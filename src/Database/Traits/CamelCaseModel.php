@@ -21,6 +21,12 @@ trait CamelCaseModel
      */
     public function setAttribute($key, $value)
     {
+        $protected = $this->protects();
+
+        if (is_array($protected) and in_array($key, $protected)) {
+            throw new ProtectedAttributeException($key);
+        }
+
         parent::setAttribute($this->getSnakeKey($key), $value);
     }
 
@@ -57,6 +63,18 @@ trait CamelCaseModel
     public function getAttributes()
     {
         return $this->attributesToArray();
+    }
+
+    /**
+     * Defines the fields that should be protected from being set directly. This is useful
+     * for protecting invariants in your domain, or simply locking down an attribute from being
+     * changed. Overload this method to define the attributes you want to protect.
+     *
+     * @return array
+     */
+    protected function protects()
+    {
+        return [];
     }
 
     /**
