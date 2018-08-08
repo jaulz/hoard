@@ -5,12 +5,11 @@ use Eloquence\Behaviours\CamelCasing;
 
 class ModelStub extends ParentModelStub
 {
-    use \Eloquence\Behaviours\CamelCasing;
 
     protected $attributes = [
-        'first_name' => 'Kirk',
-        'last_name' => 'Bushell',
+        'firstName' => 'Kirk',
+        'lastName' => 'Bushell',
         'address' => 'Home',
-        'country_of_origin' => 'Australia'
+        'countryOfOrigin' => 'Australia'
     ];
 }

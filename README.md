@@ -260,12 +260,17 @@ slugs that are supported however, as well:
 * uuid
 
 The only difference between the two above, is that if you're using UUIDs, the slug will be generated previous
-to the save, based on the uuid field. With ids, which are generally auto-increase strategies - the slug has
+to the save, based on the uuid field. With ids, which are generally auto-increment strategies - the slug has
 to be generated after the record has been saved - which results in a secondary save call to the database.
 
 That's it! Easy huh?
 
 ## Changelog
+
+#### 3.1.0
+
+* Library updated to work with Laravel 5.5+
+* getAttributes and getOriginal no longer overloaded
 
 #### 2.0.7
 
