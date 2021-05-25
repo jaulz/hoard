@@ -1,8 +1,8 @@
 # Eloquence
 
-![Version](https://img.shields.io/packagist/v/kirkbushell/eloquence.svg)
-![Downloads](https://img.shields.io/packagist/dt/kirkbushell/eloquence.svg)
-![Status](https://img.shields.io/travis/kirkbushell/eloquence/master.svg)
+![Version](https://img.shields.io/packagist/v/jaulz/eloquence.svg)
+![Downloads](https://img.shields.io/packagist/dt/jaulz/eloquence.svg)
+![Status](https://img.shields.io/travis/jaulz/eloquence/master.svg)
 
 Eloquence is a package to extend Laravel's base Eloquent models and functionality.
 
@@ -13,19 +13,7 @@ such as camel cased attributes (for JSON apis), count caching, uuids and more.
 
 Install the package via composer:
 
-    composer require kirkbushell/eloquence:~4.0
-
-For Laravel 6, please install:
-
-    composer require kirkbushell/eloquence:~3.0
-
-For Laravel 5, please install the ~2.0 suite of releases.
-
-    composer require kirkbushell/eloquence:~2.0
-
-For Laravel 4, please install the 1.1.5 release. Please note that this is no longer supported.
-
-    composer require kirkbushell/eloquence:1.1.5
+    composer require jaulz/eloquence:~5.0
 
 ## Usage
 

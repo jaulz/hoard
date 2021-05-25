@@ -1,11 +1,12 @@
 {
-    "name": "kirkbushell/eloquence",
+    "name": "jaulz/eloquence",
     "description": "A set of extensions adding additional functionality and consistency to Laravel's awesome Eloquent library.",
     "keywords": ["laravel", "eloquent", "camelcase", "camel", "case", "snake_case", "snake"],
     "authors": [
         {
-            "name": "Kirk Bushell",
-            "email": "torm3nt@gmail.com"
+            "name": "Julian Hundeloh",
+            "email": "julian@hundeloh-consulting.ch",
+            "role": "Developer"
         }
     ],
     "require": {
@@ -13,7 +14,6 @@
         "hashids/hashids": "^4.0",
         "illuminate/database": "~8.0",
         "illuminate/support": "~8.0",
-        "ramsey/uuid": "^4",
         "hanneskod/classtools": "~1.0"
     },
     "require-dev": {
