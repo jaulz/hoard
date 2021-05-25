@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence\Behaviours;
+namespace Jaulz\Eloquence\Behaviours;
 
 use Illuminate\Support\Str;
 

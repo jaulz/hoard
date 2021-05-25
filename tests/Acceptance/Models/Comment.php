@@ -1,8 +1,8 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Eloquence\Behaviours\CountCache\Countable;
-use Eloquence\Behaviours\CamelCasing;
+use Jaulz\Eloquence\Behaviours\CountCache\Countable;
+use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 

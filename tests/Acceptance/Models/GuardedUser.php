@@ -1,7 +1,7 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Eloquence\Behaviours\CamelCasing;
+use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 
 class GuardedUser extends Model

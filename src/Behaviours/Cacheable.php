@@ -1,11 +1,11 @@
 <?php
 
-namespace Eloquence\Behaviours;
+namespace Jaulz\Eloquence\Behaviours;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Eloquence\Exceptions\UnableToCacheException;
+use Jaulz\Eloquence\Exceptions\UnableToCacheException;
 
 trait Cacheable
 {

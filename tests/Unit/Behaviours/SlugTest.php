@@ -1,7 +1,7 @@
 <?php
 namespace tests\Unit\Database\Traits;
 
-use Eloquence\Behaviours\Slug;
+use Jaulz\Eloquence\Behaviours\Slug;
 use Tests\Unit\TestCase;
 
 class SlugTest extends TestCase

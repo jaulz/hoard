@@ -1,8 +1,8 @@
 <?php
 namespace Tests\Unit\Stubs\SumCache;
 
-use Eloquence\Behaviours\SumCache\Summable;
-use Eloquence\Database\Model;
+use Jaulz\Eloquence\Behaviours\SumCache\Summable;
+use Jaulz\Eloquence\Database\Model;
 
 class Item extends Model
 {

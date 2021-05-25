@@ -1,7 +1,7 @@
 <?php
-namespace Eloquence\Behaviours\SumCache;
+namespace Jaulz\Eloquence\Behaviours\SumCache;
 
-use Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 
 trait Summable
 {

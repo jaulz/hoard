@@ -1,15 +1,15 @@
 <?php
-namespace Eloquence\Database;
+namespace Jaulz\Eloquence\Database;
 
-use Eloquence\Behaviours\CamelCasing;
-use Eloquence\Behaviours\Uuid;
+use Jaulz\Eloquence\Behaviours\CamelCasing;
+use Jaulz\Eloquence\Behaviours\Uuid;
 
 /**
  * Class Model
  *
  * Have your models extend the model class to include the below traits.
  *
- * @package Eloquence\Database
+ * @package Jaulz\Eloquence\Database
  */
 abstract class Model extends \Illuminate\Database\Eloquent\Model
 {

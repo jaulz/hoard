@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence\Behaviours;
+namespace Jaulz\Eloquence\Behaviours;
 
 use Hashids\Hashids;
 use Illuminate\Contracts\Support\Jsonable;

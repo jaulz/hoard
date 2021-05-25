@@ -1,8 +1,8 @@
 <?php
 namespace Tests\Unit\Stubs\CountCache;
 
-use Eloquence\Behaviours\CountCache\Countable;
-use Eloquence\Database\Model;
+use Jaulz\Eloquence\Behaviours\CountCache\Countable;
+use Jaulz\Eloquence\Database\Model;
 
 class Post extends Model
 {

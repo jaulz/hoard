@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence\Behaviours\CountCache;
+namespace Jaulz\Eloquence\Behaviours\CountCache;
 
 trait Countable
 {

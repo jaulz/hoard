@@ -1,6 +1,6 @@
 <?php
 
-namespace Eloquence\Behaviours\SumCache;
+namespace Jaulz\Eloquence\Behaviours\SumCache;
 
 /**
  * The Observer is used for watching for model updates and making the appropriate changes

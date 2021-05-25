@@ -1,8 +1,8 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Eloquence\Behaviours\SumCache\Summable;
-use Eloquence\Behaviours\CamelCasing;
+use Jaulz\Eloquence\Behaviours\SumCache\Summable;
+use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 
 class Item extends Model

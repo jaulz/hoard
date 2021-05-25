@@ -1,4 +1,4 @@
-<?php namespace Eloquence\Commands;
+<?php namespace Jaulz\Eloquence\Commands;
 
 use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Database\Eloquent\Model;

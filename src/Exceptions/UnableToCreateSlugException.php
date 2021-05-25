@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence\Exceptions;
+namespace Jaulz\Eloquence\Exceptions;
 
 class UnableToCreateSlugException extends \Exception
 {

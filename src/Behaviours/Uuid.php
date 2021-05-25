@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence\Behaviours;
+namespace Jaulz\Eloquence\Behaviours;
 
 use Ramsey\Uuid\Uuid as RamseyUuid;
 
@@ -11,7 +11,7 @@ use Ramsey\Uuid\Uuid as RamseyUuid;
  *
  * Taken from: http://garrettstjohn.com/entry/using-uuids-laravel-eloquent-orm/
  *
- * @package Eloquence\Database\Traits
+ * @package Jaulz\Eloquence\Database\Traits
  */
 trait Uuid
 {

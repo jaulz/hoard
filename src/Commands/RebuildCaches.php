@@ -1,8 +1,8 @@
 <?php
-namespace Eloquence\Commands;
+namespace Jaulz\Eloquence\Commands;
 
-use Eloquence\Behaviours\CountCache\CountCache;
-use Eloquence\Behaviours\SumCache\SumCache;
+use Jaulz\Eloquence\Behaviours\CountCache\CountCache;
+use Jaulz\Eloquence\Behaviours\SumCache\SumCache;
 use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;

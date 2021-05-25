@@ -1,7 +1,7 @@
 <?php
 namespace Eloquence;
 
-use Eloquence\Commands\RebuildCaches;
+use Jaulz\Eloquence\Commands\RebuildCaches;
 use Illuminate\Support\ServiceProvider;
 
 class EloquenceServiceProvider extends ServiceProvider
@@ -23,7 +23,7 @@ class EloquenceServiceProvider extends ServiceProvider
          * arrangement so it seems impossible for us to inject our own custom implementation without
          * being dirty, dirty coders.
          */
-        $this->app->bind('Illuminate\Database\Eloquent\Model', 'Eloquence\Database\Model');
+        $this->app->bind('Illuminate\Database\Eloquent\Model', 'Jaulz\Eloquence\Database\Model');
     }
 
     /**

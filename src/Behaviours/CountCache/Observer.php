@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence\Behaviours\CountCache;
+namespace Jaulz\Eloquence\Behaviours\CountCache;
 
 /**
  * The Observer is used for watching for model updates and making the appropriate changes

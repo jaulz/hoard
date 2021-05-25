@@ -1,8 +1,8 @@
 <?php
-namespace Eloquence\Behaviours;
+namespace Jaulz\Eloquence\Behaviours;
 
-use Eloquence\Behaviours\Slug;
-use Eloquence\Exceptions\UnableToCreateSlugException;
+use Jaulz\Eloquence\Behaviours\Slug;
+use Jaulz\Eloquence\Exceptions\UnableToCreateSlugException;
 use Illuminate\Support\Str;
 
 trait Sluggable
@@ -166,7 +166,7 @@ trait Sluggable
     /**
      * Returns the slug attribute as a Slug value object.
      *
-     * @return \Eloquence\Behaviours\Slug
+     * @return \Jaulz\Eloquence\Behaviours\Slug
      */
     public function getSlugAttribute()
     {

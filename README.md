@@ -19,7 +19,7 @@ Install the package via composer:
 
 First, add the eloquence service provider to your config/app.php file:
 
-    'Eloquence\EloquenceServiceProvider',
+    'Jaulz\Eloquence\EloquenceServiceProvider',
 
 It's important to note that this will automatically re-bind the Model class
 that Eloquent uses for many-to-many relationships. This is necessary because
@@ -36,7 +36,7 @@ data from our Eloquent models persist through to our APIs in a camel-case manner
 if you are writing front-end applications, which are also using camelCase. This allows for a 
 better standard across our application. To use:
 
-    use \Eloquence\Behaviours\CamelCasing;
+    use \Jaulz\Eloquence\Behaviours\CamelCasing;
 
 Put the above line in your models and that's it.
 
@@ -53,7 +53,7 @@ Eloquence comes bundled with UUID capabilities that you can use in your models.
 
 Simply include the Uuid trait:
 
-    use Eloquence\Behaviours\Uuid;
+    use Jaulz\Eloquence\Behaviours\Uuid;
 
 And then disable auto incrementing ids:
 

@@ -1,7 +1,7 @@
 <?php
-namespace Eloquence\Behaviours\CountCache;
+namespace Jaulz\Eloquence\Behaviours\CountCache;
 
-use Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
