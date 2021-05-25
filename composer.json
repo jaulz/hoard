@@ -24,7 +24,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Jaulz\Eloquence\\": "src/",
+            "Jaulz\\Eloquence\\": "src/",
             "Tests\\": "tests/"
         }
     },
