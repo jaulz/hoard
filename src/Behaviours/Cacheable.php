@@ -10,65 +10,6 @@ use Jaulz\Eloquence\Exceptions\UnableToCacheException;
 trait Cacheable
 {
     /**
-     * Checks if the where condition matches the model.
-     *
-     * @param boolean   $current Use current or original values.
-     * @param any       $config 
-     * @param \Closure $function
-     */
-    private function checkWhereCondition($current, $config) {
-        $relevant = true;
-
-        foreach ($config['where'] as $attribute => $value) {
-                // Get attribute, operator and value
-                $operator = '=';
-                if (is_array($value)) {
-                    if (count($value) > 2) {
-                        $attribute = $value[0];
-                        $operator = $value[1];
-                        $value = $value[2];
-                    } else {
-                        $attribute = $value[0];
-                        $value = $value[2];
-                    }
-                }
-
-                // Determine if model is relevant for count
-                $relevant = false;
-                $modelValue = $current ? $this->model->{$attribute} : $this->model->getOriginal($attribute);
-                switch ($operator) {
-                    case '=':
-                        $relevant = $modelValue === $value;
-                        break;
-                    case '<':
-                        $relevant = $modelValue < $value;
-                        break;
-                    case '<=':
-                        $relevant = $modelValue <= $value;
-                        break;
-                    case '>':
-                        $relevant = $modelValue > $value;
-                        break;
-                    case '>=':
-                        $relevant = $modelValue > $value;
-                        break;
-                }
-
-                if (!$relevant &&  $current &&!isset($modelValue)) {
-                    throw new UnableToCacheException(
-                        "Unable to cache " . $config['foreignKey'] . " because " . $attribute . " is part of the where condition but it is not set explicitly on the entity."
-                    );
-                }
-
-                if (!$relevant) {
-                    break;
-                }
-            }
-
-        return $relevant;
-    }
-
-    /**
      * Applies the provided function to the count cache setup/configuration.
      *
      * @param string   $type Either sum or count.
@@ -220,5 +161,64 @@ trait Cacheable
         }
 
         return DB::getTablePrefix() . $model->getTable();
+    }
+
+    /**
+     * Checks if the where condition matches the model.
+     *
+     * @param boolean   $current Use current or original values.
+     * @param any       $config 
+     * @param \Closure $function
+     */
+    protected function checkWhereCondition($current, $config) {
+        $relevant = true;
+
+        foreach ($config['where'] as $attribute => $value) {
+                // Get attribute, operator and value
+                $operator = '=';
+                if (is_array($value)) {
+                    if (count($value) > 2) {
+                        $attribute = $value[0];
+                        $operator = $value[1];
+                        $value = $value[2];
+                    } else {
+                        $attribute = $value[0];
+                        $value = $value[2];
+                    }
+                }
+
+                // Determine if model is relevant for count
+                $relevant = false;
+                $modelValue = $current ? $this->model->{$attribute} : $this->model->getOriginal($attribute);
+                switch ($operator) {
+                    case '=':
+                        $relevant = $modelValue === $value;
+                        break;
+                    case '<':
+                        $relevant = $modelValue < $value;
+                        break;
+                    case '<=':
+                        $relevant = $modelValue <= $value;
+                        break;
+                    case '>':
+                        $relevant = $modelValue > $value;
+                        break;
+                    case '>=':
+                        $relevant = $modelValue > $value;
+                        break;
+                }
+
+                if (!$relevant &&  $current &&!isset($modelValue)) {
+                    throw new UnableToCacheException(
+                        "Unable to cache " . $config['columnToSum'] . " because " . $attribute . " is part of the where condition but it is not set explicitly on the entity."
+                    );
+                }
+
+                if (!$relevant) {
+                    break;
+                }
+            }
+
+        return $relevant;
     }
 }
