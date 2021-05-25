@@ -210,7 +210,7 @@ trait Cacheable
 
                 if (!$relevant &&  $current &&!isset($modelValue)) {
                     throw new UnableToCacheException(
-                        "Unable to cache " . $config['columnToSum'] . " because " . $attribute . " is part of the where condition but it is not set explicitly on the entity."
+                        "Unable to cache " . $config['field'] . " because " . $attribute . " is part of the where condition but it is not set explicitly on the entity."
                     );
                 }
 
