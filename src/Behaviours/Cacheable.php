@@ -1,12 +1,46 @@
 <?php
+
 namespace Eloquence\Behaviours;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Eloquence\Exceptions\UnableToCacheException;
 
 trait Cacheable
 {
+    /**
+     * Applies the provided function to the count cache setup/configuration.
+     *
+     * @param string   $type Either sum or count.
+     * @param \Closure $function
+     */
+    public function apply(string $type, \Closure $function)
+    {
+        foreach ($this->model->{$type . 'Caches'}() as $key => $cache) {
+            $config = $this->config($key, $cache);
+
+            // Check if the model fits the where condition
+            $isRelevant = true;
+            foreach ($config['where'] as $attribute => $value) {
+                $isRelevant = $this->model->{$attribute} === $value;
+                if (!$isRelevant && !isset($this->model->{$attribute})) {
+                    throw new UnableToCacheException(
+                        "Unable to cache because the properties of the where condition must explicitly be set on the entity."
+                    );
+                }
+
+                if (!$isRelevant) {
+                    break;
+                }
+            }
+            if (!$isRelevant) {
+                continue;
+            }
+
+            $function($config);
+        }
+    }
 
     /**
      * Updates a table's record based on the query information provided in the $config variable.
@@ -59,7 +93,7 @@ trait Cacheable
             $aggregateField = Str::snake($aggregateField);
         }
 
-        $sql = DB::table($table)->select($config['foreignKey'])->groupBy($config['foreignKey']);
+        $sql = DB::table($table)->select($config['foreignKey'])->groupBy($config['foreignKey'])->where($config['where']);
 
         if (strtolower($command) == 'count') {
             $aggregate = $sql->count($aggregateField);
@@ -138,7 +172,6 @@ trait Cacheable
             $model = new $model;
         }
 
-        return DB::getTablePrefix().$model->getTable();
+        return DB::getTablePrefix() . $model->getTable();
     }
-
 }

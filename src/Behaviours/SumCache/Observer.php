@@ -17,7 +17,7 @@ class Observer
     public function created($model)
     {
         $sumCache = new SumCache($model);
-        $sumCache->apply(function ($config) use ($model, $sumCache) {
+        $sumCache->apply('sum', function ($config) use ($model, $sumCache) {
             $sumCache->updateCacheRecord($config, '+', $model->{$config['columnToSum']}, $model->{$config['foreignKey']});
         });
     }
@@ -30,7 +30,7 @@ class Observer
     public function deleted($model)
     {
         $sumCache = new SumCache($model);
-        $sumCache->apply(function ($config) use ($model, $sumCache) {
+        $sumCache->apply('sum', function ($config) use ($model, $sumCache) {
             $sumCache->updateCacheRecord($config, '-', $model->{$config['columnToSum']}, $model->{$config['foreignKey']});
         });
     }

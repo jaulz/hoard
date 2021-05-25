@@ -24,23 +24,11 @@ class SumCache
     }
 
     /**
-     * Applies the provided function to the count cache setup/configuration.
-     *
-     * @param \Closure $function
-     */
-    public function apply(\Closure $function)
-    {
-        foreach ($this->model->sumCaches() as $key => $cache) {
-            $function($this->config($key, $cache));
-        }
-    }
-
-    /**
      * Rebuild the count caches from the database
      */
     public function rebuild()
     {
-        $this->apply(function($config) {
+        $this->apply('sum', function($config) {
             $this->rebuildCacheRecord($config, $this->model, 'SUM', $config['columnToSum']);
         });
     }
@@ -50,7 +38,7 @@ class SumCache
      */
     public function update()
     {
-        $this->apply(function ($config) {
+        $this->apply('sum', function ($config) {
             $foreignKey = Str::snake($this->key($config['foreignKey']));
             $amount = $this->model->{$config['columnToSum']};
 
@@ -119,7 +107,8 @@ class SumCache
             'columnToSum' => 'total',
             'field' => $this->field($this->model, 'total'),
             'foreignKey' => $this->field($relatedModel, 'id'),
-            'key' => 'id'
+            'key' => 'id',
+            'where' => []
         ];
 
         return array_merge($defaults, $options);
