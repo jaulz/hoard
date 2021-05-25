@@ -38,8 +38,12 @@ trait Cacheable
      * @param int|float|double $amount
      * @param string $foreignKey
      */
-    public function updateCacheRecord(array $config, $operation, $amount, $foreignKey)
-    {
+    public function updateCacheRecord(
+        array $config,
+        $operation,
+        $amount,
+        $foreignKey
+    ) {
         if (is_null($foreignKey) || !$amount) {
             return;
         }
@@ -49,15 +53,15 @@ trait Cacheable
         $sql = DB::table($config['table'])->where($config['key'], $foreignKey);
 
         /*
-         * Increment for + operator
-         */
+     * Increment for + operator
+     */
         if ($operation == '+') {
             return $sql->increment($config['field'], $amount);
         }
 
         /*
-         * Decrement for - operator
-         */
+     * Decrement for - operator
+     */
         return $sql->decrement($config['field'], $amount);
     }
 
@@ -70,8 +74,12 @@ trait Cacheable
      * @param null $aggregateField
      * @return mixed
      */
-    public function rebuildCacheRecord(array $config, Model $model, $command, $aggregateField = null)
-    {
+    public function rebuildCacheRecord(
+        array $config,
+        Model $model,
+        $command,
+        $aggregateField = null
+    ) {
         $config = $this->processConfig($config);
         $table = $this->getModelTable($model);
 
@@ -81,22 +89,24 @@ trait Cacheable
             $aggregateField = Str::snake($aggregateField);
         }
 
-        $sql = DB::table($table)->select($config['foreignKey'])->groupBy($config['foreignKey'])->where($config['where']);
+        $sql = DB::table($table)
+            ->select($config['foreignKey'])
+            ->groupBy($config['foreignKey'])
+            ->where($config['where']);
 
         if (strtolower($command) == 'count') {
             $aggregate = $sql->count($aggregateField);
-        } else if (strtolower($command) == 'sum') {
+        } elseif (strtolower($command) == 'sum') {
             $aggregate = $sql->sum($aggregateField);
-        } else if (strtolower($command) == 'avg') {
+        } elseif (strtolower($command) == 'avg') {
             $aggregate = $sql->avg($aggregateField);
         } else {
             $aggregate = null;
         }
 
-        return DB::table($config['table'])
-            ->update([
-                $config['field'] => $aggregate
-            ]);
+        return DB::table($config['table'])->update([
+            $config['field'] => $aggregate,
+        ]);
     }
 
     /**
@@ -124,10 +134,10 @@ trait Cacheable
     protected function processConfig(array $config)
     {
         return [
-            'model'      => $config['model'],
-            'table'      => $this->getModelTable($config['model']),
-            'field'      => Str::snake($config['field']),
-            'key'        => Str::snake($this->key($config['key'])),
+            'model' => $config['model'],
+            'table' => $this->getModelTable($config['model']),
+            'field' => Str::snake($config['field']),
+            'key' => Str::snake($this->key($config['key'])),
             'foreignKey' => Str::snake($this->key($config['foreignKey'])),
         ];
     }
@@ -157,7 +167,7 @@ trait Cacheable
     protected function getModelTable($model)
     {
         if (!is_object($model)) {
-            $model = new $model;
+            $model = new $model();
         }
 
         return DB::getTablePrefix() . $model->getTable();
@@ -167,57 +177,71 @@ trait Cacheable
      * Checks if the where condition matches the model.
      *
      * @param boolean   $current Use current or original values.
-     * @param any       $config 
+     * @param any       $config
      * @param \Closure $function
      */
-    protected function checkWhereCondition($current, $config) {
+    protected function checkWhereCondition($current, $config)
+    {
         $relevant = true;
 
         foreach ($config['where'] as $attribute => $value) {
-                // Get attribute, operator and value
-                $operator = '=';
-                if (is_array($value)) {
-                    if (count($value) > 2) {
-                        $attribute = $value[0];
-                        $operator = $value[1];
-                        $value = $value[2];
-                    } else {
-                        $attribute = $value[0];
-                        $value = $value[2];
-                    }
-                }
-
-                // Determine if model is relevant for count
-                $relevant = false;
-                $modelValue = $current ? $this->model->{$attribute} : $this->model->getOriginal($attribute);
-                switch ($operator) {
-                    case '=':
-                        $relevant = $modelValue === $value;
-                        break;
-                    case '<':
-                        $relevant = $modelValue < $value;
-                        break;
-                    case '<=':
-                        $relevant = $modelValue <= $value;
-                        break;
-                    case '>':
-                        $relevant = $modelValue > $value;
-                        break;
-                    case '>=':
-                        $relevant = $modelValue > $value;
-                        break;
-                }
-
-                if (!$relevant &&  $current &&!isset($modelValue)) {
-                    throw new UnableToCacheException(
-                        "Unable to cache " . $config['field'] . " because " . $attribute . " is part of the where condition but it is not set explicitly on the entity."
-                    );
-                }
-
-                if (!$relevant) {
-                    break;
+            // Get attribute, operator and value
+            $operator = '=';
+            if (is_array($value)) {
+                if (count($value) > 2) {
+                    $attribute = $value[0];
+                    $operator = $value[1];
+                    $value = $value[2];
+                } else {
+                    $attribute = $value[0];
+                    $value = $value[2];
                 }
             }
+
+            // Determine if model is relevant for count
+            $relevant = false;
+            $modelValue = $current
+                ? $this->model->{$attribute}
+                : $this->model->getOriginal($attribute);
+            switch ($operator) {
+                case '=':
+                    $relevant = $modelValue === $value;
+                    break;
+                case '<':
+                    $relevant = $modelValue < $value;
+                    break;
+                case '<=':
+                    $relevant = $modelValue <= $value;
+                    break;
+                case '>':
+                    $relevant = $modelValue > $value;
+                    break;
+                case '>=':
+                    $relevant = $modelValue > $value;
+                    break;
+                case '<>':
+                    $relevant = $modelValue !== $value;
+                    break;
+            }
+
+            if (
+                !$relevant &&
+                $current &&
+                !array_key_exists($attribute, $this->model->getAttributes())
+            ) {
+                throw new UnableToCacheException(
+                    'Unable to cache ' .
+                        $config['field'] .
+                        ' because ' .
+                        $attribute .
+                        ' is part of the where condition but it is not set explicitly on the entity.'
+                );
+            }
+
+            if (!$relevant) {
+                break;
+            }
+        }
 
         return $relevant;
     }
