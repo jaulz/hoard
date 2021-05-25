@@ -40,6 +40,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('post_count')->default(0);
             $table->integer('post_count_explicit')->default(0);
             $table->integer('post_count_conditional')->default(0);
+            $table->integer('post_count_complex_conditional')->default(0);
             $table->timestamps();
         });
 
@@ -49,6 +50,7 @@ class AcceptanceTestCase extends TestCase
             $table->string('slug')->nullable();
             $table->integer('comment_count')->default(0);
             $table->boolean('visible')->default(false);
+            $table->integer('weight')->default(0);
             $table->timestamps();
         });
 
@@ -66,6 +68,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('item_total')->default(0);
             $table->integer('item_total_explicit')->default(0);
             $table->integer('item_total_conditional')->default(0);
+            $table->integer('item_total_complex_conditional')->default(0);
             $table->timestamps();
         });
 

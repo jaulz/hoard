@@ -28,12 +28,23 @@ class CountCache
      */
     public function update()
     {
-        $this->apply('count', function ($config) {
+        $this->apply('count', function ($config, $isRelevant, $wasRelevant) {
             $foreignKey = Str::snake($this->key($config['foreignKey']));
 
+            // In case the foreign key changed, we just transfer the values from one model to the other
             if ($this->model->getOriginal($foreignKey) && $this->model->{$foreignKey} != $this->model->getOriginal($foreignKey)) {
                 $this->updateCacheRecord($config, '-', 1, $this->model->getOriginal($foreignKey));
                 $this->updateCacheRecord($config, '+', 1, $this->model->{$foreignKey});
+            } else {
+                if ($isRelevant && $wasRelevant) {
+                    // We do not need to do anything when the model is as relevant as before
+                } else if ($isRelevant && !$wasRelevant) {
+                    // Increment because it was not relevant before but now it is
+                    $this->updateCacheRecord($config, '+', 1, $this->model->{$foreignKey});
+                } else if (!$isRelevant && $wasRelevant) {
+                    // Decrement because it was relevant before but now it is not anymore
+                    $this->updateCacheRecord($config, '-', 1, $this->model->{$foreignKey});
+                }
             }
         });
     }

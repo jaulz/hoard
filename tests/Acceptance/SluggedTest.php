@@ -20,6 +20,7 @@ class SluggedTest extends AcceptanceTestCase
     {
         $post = new Post;
         $post->visible = true;
+        $post->weight = 0;
         $post->save();
 
         $this->assertRegExp('/^[a-z0-9]{8}$/i', (string) $post->slug);

@@ -38,13 +38,27 @@ class SumCache
      */
     public function update()
     {
-        $this->apply('sum', function ($config) {
+        $this->apply('sum', function ($config, $isRelevant, $wasRelevant) {
             $foreignKey = Str::snake($this->key($config['foreignKey']));
-            $amount = $this->model->{$config['columnToSum']};
 
+            // In case the foreign key changed, we just transfer the values from one model to the other
             if ($this->model->getOriginal($foreignKey) && $this->model->{$foreignKey} != $this->model->getOriginal($foreignKey)) {
+                $amount = $this->model->{$config['columnToSum']};
                 $this->updateCacheRecord($config, '-', $amount, $this->model->getOriginal($foreignKey));
                 $this->updateCacheRecord($config, '+', $amount, $this->model->{$foreignKey});
+            } else {
+                if ($isRelevant && $wasRelevant) {
+                    // We need to add the difference in case it is as relevant as before
+                    $difference = $this->model->{$config['columnToSum']} - $this->model->getOriginal($config['columnToSum']);
+                    $this->updateCacheRecord($config, '+', $difference, $this->model->{$foreignKey});
+                } else if ($isRelevant && !$wasRelevant) {
+                    // Increment because it was not relevant before but now it is
+                    $this->updateCacheRecord($config, '+', $this->model->{$config['columnToSum']}, $this->model->{$foreignKey});
+                } else if (!$isRelevant && $wasRelevant) {
+                    // Decrement because it was relevant before but now it is not anymore
+                    $this->updateCacheRecord($config, '-', $this->model->getOriginal($config['columnToSum']), $this->model->{$foreignKey});
+                }
+
             }
         });
     }

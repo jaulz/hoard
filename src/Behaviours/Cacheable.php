@@ -10,6 +10,73 @@ use Eloquence\Exceptions\UnableToCacheException;
 trait Cacheable
 {
     /**
+     * Checks if the where condition matches the model.
+     *
+     * @param boolean   $current Use current or original values.
+     * @param any       $config 
+     * @param \Closure $function
+     */
+    public function checkWhereCondition($current, $config) {
+        $relevant = true;
+
+        foreach ($config['where'] as $attribute => $value) {
+                // Get attribute, operator and value
+                $operator = '=';
+                if (is_array($value)) {
+                    if (count($value) > 2) {
+                        $attribute = $value[0];
+                        $operator = $value[1];
+                        $value = $value[2];
+                    } else {
+                        $attribute = $value[0];
+                        $value = $value[2];
+                    }
+                }
+
+                // Determine if model is relevant for count
+                $relevant = false;
+                $modelValue = $current ? $this->model->{$attribute} : $this->model->getOriginal($attribute);
+                switch ($operator) {
+                    case '=':
+                        $relevant = $modelValue === $value;
+                        break;
+                    case '<':
+                        $relevant = $modelValue < $value;
+                        break;
+                    case '<=':
+                        $relevant = $modelValue <= $value;
+                        break;
+                    case '>':
+                        $relevant = $modelValue > $value;
+                        break;
+                    case '>=':
+                        $relevant = $modelValue > $value;
+                        break;
+                }
+                /*
+                    if ($attribute === 'weight') {
+                    error_log(var_dump($attribute));
+                    error_log(var_dump($operator));
+                    error_log(var_dump($value));
+                    error_log(var_dump($isRelevant));
+                    error_log(var_dump($modelValue));
+                    }*/
+
+                if (!$relevant && $current && !isset($modelValue)) {
+                    throw new UnableToCacheException(
+                        "Unable to cache because the properties of the where condition must explicitly be set on the entity."
+                    );
+                }
+
+                if (!$relevant) {
+                    break;
+                }
+            }
+
+        return $relevant;
+    }
+
+    /**
      * Applies the provided function to the count cache setup/configuration.
      *
      * @param string   $type Either sum or count.
@@ -19,26 +86,14 @@ trait Cacheable
     {
         foreach ($this->model->{$type . 'Caches'}() as $key => $cache) {
             $config = $this->config($key, $cache);
+            $isRelevant = $this->checkWhereCondition(true, $config);
+            $wasRelevant = $this->checkWhereCondition(false, $config);
 
-            // Check if the model fits the where condition
-            $isRelevant = true;
-            foreach ($config['where'] as $attribute => $value) {
-                $isRelevant = $this->model->{$attribute} === $value;
-                if (!$isRelevant && !isset($this->model->{$attribute})) {
-                    throw new UnableToCacheException(
-                        "Unable to cache because the properties of the where condition must explicitly be set on the entity."
-                    );
-                }
-
-                if (!$isRelevant) {
-                    break;
-                }
-            }
-            if (!$isRelevant) {
+            if (!$isRelevant && !$wasRelevant) {
                 continue;
             }
 
-            $function($config);
+            $function($config, $isRelevant, $wasRelevant);
         }
     }
 
@@ -52,7 +107,7 @@ trait Cacheable
      */
     public function updateCacheRecord(array $config, $operation, $amount, $foreignKey)
     {
-        if (is_null($foreignKey)) {
+        if (is_null($foreignKey) || !$amount) {
             return;
         }
 

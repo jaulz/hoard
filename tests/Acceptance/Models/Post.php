@@ -30,6 +30,16 @@ class Post extends Model
                 'where' => [
                     'visible' => true, 
                 ]
+            ],
+            [
+                'model' => 'Tests\Acceptance\Models\User',
+                'field' => 'postCountComplexConditional',
+                'foreignKey' => 'userId',
+                'key' => 'id',
+                'where' => [
+                    'visible' => true,
+                    ['weight', '>', 5] 
+                ]
             ]
         ];
     }

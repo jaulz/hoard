@@ -30,6 +30,17 @@ class Item extends Model
                 'where' => [
                     'billable' => true 
                 ]
+            ],
+            [
+                'model' => 'Tests\Acceptance\Models\Order',
+                'field' => 'itemTotalComplexConditional',
+                'columnToSum' => 'total',
+                'foreignKey' => 'orderId',
+                'key' => 'id',
+                'where' => [
+                    'billable' => true,
+                    ['total', '<', 45] 
+                ]
             ]
         ];
     }
