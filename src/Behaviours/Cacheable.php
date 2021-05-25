@@ -16,7 +16,7 @@ trait Cacheable
      * @param any       $config 
      * @param \Closure $function
      */
-    public function checkWhereCondition($current, $config) {
+    private function checkWhereCondition($current, $config) {
         $relevant = true;
 
         foreach ($config['where'] as $attribute => $value) {
@@ -53,18 +53,10 @@ trait Cacheable
                         $relevant = $modelValue > $value;
                         break;
                 }
-                /*
-                    if ($attribute === 'weight') {
-                    error_log(var_dump($attribute));
-                    error_log(var_dump($operator));
-                    error_log(var_dump($value));
-                    error_log(var_dump($isRelevant));
-                    error_log(var_dump($modelValue));
-                    }*/
 
-                if (!$relevant && $current && !isset($modelValue)) {
+                if (!$relevant &&  $current &&!isset($modelValue)) {
                     throw new UnableToCacheException(
-                        "Unable to cache because the properties of the where condition must explicitly be set on the entity."
+                        "Unable to cache " . $config['foreignKey'] . " because " . $attribute . " is part of the where condition but it is not set explicitly on the entity."
                     );
                 }
 
