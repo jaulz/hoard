@@ -201,8 +201,8 @@ trait Cacheable
             // Determine if model is relevant for count
             $relevant = false;
             $modelValue = $current
-                ? $this->model->{$attribute}
-                : $this->model->getOriginal($attribute);
+                ? $this->model->getAttributes()[$attribute]
+                : $this->model->getRawOriginal($attribute);
             switch ($operator) {
                 case '=':
                     $relevant = $modelValue === $value;
