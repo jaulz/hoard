@@ -1,5 +1,5 @@
 <?php
-namespace Eloquence;
+namespace Jaulz\Eloquence;
 
 use Jaulz\Eloquence\Commands\RebuildCaches;
 use Illuminate\Support\ServiceProvider;
