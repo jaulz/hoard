@@ -61,25 +61,29 @@ class RebuildCaches extends Command
     {
         $models = $className::all();
         $count = $models->count();
-        $this->info("Rebuilding $count $className caches");
-        $models->each(function ($model, $index) use ($className) {
+        $startTime = microtime(true); 
+
+        $models->each(function ($model, $index) use ($className, $count) {
             $iteration = $index + 1;
             $keyName = $model->getKeyName();
             $key = $model->getKey();
 
             if (method_exists($model, 'countCaches')) {
-                $this->info("($iteration) Rebuilding $keyName=$key count caches");
+                $this->info("($iteration/$count) Rebuilding $className($keyName=$key) count caches");
                 $countCache = new CountCache($model);
                 $countCache->rebuild();
             }
 
             if (method_exists($model, 'sumCaches')) {
-                $this->info("($iteration) Rebuilding $keyName=$key sum caches");
+                $this->info("($iteration/$count) Rebuilding $className($keyName=$key) sum caches");
                 $sumCache = new SumCache($model);
                 $sumCache->rebuild();
             }
         });
-        $this->info("Rebuilt $className caches");
+
+        $endTime = microtime(true);
+        $executionTime = intval(($endTime - $startTime) * 1000);
+        $this->info("Finished rebuilding $className caches in $executionTime milliseconds");
     }
 
 }
