@@ -19,10 +19,10 @@ trait Cacheable
     public function apply(string $type, \Closure $function, ?bool $rebuild = false)
     {
         foreach ($this->model->{$type . 'Caches'}() as $key => $cache) {
-            $config = $this->config($key, $cache);
+            $config = $this->config(get_class($this->model), $key, $cache);
 
-            $isRelevant = $this->checkWhereCondition(true, $config);
-            $wasRelevant = $this->checkWhereCondition(false, $config);
+            $isRelevant = $this::checkWhereCondition($this->model, true, $config);
+            $wasRelevant = $this::checkWhereCondition($this->model, false, $config);
 
             if (!$isRelevant && !$wasRelevant) {
                 continue;
@@ -50,7 +50,7 @@ trait Cacheable
             return;
         }
 
-        $config = $this->processConfig($config);
+        $config = $this->processConfig(get_class($this->model), $config);
 
         $sql = DB::table($config['table'])->where($config['key'], $foreignKey);
 
@@ -58,6 +58,9 @@ trait Cacheable
      * Increment for + operator
      */
         if ($operation == '+') {
+            if ($config['field'][0] === '{') {
+            dd($config);
+            }
             return $sql->increment($config['field'], $amount);
         }
 
@@ -71,18 +74,18 @@ trait Cacheable
      * Rebuilds the cache for the records in question.
      *
      * @param array $config
-     * @param Model $model
+     * @param string $model
      * @param $command
      * @param null $aggregateField
      * @return mixed
      */
     public function rebuildCacheRecord(
         array $config,
-        Model $model,
+        string $model,
         $command,
         $aggregateField = null
     ) {
-        $config = $this->processConfig($config);
+        $config = $this->processConfig($model, $config);
         $table = $this->getModelTable($model);
 
         if (is_null($aggregateField)) {
@@ -119,7 +122,7 @@ trait Cacheable
      *
      * @return string
      */
-    protected function field($model, $field)
+    protected static function field(string $model, string $field)
     {
         $class = strtolower(class_basename($model));
         $field = $class . '_' . $field;
@@ -130,17 +133,18 @@ trait Cacheable
     /**
      * Process configuration parameters to check key names, fix snake casing, etc..
      *
+     * @param string $model
      * @param array $config
      * @return array
      */
-    protected function processConfig(array $config)
+    protected static function processConfig(string $model, array $config)
     {
         return [
             'model' => $config['model'],
-            'table' => $this->getModelTable($config['model']),
+            'table' => self::getModelTable($config['model']),
             'field' => Str::snake($config['field']),
-            'key' => Str::snake($this->key($config['key'])),
-            'foreignKey' => Str::snake($this->key($config['foreignKey'])),
+            'key' => Str::snake(self::key($config['model'], $config['key'])),
+            'foreignKey' => Str::snake(self::key($model, $config['foreignKey'])),
             'where' => $config['where'] ?? [],
         ];
     }
@@ -148,13 +152,18 @@ trait Cacheable
     /**
      * Returns the true key for a given field.
      *
+     * @param string $model
      * @param string $field
      * @return mixed
      */
-    protected function key($field)
+    protected static function key(string $model, $field)
     {
-        if (method_exists($this->model, 'getTrueKey')) {
-            return $this->model->getTrueKey($field);
+        if (!is_object($model)) {
+            $model = new $model();
+        }
+
+        if (method_exists($model, 'getTrueKey')) {
+            return $model->getTrueKey($field);
         }
 
         return $field;
@@ -167,7 +176,7 @@ trait Cacheable
      * @param string|Model $model
      * @return mixed
      */
-    protected function getModelTable($model)
+    protected static function getModelTable($model)
     {
         if (!is_object($model)) {
             $model = new $model();
@@ -179,11 +188,12 @@ trait Cacheable
     /**
      * Checks if the where condition matches the model.
      *
+     * @param Model     $model
      * @param boolean   $current Use current or original values.
      * @param any       $config
      * @param \Closure $function
      */
-    protected function checkWhereCondition($current, $config)
+    protected static function checkWhereCondition($model, $current, $config)
     {
         $relevant = true;
 
@@ -204,8 +214,8 @@ trait Cacheable
             // Determine if model is relevant for count
             $relevant = false;
             $modelValue = $current
-                ? $this->model->getAttributes()[$attribute]
-                : $this->model->getRawOriginal($attribute);
+                ? $model->getAttributes()[$attribute]
+                : $model->getRawOriginal($attribute);
             switch ($operator) {
                 case '=':
                     $relevant = $modelValue === $value;
@@ -230,7 +240,7 @@ trait Cacheable
             if (
                 !$relevant &&
                 $current &&
-                !array_key_exists($attribute, $this->model->getAttributes())
+                !array_key_exists($attribute, $model->getAttributes())
             ) {
                 throw new UnableToCacheException(
                     'Unable to cache ' .

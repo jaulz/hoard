@@ -39,7 +39,7 @@ class SumCache
     public function update()
     {
         $this->apply('sum', function ($config, $isRelevant, $wasRelevant) {
-            $foreignKey = Str::snake($this->key($config['foreignKey']));
+            $foreignKey = Str::snake($this::key(get_class($this->model), $config['foreignKey']));
 
             // In case the foreign key changed, we just transfer the values from one model to the other
             if ($this->model->getOriginal($foreignKey) && $this->model->{$foreignKey} != $this->model->getOriginal($foreignKey)) {
@@ -66,11 +66,12 @@ class SumCache
     /**
      * Takes a registered sum cache, and setups up defaults.
      *
+     * @param string $model
      * @param string $cacheKey
      * @param array $cacheOptions
      * @return array
      */
-    protected function config($cacheKey, $cacheOptions)
+    protected static function config($model, $cacheKey, $cacheOptions)
     {
         $opts = [];
 
@@ -104,23 +105,24 @@ class SumCache
             }
         }
 
-        return $this->defaults($opts, $relatedModel);
+        return self::defaults($opts, $model, $relatedModel);
     }
 
     /**
      * Returns necessary defaults, overwritten by provided options.
      *
      * @param array $options
+     * @param string $model
      * @param string $relatedModel
      * @return array
      */
-    protected function defaults($options, $relatedModel)
+    protected static function defaults($options, $model, $relatedModel)
     {
         $defaults = [
             'model' => $relatedModel,
             'columnToSum' => 'total',
-            'field' => $this->field($this->model, 'total'),
-            'foreignKey' => $this->field($relatedModel, 'id'),
+            'field' => self::field($model, 'total'),
+            'foreignKey' => self::field($relatedModel, 'id'),
             'key' => 'id',
             'where' => []
         ];

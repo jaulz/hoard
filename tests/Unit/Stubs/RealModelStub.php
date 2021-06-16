@@ -4,11 +4,12 @@ namespace Tests\Unit\Stubs;
 use Jaulz\Eloquence\Behaviours\CountCache\CacheConfig;
 use Jaulz\Eloquence\Behaviours\CountCache\Countable;
 use Jaulz\Eloquence\Behaviours\CountCache\CountCache;
-use Jaulz\Eloquence\Database\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class RealModelStub extends Model
 {
     use \Jaulz\Eloquence\Behaviours\CountCache\Countable;
+    use \Jaulz\Eloquence\Behaviours\CamelCasing;
 
     protected $dateFormat = \DateTime::ISO8601;
 
