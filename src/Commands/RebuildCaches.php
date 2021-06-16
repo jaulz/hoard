@@ -59,7 +59,7 @@ class RebuildCaches extends Command
      */
     private function rebuild($className)
     {
-        $models = $className::all();
+        $models = $className::lazy();
         $count = $models->count();
         $startTime = microtime(true); 
 
