@@ -21,15 +21,11 @@ trait Cacheable
         foreach ($this->model->{$type . 'Caches'}() as $key => $cache) {
             $config = $this->config($key, $cache);
 
-            $isRelevant = true;
-            $wasRelevant = true;
-            if (!$rebuild) {
-                $isRelevant = $this->checkWhereCondition(true, $config);
-                $wasRelevant = $this->checkWhereCondition(false, $config);
+            $isRelevant = $this->checkWhereCondition(true, $config);
+            $wasRelevant = $this->checkWhereCondition(false, $config);
 
-                if (!$isRelevant && !$wasRelevant) {
-                    continue;
-                }
+            if (!$isRelevant && !$wasRelevant) {
+                continue;
             }
 
             $function($config, $isRelevant, $wasRelevant);
@@ -145,6 +141,7 @@ trait Cacheable
             'field' => Str::snake($config['field']),
             'key' => Str::snake($this->key($config['key'])),
             'foreignKey' => Str::snake($this->key($config['foreignKey'])),
+            'where' => $config['where'] ?? [],
         ];
     }
 
