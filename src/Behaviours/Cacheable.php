@@ -14,16 +14,22 @@ trait Cacheable
      *
      * @param string   $type Either sum or count.
      * @param \Closure $function
+     * @param ?boolean   $rebuild Rebuild cache and thus force the operation.
      */
-    public function apply(string $type, \Closure $function)
+    public function apply(string $type, \Closure $function, ?bool $rebuild = false)
     {
         foreach ($this->model->{$type . 'Caches'}() as $key => $cache) {
             $config = $this->config($key, $cache);
-            $isRelevant = $this->checkWhereCondition(true, $config);
-            $wasRelevant = $this->checkWhereCondition(false, $config);
 
-            if (!$isRelevant && !$wasRelevant) {
-                continue;
+            $isRelevant = true;
+            $wasRelevant = true;
+            if (!$rebuild) {
+                $isRelevant = $this->checkWhereCondition(true, $config);
+                $wasRelevant = $this->checkWhereCondition(false, $config);
+
+                if (!$isRelevant && !$wasRelevant) {
+                    continue;
+                }
             }
 
             $function($config, $isRelevant, $wasRelevant);

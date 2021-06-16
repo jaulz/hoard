@@ -56,7 +56,7 @@ class CountCache
     {
         $this->apply('count', function($config) {
             $this->rebuildCacheRecord($config, $this->model, 'COUNT');
-        });
+        }, true);
     }
 
     /**

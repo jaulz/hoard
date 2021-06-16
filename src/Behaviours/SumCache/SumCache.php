@@ -30,7 +30,7 @@ class SumCache
     {
         $this->apply('sum', function($config) {
             $this->rebuildCacheRecord($config, $this->model, 'SUM', $config['columnToSum']);
-        });
+        }, true);
     }
 
     /**
