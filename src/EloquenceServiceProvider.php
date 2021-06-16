@@ -33,8 +33,8 @@ class EloquenceServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->bind('command.eloquence:rebuild', RebuildCaches::class);
-
-        $this->commands(['command.eloquence:rebuild']);
+        $this->commands([
+            RebuildCaches::class,
+        ]);
     }
 }
