@@ -81,9 +81,14 @@ trait Cacheable
         $aggregate
     ) {
         // Get all update statements
-        $updates = collect($foreignConfigs)->mapWithKeys(function ($configs, $foreignModel) use ($model, $aggregate) {
+        $fields = [];
+        $updates = collect($foreignConfigs)->mapWithKeys(function ($configs, $foreignModel) use ($model, $aggregate, $fields) {
             return collect($configs)->map(function ($config) use ($foreignModel) {
+                // Normalize config
                 $config = self::processConfig($foreignModel, $config);
+                
+                // Collect all fields
+                array_push($fields, $config['field']);
 
                 return $config;
             })->mapWithKeys(function ($config) use ($model, $aggregate, $foreignModel) {
@@ -104,19 +109,19 @@ trait Cacheable
         })->toArray();
 
         // Run updates unguarded
-        $before = $model->getAttributes();
+        $before = collect($model->getAttributes())->only($fields);
         $success = $model::unguarded(function () use ($model, $updates) {
             $model->fill($updates);
             $model->timestamps = false;
 
             return $model->saveQuietly();
         });
-        $after = $model->refresh()->getAttributes();
+        $after = collect($model->refresh()->getAttributes())->only($fields);
 
         return [
-            'before' => $before,
-            'after' => $after,
-            'difference' => array_diff($before, $after)
+            'before' => $before->toArray(),
+            'after' => $after->toArray(),
+            'difference' => $before->diffAssoc($after)->toArray()
         ];
     }
 
