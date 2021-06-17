@@ -81,14 +81,14 @@ trait Cacheable
         $aggregate
     ) {
         // Get all update statements
-        $fields = [];
+        $fields = collect([]);
         $updates = collect($foreignConfigs)->mapWithKeys(function ($configs, $foreignModel) use ($model, $aggregate, $fields) {
             return collect($configs)->map(function ($config) use ($foreignModel, $fields) {
                 // Normalize config
                 $config = self::processConfig($foreignModel, $config);
                 
                 // Collect all fields
-                array_push($fields, $config['field']);
+                $fields->push($config['field']);
 
                 return $config;
             })->mapWithKeys(function ($config) use ($model, $aggregate, $foreignModel) {
