@@ -45,12 +45,12 @@ class RebuildCaches extends Command
       $directory
     ))->getAllCacheableClasses();
 
-    $this->rebuild('count', $this->mapDependencies(
+    $this->rebuild('count', $this->mapUsages(
         'count',
         $classNames,
         $this->option('class')
       ));
-      $this->rebuild('sum', $this->mapDependencies(
+      $this->rebuild('sum', $this->mapUsages(
         'sum',
           $classNames,
           $this->option('class')
@@ -58,13 +58,13 @@ class RebuildCaches extends Command
   }
 
   /**
-   * Get a map of all cacheable classes including their foreign dependencies
+   * Get a map of all cacheable classes including their usages
    *
    * @param string $type
    * @param string $className
    * @param ?string $filter
    */
-  private function mapDependencies(
+  private function mapUsages(
     string $type,
     array $classNames,
     ?string $filter
@@ -91,8 +91,8 @@ class RebuildCaches extends Command
           $foreignOptions = collect([]);
           $foreignModel = new $foreignClassName();
           collect($foreignModel->{$type . 'Caches'}())
-            ->filter(function ($option) use ($className) {
-              return $option['model'] === $className;
+            ->filter(function ($options) use ($className) {
+              return $options['model'] === $className;
             })
             ->each(function ($options) use ($foreignOptions) {
               $foreignOptions->push($options);
@@ -102,10 +102,10 @@ class RebuildCaches extends Command
             return true;
           }
 
-          $options->put($foreignClassName, $foreignOptions);
+          $options->put($foreignClassName, $foreignOptions->toArray());
         });
 
-        return [$className => $options];
+        return [$className => $options->toArray()];
       });
   }
 
@@ -118,12 +118,12 @@ class RebuildCaches extends Command
   private function rebuild(
     string $type, $mapping)
   {
-    $mapping->each(function ($dependencies, $className) use ($type) {
+    $mapping->each(function ($usages, $className) use ($type) {
         $models = $className::lazy();
         $count = $models->count();
         $startTime = microtime(true);
     
-        $models->each(function ($model, $index) use ($className, $type, $count) {
+        $models->each(function ($model, $index) use ($className, $type, $count, $usages) {
           $iteration = $index + 1;
           $keyName = $model->getKeyName();
           $key = $model->getKey();
@@ -135,7 +135,7 @@ class RebuildCaches extends Command
 
             $cacheClass = 'Jaulz\\Eloquence\\Behaviours\\CountCache\\' . Str::studly($type) . 'Cache';
             $cache = new $cacheClass($model);
-            $cache->rebuild($dependencies);
+            $cache->rebuild($usages);
           }
         });
     

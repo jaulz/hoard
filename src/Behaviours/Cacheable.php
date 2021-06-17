@@ -50,7 +50,7 @@ trait Cacheable
             return;
         }
 
-        $config = $this->processConfig(get_class($this->model), $config);
+        $config = self::processConfig(get_class($this->model), $config);
 
         $sql = DB::table($config['table'])->where($config['key'], $foreignKey);
 
@@ -58,9 +58,6 @@ trait Cacheable
      * Increment for + operator
      */
         if ($operation == '+') {
-            if ($config['field'][0] === '{') {
-            dd($config);
-            }
             return $sql->increment($config['field'], $amount);
         }
 
@@ -73,45 +70,51 @@ trait Cacheable
     /**
      * Rebuilds the cache for the records in question.
      *
-     * @param array $config
-     * @param string $model
-     * @param $command
-     * @param null $aggregateField
+     * @param Model $model
+     * @param array $foreignConfigs
+     * @param $aggregate
      * @return mixed
      */
-    public function rebuildCacheRecord(
-        array $config,
-        string $model,
-        $command,
-        $aggregateField = null
+    public static function rebuildCacheRecords(
+        Model $model,
+        array $foreignConfigs,
+        $aggregate
     ) {
-        $config = $this->processConfig($model, $config);
-        $table = $this->getModelTable($model);
+        // Get all update statements
+        $updates = collect($foreignConfigs)->mapWithKeys(function ($configs, $foreignModel) use ($model, $aggregate) {
+            return collect($configs)->map(function ($config) use ($foreignModel) {
+                $config = self::processConfig($foreignModel, $config);
 
-        if (is_null($aggregateField)) {
-            $aggregateField = $config['foreignKey'];
-        } else {
-            $aggregateField = Str::snake($aggregateField);
-        }
+                return $config;
+            })->mapWithKeys(function ($config) use ($model, $aggregate, $foreignModel) {
+                // Create query that selects the aggregated field from the foreign table
+                $aggregateField = $aggregate === 'sum' ? $config['columnToSum'] : '*';
+                $query = $foreignModel::select(
+                    DB::raw("$aggregate($aggregateField)")
+                )
+                    ->where($config['where'])->where($config['foreignKey'], $model[$config['key']])->take(1);
 
-        $sql = DB::table($table)
-            ->select($config['foreignKey'])
-            ->groupBy($config['foreignKey'])
-            ->where($config['where']);
+                // Convert query builder to raw sql statement so we can use it in the update statement
+                $sql = $query->toSql();
+                $bindings = $query->getBindings();
+                $rawSql = vsprintf(str_replace(['?'], ['\'%s\''], $sql), $bindings);
 
-        if (strtolower($command) == 'count') {
-            $aggregate = $sql->count($aggregateField);
-        } elseif (strtolower($command) == 'sum') {
-            $aggregate = $sql->sum($aggregateField);
-        } elseif (strtolower($command) == 'avg') {
-            $aggregate = $sql->avg($aggregateField);
-        } else {
-            $aggregate = null;
-        }
+                return [$config['field'] => DB::raw('(' . $rawSql . ')')];
+            });
+        })->toArray();
 
-        return DB::table($config['table'])->update([
-            $config['field'] => $aggregate,
-        ]);
+        // Run updates unguarded
+        $before = $model->getAttributes();
+        $success = $model::unguarded(function () use ($model, $updates) {
+            $model->fill($updates);
+            $model->timestamps = false;
+
+            return $model->saveQuietly();
+        });
+        $after = $model->refresh()->getAttributes();
+        $fixed = empty(array_diff($before, $after));
+
+        return $success && $fixed;
     }
 
     /**

@@ -51,12 +51,13 @@ class CountCache
 
     /**
      * Rebuild the count caches from the database
+     * 
+     * @param array $configs
+     * @return boolean
      */
-    public function rebuild()
+    public function rebuild($configs)
     {
-        $this->apply('count', function($config) {
-            $this->rebuildCacheRecord($config, $this->model, 'COUNT');
-        }, true);
+        return self::rebuildCacheRecords($this->model, $configs, 'COUNT');
     }
 
     /**
