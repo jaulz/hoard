@@ -83,7 +83,7 @@ trait Cacheable
         // Get all update statements
         $fields = [];
         $updates = collect($foreignConfigs)->mapWithKeys(function ($configs, $foreignModel) use ($model, $aggregate, $fields) {
-            return collect($configs)->map(function ($config) use ($foreignModel) {
+            return collect($configs)->map(function ($config) use ($foreignModel, $fields) {
                 // Normalize config
                 $config = self::processConfig($foreignModel, $config);
                 
