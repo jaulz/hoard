@@ -73,7 +73,7 @@ trait Cacheable
      * @param Model $model
      * @param array $foreignConfigs
      * @param $aggregate
-     * @return mixed
+     * @return array
      */
     public static function rebuildCacheRecords(
         Model $model,
@@ -112,9 +112,8 @@ trait Cacheable
             return $model->saveQuietly();
         });
         $after = $model->refresh()->getAttributes();
-        $fixed = empty(array_diff($before, $after));
 
-        return $success && $fixed;
+        return array_diff($before, $after);
     }
 
     /**

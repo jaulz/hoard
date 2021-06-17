@@ -84,10 +84,12 @@ class RebuildCaches extends Command
           $type,
           $options
         ) {
+            // Get specific cache options
           if (!method_exists($foreignClassName, $type . 'Caches')) {
             return true;
           }
 
+          // Go through options and see where the model is referenced
           $foreignOptions = collect([]);
           $foreignModel = new $foreignClassName();
           collect($foreignModel->{$type . 'Caches'}())
@@ -119,10 +121,12 @@ class RebuildCaches extends Command
     string $type, $mapping)
   {
     $mapping->each(function ($usages, $className) use ($type) {
+        // Load all instances lazily
         $models = $className::lazy();
         $count = $models->count();
         $startTime = microtime(true);
     
+        // Run through each model and rebuild cache
         $models->each(function ($model, $index) use ($className, $type, $count, $usages) {
           $iteration = $index + 1;
           $keyName = $model->getKeyName();
@@ -135,14 +139,17 @@ class RebuildCaches extends Command
 
             $cacheClass = 'Jaulz\\Eloquence\\Behaviours\\CountCache\\' . Str::studly($type) . 'Cache';
             $cache = new $cacheClass($model);
-            $cache->rebuild($usages);
+            $differences = $cache->rebuild($usages);
+            if (!empty($differences)) {
+                $this->warn('Fixed cached field $differences');
+            }
           }
         });
     
         $endTime = microtime(true);
         $executionTime = intval(($endTime - $startTime) * 1000);
         $this->info(
-          "Finished rebuilding $className caches in $executionTime milliseconds"
+          "Finished rebuilding $className $type caches in $executionTime milliseconds"
         );
     });
   }

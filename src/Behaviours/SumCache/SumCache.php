@@ -27,7 +27,7 @@ class SumCache
      * Rebuild the count caches from the database
      * 
      * @param array $configs
-     * @return boolean
+     * @return array
      */
     public function rebuild($configs)
     {
