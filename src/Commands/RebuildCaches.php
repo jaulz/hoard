@@ -137,7 +137,7 @@ class RebuildCaches extends Command
               "($iteration/$count) Rebuilding $className($keyName=$key) $type caches"
             );
 
-            $cacheClass = 'Jaulz\\Eloquence\\Behaviours\\CountCache\\' . Str::studly($type) . 'Cache';
+            $cacheClass = 'Jaulz\\Eloquence\\Behaviours\\' . Str::studly($type) . 'Cache\\' . Str::studly($type) . 'Cache';
             $cache = new $cacheClass($model);
             $result = $cache->rebuild($usages);
             if (!empty($result['difference'])) {
