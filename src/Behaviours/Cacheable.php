@@ -113,7 +113,11 @@ trait Cacheable
         });
         $after = $model->refresh()->getAttributes();
 
-        return array_diff($before, $after);
+        return [
+            'before' => $before,
+            'after' => $after,
+            'difference' => array_diff($before, $after)
+        ];
     }
 
     /**

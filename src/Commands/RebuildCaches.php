@@ -139,9 +139,12 @@ class RebuildCaches extends Command
 
             $cacheClass = 'Jaulz\\Eloquence\\Behaviours\\CountCache\\' . Str::studly($type) . 'Cache';
             $cache = new $cacheClass($model);
-            $differences = $cache->rebuild($usages);
-            if (!empty($differences)) {
-                $this->warn('Fixed cached field $differences');
+            $result = $cache->rebuild($usages);
+            if (!empty($result['difference'])) {
+                $this->warn('Fixed cached fields:');
+                $this->warn('Before: ' . json_encode($result['before']));
+                $this->warn('After: ' . json_encode($result['after']));
+                $this->warn('Difference: ' . json_encode($result['difference']));
             }
           }
         });
