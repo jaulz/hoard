@@ -1,14 +1,8 @@
 <?php
 namespace Jaulz\Eloquence\Commands;
 
-use Jaulz\Eloquence\Behaviours\CountCache\CountCache;
-use Jaulz\Eloquence\Behaviours\SumCache\SumCache;
-use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Console\Command;
-use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Model;
 use Jaulz\Eloquence\Behaviours\Cacheable\Cache;
-use Symfony\Component\Finder\Finder;
 
 class RebuildCaches extends Command
 {
@@ -46,10 +40,7 @@ class RebuildCaches extends Command
       $directory
     ))->getAllCacheableClasses();
 
-    $this->rebuild($this->mapUsages(
-        $classNames,
-        $this->option('class')
-      ));
+    $this->rebuild($this->mapUsages($classNames, $this->option('class')));
   }
 
   /**
@@ -58,15 +49,11 @@ class RebuildCaches extends Command
    * @param string $className
    * @param ?string $filter
    */
-  private function mapUsages(
-    array $classNames,
-    ?string $filter
-  ) {
+  private function mapUsages(array $classNames, ?string $filter)
+  {
     return collect($classNames)
       ->filter(function ($className) use ($filter) {
-        return $filter
-          ? $filter === $className
-          : true;
+        return $filter ? $filter === $className : true;
       })
       ->mapWithKeys(function ($className) use ($classNames) {
         $options = collect([]);
@@ -76,7 +63,7 @@ class RebuildCaches extends Command
           $className,
           $options
         ) {
-            // Get specific cache options
+          // Get specific cache options
           if (!method_exists($foreignClassName, 'caches')) {
             return true;
           }
@@ -111,38 +98,42 @@ class RebuildCaches extends Command
   private function rebuild($mapping)
   {
     $mapping->each(function ($usages, $className) {
-        // Load all instances lazily
-        $models = $className::lazy();
-        $count = $models->count();
-        $startTime = microtime(true);
-    
-        // Run through each model and rebuild cache
-        $models->each(function ($model, $index) use ($className, $count, $usages) {
-          $iteration = $index + 1;
-          $keyName = $model->getKeyName();
-          $key = $model->getKey();
-    
-          if (method_exists($model, 'caches')) {
-            $this->comment(
-              "($iteration/$count) Rebuilding $className($keyName=$key) caches"
-            );
+      // Load all instances lazily
+      $models = $className::lazy();
+      $count = $models->count();
+      $startTime = microtime(true);
 
-            $cache = new Cache($model);
-            $result = $cache->rebuild($usages);
-            if (!empty($result['difference'])) {
-                $this->warn('Fixed cached fields:');
-                $this->warn('Before: ' . json_encode($result['before']));
-                $this->warn('After: ' . json_encode($result['after']));
-                $this->warn('Difference: ' . json_encode($result['difference']));
-            }
+      // Run through each model and rebuild cache
+      $models->each(function ($model, $index) use (
+        $className,
+        $count,
+        $usages
+      ) {
+        $iteration = $index + 1;
+        $keyName = $model->getKeyName();
+        $key = $model->getKey();
+
+        if (method_exists($model, 'caches')) {
+          $this->comment(
+            "($iteration/$count) Rebuilding $className($keyName=$key) caches"
+          );
+
+          $cache = new Cache($model);
+          $result = $cache->rebuild($usages);
+          if (!empty($result['difference'])) {
+            $this->warn('Fixed cached fields:');
+            $this->warn('Before: ' . json_encode($result['before']));
+            $this->warn('After: ' . json_encode($result['after']));
+            $this->warn('Difference: ' . json_encode($result['difference']));
           }
-        });
-    
-        $endTime = microtime(true);
-        $executionTime = intval(($endTime - $startTime) * 1000);
-        $this->info(
-          "Finished rebuilding $className caches in $executionTime milliseconds"
-        );
+        }
+      });
+
+      $endTime = microtime(true);
+      $executionTime = intval(($endTime - $startTime) * 1000);
+      $this->info(
+        "Finished rebuilding $className caches in $executionTime milliseconds"
+      );
     });
   }
 }
