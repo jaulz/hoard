@@ -7,6 +7,7 @@ use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Model;
+use Jaulz\Eloquence\Behaviours\Cacheable\Cache;
 use Symfony\Component\Finder\Finder;
 
 class RebuildCaches extends Command
@@ -45,27 +46,19 @@ class RebuildCaches extends Command
       $directory
     ))->getAllCacheableClasses();
 
-    $this->rebuild('count', $this->mapUsages(
-        'count',
+    $this->rebuild($this->mapUsages(
         $classNames,
         $this->option('class')
       ));
-      $this->rebuild('sum', $this->mapUsages(
-        'sum',
-          $classNames,
-          $this->option('class')
-        ));
   }
 
   /**
    * Get a map of all cacheable classes including their usages
    *
-   * @param string $type
    * @param string $className
    * @param ?string $filter
    */
   private function mapUsages(
-    string $type,
     array $classNames,
     ?string $filter
   ) {
@@ -75,24 +68,23 @@ class RebuildCaches extends Command
           ? $filter === $className
           : true;
       })
-      ->mapWithKeys(function ($className) use ($classNames, $type) {
+      ->mapWithKeys(function ($className) use ($classNames) {
         $options = collect([]);
 
         // Go through all other classes and check if they reference the current class
         collect($classNames)->each(function ($foreignClassName) use (
           $className,
-          $type,
           $options
         ) {
             // Get specific cache options
-          if (!method_exists($foreignClassName, $type . 'Caches')) {
+          if (!method_exists($foreignClassName, 'caches')) {
             return true;
           }
 
           // Go through options and see where the model is referenced
           $foreignOptions = collect([]);
           $foreignModel = new $foreignClassName();
-          collect($foreignModel->{$type . 'Caches'}())
+          collect($foreignModel->caches())
             ->filter(function ($options) use ($className) {
               return $options['model'] === $className;
             })
@@ -114,31 +106,28 @@ class RebuildCaches extends Command
   /**
    * Rebuilds the caches for the given class.
    *
-   * @param string $type
    * @param any $mapping
    */
-  private function rebuild(
-    string $type, $mapping)
+  private function rebuild($mapping)
   {
-    $mapping->each(function ($usages, $className) use ($type) {
+    $mapping->each(function ($usages, $className) {
         // Load all instances lazily
         $models = $className::lazy();
         $count = $models->count();
         $startTime = microtime(true);
     
         // Run through each model and rebuild cache
-        $models->each(function ($model, $index) use ($className, $type, $count, $usages) {
+        $models->each(function ($model, $index) use ($className, $count, $usages) {
           $iteration = $index + 1;
           $keyName = $model->getKeyName();
           $key = $model->getKey();
     
-          if (method_exists($model, $type . 'Caches')) {
+          if (method_exists($model, 'caches')) {
             $this->comment(
-              "($iteration/$count) Rebuilding $className($keyName=$key) $type caches"
+              "($iteration/$count) Rebuilding $className($keyName=$key) caches"
             );
 
-            $cacheClass = 'Jaulz\\Eloquence\\Behaviours\\' . Str::studly($type) . 'Cache\\' . Str::studly($type) . 'Cache';
-            $cache = new $cacheClass($model);
+            $cache = new Cache($model);
             $result = $cache->rebuild($usages);
             if (!empty($result['difference'])) {
                 $this->warn('Fixed cached fields:');
@@ -152,7 +141,7 @@ class RebuildCaches extends Command
         $endTime = microtime(true);
         $executionTime = intval(($endTime - $startTime) * 1000);
         $this->info(
-          "Finished rebuilding $className $type caches in $executionTime milliseconds"
+          "Finished rebuilding $className caches in $executionTime milliseconds"
         );
     });
   }

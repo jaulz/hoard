@@ -36,11 +36,11 @@ class AcceptanceTestCase extends TestCase
             $table->string('first_name');
             $table->string('last_name');
             $table->string('slug')->nullable();
-            $table->integer('comment_count')->default(0);
-            $table->integer('post_count')->default(0);
-            $table->integer('post_count_explicit')->default(0);
-            $table->integer('post_count_conditional')->default(0);
-            $table->integer('post_count_complex_conditional')->default(0);
+            $table->integer('comment_count')->default(0)->nullable();
+            $table->integer('post_count')->default(0)->nullable();
+            $table->integer('post_count_explicit')->default(0)->nullable();
+            $table->integer('post_count_conditional')->default(0)->nullable();
+            $table->integer('post_count_complex_conditional')->default(0)->nullable();
             $table->timestamps();
         });
 
@@ -48,9 +48,11 @@ class AcceptanceTestCase extends TestCase
             $table->increments('id');
             $table->integer('user_id')->nullable();
             $table->string('slug')->nullable();
-            $table->integer('comment_count')->default(0);
+            $table->integer('comment_count')->default(0)->nullable();
             $table->boolean('visible')->default(false);
             $table->integer('weight')->default(0);
+            $table->timestamp('first_commented_at')->nullable();
+            $table->timestamp('last_commented_at')->nullable();
             $table->timestamps();
         });
 
@@ -65,10 +67,10 @@ class AcceptanceTestCase extends TestCase
 
         Schema::create('orders', function (Blueprint $table) {
             $table->increments('id');
-            $table->integer('item_total')->default(0);
-            $table->integer('item_total_explicit')->default(0);
-            $table->integer('item_total_conditional')->default(0);
-            $table->integer('item_total_complex_conditional')->default(0);
+            $table->integer('item_total')->default(0)->nullable();
+            $table->integer('item_total_explicit')->default(0)->nullable();
+            $table->integer('item_total_conditional')->default(0)->nullable();
+            $table->integer('item_total_complex_conditional')->default(0)->nullable();
             $table->timestamps();
         });
 

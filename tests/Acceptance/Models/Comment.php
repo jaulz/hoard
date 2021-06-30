@@ -1,7 +1,7 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\CountCache\Countable;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -9,14 +9,35 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Comment extends Model
 {
     use CamelCasing;
-    use Countable;
+    use Cacheable;
     use SoftDeletes;
 
-    public function countCaches()
+    public function caches()
     {
         return [
-            'Tests\Acceptance\Models\Post',
-            'Tests\Acceptance\Models\User',
+            [
+                'function' => 'count',
+                'model' => 'Tests\Acceptance\Models\Post',
+            ],
+
+            [
+                'function' => 'COUNT',
+                'model' => 'Tests\Acceptance\Models\User',
+            ],
+
+            [
+                'function' => 'MAX',
+                'model' => 'Tests\Acceptance\Models\Post',
+                'summary' => 'last_commented_at',
+                'field' => 'created_at'
+            ],
+
+            [
+                'function' => 'MIN',
+                'model' => 'Tests\Acceptance\Models\Post',
+                'summary' => 'first_commented_at',
+                'field' => 'created_at'
+            ],
         ];
     }
 }

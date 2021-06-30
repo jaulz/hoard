@@ -1,30 +1,39 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\SumCache\Summable;
 use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 
 class Item extends Model
 {
     use CamelCasing;
-    use Summable;
+    use Cacheable;
 
-    public function sumCaches()
+    public function caches()
     {
         return [
-            'Tests\Acceptance\Models\Order',
             [
+                'function' => 'sum',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'field' => 'itemTotalExplicit',
-                'columnToSum' => 'total',
+                'field' => 'total',
+                'summary' => 'itemTotal',
+            ],
+
+            [
+                'function' => 'SUM',
+                'model' => 'Tests\Acceptance\Models\Order',
+                'summary' => 'itemTotalExplicit',
+                'field' => 'total',
                 'foreignKey' => 'orderId',
                 'key' => 'id',
             ],
+
             [
+                'function' => 'sUm',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'field' => 'itemTotalConditional',
-                'columnToSum' => 'total',
+                'summary' => 'itemTotalConditional',
+                'field' => 'total',
                 'foreignKey' => 'orderId',
                 'key' => 'id',
                 'where' => [
@@ -32,9 +41,10 @@ class Item extends Model
                 ]
             ],
             [
+                'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'field' => 'itemTotalComplexConditional',
-                'columnToSum' => 'total',
+                'summary' => 'itemTotalComplexConditional',
+                'field' => 'total',
                 'foreignKey' => 'orderId',
                 'key' => 'id',
                 'where' => [

@@ -1,21 +1,26 @@
 <?php
 namespace Tests\Unit\Stubs\SumCache;
 
-use Jaulz\Eloquence\Behaviours\SumCache\Summable;
-use Jaulz\Eloquence\Database\Model;
+use Illuminate\Database\Eloquent\Model;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 
 class Item extends Model
 {
-    use Summable;
+    use Cacheable;
 
-    public function sumCaches()
+    public function caches()
     {
         return [
-            'Tests\Unit\Stubs\SumCache\Order',
             [
+                'function' => 'sum',
                 'model' => 'Tests\Unit\Stubs\SumCache\Order',
-                'sumField' => 'itemTotalExplicit',
-                'columnToSum' => 'total',
+            ],
+
+            [
+                'function' => 'sum',
+                'model' => 'Tests\Unit\Stubs\SumCache\Order',
+                'summary' => 'itemTotalExplicit',
+                'field' => 'total',
                 'foreignKey' => 'itemId',
                 'key' => 'id',
             ]

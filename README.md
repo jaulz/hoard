@@ -82,159 +82,67 @@ to use the Uuid trait, as it's practically useless in this scenario.
 Eloquence comes with a system for setting up behaviours, which are really just small libraries that you can use with your Eloquent models.
 The first of these is the count cache.
 
-### Count cache
+### Cache
 
-Count caching is where you cache the result of a count of a related table's records. A simple example of this is where you have a user who
+Caching is where you cache the result of an aggregation of a related table's records. A simple example of this is where you have a user who
 has many posts. In this example, you may want to count the number of posts a user has regularly - and perhaps even order by this. In SQL,
 ordering by a counted field is slow and unable to be indexed. You can get around this by caching the count of the posts the user
 has created on the user's record.
 
 To get this working, you need to do two steps:
 
-1. Use the Countable trait on the model and 
-2. Configure the count cache settings
+1. Use the Cacheable trait on the model and 
+2. Configure the cache settings
 
-#### Configure the count cache
+#### Configure the cache
 
-To setup the count cache configuration, we need to have the model use Countable trait, like so:
-
-```php
-class Post extends Eloquent {
-    use Countable;
-    
-    public function countCaches() {
-        return [User::class];
-    }
-}
-```
-
-This tells the count cache that the Post model has a count cache on the User model. So, whenever a post is added, or modified or
-deleted, the count cache behaviour will update the appropriate user's count cache for their posts. In this case, it would update `post_count`
-on the user model.
-
-The example above uses the following standard conventions:
-
-* `post_count` is a defined field on the User model table
-* `user_id` is the field representing the foreign key on the post model
-* `id` is the primary key on the user model table
-
-These are, however, configurable:
-
-```php
-class Post extends Eloquent {
-    use Countable;
-    
-    public function countCaches() {
-        return [
-            'num_posts' => ['User', 'users_id', 'id']
-        ];
-    }
-}
-```
-
-This example customises the count cache field, and the related foreign key, with `num_posts` and `users_id`, respectively.
-
-Alternatively, you can be very explicit about the configuration (useful if you are using count caching on several tables
-and use the same column name on each of them):
-
-```php
-class Post extends {
-    use Countable;
-    
-    public function countCaches() {
-        return [
-            [
-                'model'      => 'User',
-                'field'      => 'num_posts',
-                'foreignKey' => 'users_id',
-                'key'        => 'id',
-                'where'        => [ 'visible' => true ]
-            ]
-        ];
-    }
-}
-```
-
-If using the explicit configuration, at a minimum you will need to define the "model" parameter.  The "countField", "foreignKey",
-and "key" parameters will be calculated using the standard conventions mentioned above if they are omitted.
-
-With this configuration now setup - you're ready to go!
-
-
-### Sum cache
-
-Sum caching is similar to count caching, except that instead of caching a _count_ of a related table's records, you cache a _sum_
-of a particular field on the related table's records. A simple example of this is where you have an order that has many items.
-Using sum caching, you can cache the sum of all the items' prices, and store that sum in the order table.
-
-To get this working -- just like count caching -- you need to do two steps:
-
-1. Utilise the Summable trait on the model and
-2. Configure the model for any sum caches
-
-#### Configure the sum cache
-
-To setup the sum cache configuration, simply do the following:
+To setup the cache configuration, simply do the following:
 
 ```php
 class Item extends Eloquent {
     use Summable;
     
-    public function sumCaches() {
+    public function caches() {
         return [Order::class];
     }
 }
 ```
 
-This tells the sum cache manager that the Item model has a sum cache on the Order model. So, whenever an item is added, modified, or
-deleted, the sum cache behaviour will update the appropriate order's sum cache for their items. In this case, it would update `item_total`
+This tells the cache manager that the Item model has a cache on the Order model. So, whenever an item is added, modified, or
+deleted, the cache behaviour will update the appropriate order's cache for their items. In this case, it would update `item_total`
 on the Order model.
 
-The example above uses the following conventions:
-
-* `item_total` is a defined field on the Order model table
-* `total` is a defined field on the Item model table (the column we are summing) 
-* `order_id` is the field representing the foreign key on the item model
-* `id` is the primary key on the order model table
-
-These are, however, configurable:
-
 ```php
 class Item extends Eloquent {
-    use Summable;
+    use Cacheable;
     
-    public function sumCaches() {
-        return [
-            'item_total' => ['Order', 'total', 'order_id', 'id']
-        ];
-    }
-}
-```
-    
-Or using the verbose syntax:
-
-```php
-class Item extends Eloquent {
-    use Summable;
-    
-    public function sumCaches() {
+    public function caches() {
         return [
             [
+                'function'    => 'sum',
+                'summary'     => 'total',
                 'model'       => 'Order',
-                'columnToSum' => 'total',
                 'field'       => 'item_total'
                 'foreignKey'  => 'order_id',
                 'key'         => 'id',
-                'where'        => [ 'billable' => true ]
+                'where'       => [ 'billable' => true ]
             ]
         ];
     }
 }
 ```
 
-Both of these examples implements the default settings.
+The example above uses the following conventions:
 
-With these settings configured, you will now see the related model's sum cache updated every time an item is added, updated, or removed.
+* `function` is the aggregation function
+* `summary` is the field that will contain the aggregated values
+* `item_total` is a defined field on the Order model table
+* `total` is a defined field on the Item model table (the column we are summing) 
+* `order_id` is the field representing the foreign key on the item model
+* `key` is the primary key on the order model table
+* `where` is an array of conditions that will be applied to the aggregation
+
+With these settings configured, you will now see the related model's cache updated every time an item is added, updated, or removed.
 
 ### Sluggable models
 

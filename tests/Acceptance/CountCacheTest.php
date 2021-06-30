@@ -1,6 +1,7 @@
 <?php
 namespace Tests\Acceptance;
 
+use Illuminate\Support\Facades\DB;
 use Tests\Acceptance\Models\Comment;
 use Tests\Acceptance\Models\Post;
 use Tests\Acceptance\Models\User;
@@ -30,21 +31,22 @@ class CountCacheTest extends AcceptanceTestCase
         $post->weight = 3;
         $post->save();
 
-        $this->assertEquals(0, User::first()->commentCount);
+        $this->assertEquals(2, User::first()->postCount);
+        $this->assertEquals(2, User::first()->postCountExplicit);
+        $this->assertEquals(1, User::first()->postCountConditional);
         $this->assertEquals(0, User::first()->postCountComplexConditional);
+        $this->assertEquals(0, User::first()->commentCount);
+        $this->assertEquals(null, Post::first()->firstCommentedAt);
 
         $comment = new Comment;
         $comment->userId = $this->data['user']->id;
         $comment->postId = $this->data['post']->id;
         $comment->save();
 
-        $this->assertEquals(2, User::first()->postCount);
-        $this->assertEquals(2, User::first()->postCountExplicit);
-        $this->assertEquals(1, User::first()->postCountConditional);
-        $this->assertEquals(0, User::first()->postCountComplexConditional);
-
         $this->assertEquals(1, User::first()->commentCount);
         $this->assertEquals(1, Post::first()->commentCount);
+        $this->assertEquals($comment->createdAt, Post::first()->firstCommentedAt);
+        $this->assertEquals($comment->createdAt, Post::first()->lastCommentedAt);
 
         $comment->postId = $post->id;
         $comment->save();
@@ -85,10 +87,12 @@ class CountCacheTest extends AcceptanceTestCase
         $comment->delete();
 
         $this->assertEquals(0, Post::first()->commentCount);
-
+        $this->assertEquals(null, Post::first()->firstCommentedAt);
+        
         $comment->restore();
 
         $this->assertEquals(1, Post::first()->commentCount);
+        $this->assertEquals($comment->createdAt, Post::first()->firstCommentedAt);
     }
 
     private function setupUserAndPost()

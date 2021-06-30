@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class RealModelStub extends Model
 {
-    use \Jaulz\Eloquence\Behaviours\CountCache\Countable;
+    use \Jaulz\Eloquence\Behaviours\Cacheable;
     use \Jaulz\Eloquence\Behaviours\CamelCasing;
 
     protected $dateFormat = \DateTime::ISO8601;
@@ -52,7 +52,7 @@ class RealModelStub extends Model
      *
      * @return array
      */
-    public function countCaches()
+    public function caches()
     {
         return [
             'users_count' => ['Role', 'role_id', 'id'],

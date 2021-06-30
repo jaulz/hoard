@@ -8,13 +8,20 @@ class Post extends Model
 {
     use Countable;
 
-    public function countCaches()
+    public function caches()
     {
         return [
-            'posts_count' => ['Tests\Unit\Stubs\CountCache\User', 'user_id', 'id'],
             [
+                'function' => 'COUNT',
                 'model' => 'Tests\Unit\Stubs\CountCache\User',
-                'countField' => 'posts_count_explicit',
+                'summary' => 'posts_count',
+                'foreignKey' => 'user_id',
+                'key' => 'id'
+            ],
+            [
+                'function' => 'count',
+                'model' => 'Tests\Unit\Stubs\CountCache\User',
+                'summary' => 'posts_count_explicit',
                 'foreignKey' => 'user_id',
                 'key' => 'id'
             ]

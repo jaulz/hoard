@@ -1,18 +1,31 @@
 <?php
 namespace Tests\Unit\Stubs\CountCache;
 
-use Jaulz\Eloquence\Behaviours\CountCache\Countable;
 use Illuminate\Database\Eloquent\Model;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 
 class Comment extends Model
 {
-    use Countable;
+    use Cacheable;
 
-    public function countCaches()
+    public function caches()
     {
         return [
-            'num_comments' => 'Tests\Unit\Stubs\CountCache\Post',
-            'Tests\Unit\Stubs\CountCache\User'
+            [
+                'function' => 'COUNT',
+                'model' => 'Tests\Unit\Stubs\CountCache\Post',
+                'summary' => 'num_comments',
+            ],
+            [
+                'function' => 'count',
+                'model' => 'Tests\Unit\Stubs\CountCache\User',
+            ],
+            [
+                'function' => 'MAX',
+                'model' => 'Tests\Unit\Stubs\CountCache\Post',
+                'summary' => 'last_commented',
+                'field' => 'created_at'
+            ],
         ];
     }
 }
