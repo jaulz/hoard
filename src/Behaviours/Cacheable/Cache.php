@@ -277,9 +277,10 @@ class Cache
     $key = $config['key'];
     $foreignKey =
       $foreignModel instanceof Model ? $foreignModel[$key] : $foreignModel;
+    $defaultValue = $function === 'sum' ? 0 : 'null';
 
     $cacheQuery = $this->model
-      ::select(DB::raw("$function($field)"))
+      ::select(DB::raw("COALESCE($function($field), $defaultValue)"))
       ->where($config['where'])
       ->where($config['foreignKey'], $foreignKey);
     $result = $model::where($config['key'], $foreignKey)->update([
@@ -320,8 +321,9 @@ class Cache
             // Create query that selects the aggregated field from the foreign table
             $function = $config['function'];
             $field = $config['field'];
+            $defaultValue = $function === 'sum' ? 0 : 'null';
             $query = $foreignModel
-              ::select(DB::raw("$function($field)"))
+              ::select(DB::raw("COALESCE($function($field), $defaultValue)"))
               ->where($config['where'])
               ->where($config['foreignKey'], $model[$config['key']])
               ->take(1);
