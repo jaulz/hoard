@@ -41,9 +41,11 @@ class CountCacheTest extends AcceptanceTestCase
         $comment = new Comment;
         $comment->userId = $this->data['user']->id;
         $comment->postId = $this->data['post']->id;
+        error_log('start');
         $comment->save();
 
         $this->assertEquals(1, User::first()->commentCount);
+        $this->assertEquals(1, User::first()->postCommentSum);
         $this->assertEquals(1, Post::first()->commentCount);
         $this->assertEquals($comment->createdAt, Post::first()->firstCommentedAt);
         $this->assertEquals($comment->createdAt, Post::first()->lastCommentedAt);

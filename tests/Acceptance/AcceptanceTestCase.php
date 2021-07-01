@@ -41,6 +41,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('post_count_explicit')->default(0)->nullable();
             $table->integer('post_count_conditional')->default(0)->nullable();
             $table->integer('post_count_complex_conditional')->default(0)->nullable();
+            $table->integer('post_comment_sum')->default(0)->nullable();
             $table->timestamps();
         });
 
@@ -80,6 +81,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('total');
             $table->boolean('billable')->default(false);
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 }

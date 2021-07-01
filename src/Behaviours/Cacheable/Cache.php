@@ -15,6 +15,11 @@ class Cache
   private $model;
 
   /**
+   * @var bool
+   */
+  private $propagated;
+
+  /**
    * @var array
    */
   private $configs;
@@ -22,14 +27,70 @@ class Cache
   /**
    * @param Model $model
    */
-  public function __construct(Model $model)
+  public function __construct(Model $model, bool $propagated = false)
   {
     $this->model = $model;
+    $this->propagated = $propagated;
     $this->configs = collect($model->caches())->map(function ($config) use (
       $model
     ) {
       return $this->config($model, $config);
+    })->filter(function ($config) use ($propagated) {
+      return $propagated ? empty($config['where']) : true;
     });
+  }
+
+  /**
+   * Takes a registered sum cache, and setups up defaults.
+   *
+   * @param Model $model
+   * @param array $config
+   * @return array
+   */
+  protected static function config($model, $config)
+  {
+    $foreignModelName = $config['model'];
+    $modelName = $model instanceof Model ? get_class($model) : $model;
+    $function = Str::lower($config['function']);
+
+    // Prepare defaults
+    $defaults = [
+      'field' => 'id',
+      'foreignKey' => self::field($foreignModelName, 'id'),
+      'key' => 'id',
+      'where' => [],
+      'summary' => self::field($modelName, $function),
+      'propagate' => false
+    ];
+
+    // Merge defaults and actual config
+    $config = array_merge($defaults, $config);
+    $relatedModel = $config['model'];
+
+    // Check if we need to propagate changes by checking if the foreign model is also cacheable
+    $propagate = false;
+    /*if (method_exists((new $foreignModelName()), 'bootCacheable')) {
+      $foreignModelInstance = new $foreignModelName();
+      $foreignConfig = $foreignModelInstance->caches();
+
+      $propagate = collect($foreignConfig)->some(function($foreignConfig) use ($foreignModelName, $config) {
+        $foreignConfig = static::config($foreignModelName, $foreignConfig);
+
+        return $config['summary'] === $foreignConfig['field'];
+      });
+    }*/
+
+    return [
+      'function' => $function,
+      'model' => $foreignModelName,
+      'table' => self::getModelTable($config['model']),
+      'summary' => Str::snake($config['summary']),
+      'field' => $config['field'],
+      'key' => Str::snake(self::key($modelName, $config['key'])),
+      'foreignKey' => Str::snake(self::key($modelName, $config['foreignKey'])),
+      'where' => $config['where'],
+      'propagate' => $config['propagate'],
+    ];
   }
 
   /**
@@ -57,13 +118,17 @@ class Cache
 
       // Handle certain cases more efficiently
       $rawUpdate = null;
+      $propagateValue = null;
       switch ($function) {
         case 'count':
           $rawUpdate = DB::raw("$summary + 1");
+          $propagateValue = 1;
           break;
 
         case 'sum':
+          $value = $value ?? 0;
           $rawUpdate = DB::raw("$summary + $value");
+          $propagateValue = $value;
           break;
       }
 
@@ -71,7 +136,8 @@ class Cache
         $this->model->{$foreignKey},
         $config,
         'created',
-        $rawUpdate
+        $rawUpdate,
+        $propagateValue
       );
     });
   }
@@ -90,13 +156,16 @@ class Cache
 
       // Handle certain cases more efficiently
       $rawUpdate = null;
+      $propagateValue = null;
       switch ($function) {
         case 'count':
           $rawUpdate = DB::raw("$summary - 1");
+          $propagateValue = -1;
           break;
 
         case 'sum':
           $rawUpdate = DB::raw("$summary - $value");
+          $propagateValue = -1 * $value;
           break;
       }
 
@@ -104,7 +173,8 @@ class Cache
         $this->model->{$foreignKey},
         $config,
         'deleted',
-        $rawUpdate
+        $rawUpdate,
+        $propagateValue
       );
     });
   }
@@ -122,25 +192,70 @@ class Cache
       $changedForeignKey =
         $this->model->getOriginal($foreignKey) &&
         $this->model->{$foreignKey} != $this->model->getOriginal($foreignKey);
+      $restored =  $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
+      $dirty = $this->model->isDirty();
+
+      if ($config['summary'] === 'post_comment_sum' && $this->propagated) {
+        error_log($this->model);
+       error_log($foreignKey);
+                  }
 
       // Handle certain cases more efficiently
       switch ($config['function']) {
         case 'count':
           // In case the foreign key changed, we just transfer the values from one model to the other
           if ($changedForeignKey) {
-            $this->updateCacheRecord(
+            return [
+              $this->updateCacheRecord(
+                $this->model->{$foreignKey},
+                $config,
+                'updated',
+                DB::raw("$summary + $value"),
+                $value
+              ),
+
+              $this->updateCacheRecord(
+                $this->model->getOriginal($foreignKey),
+                $config,
+                'updated',
+                DB::raw("$summary + (-1 * $value)"),
+                -1 * $value,
+              )
+            ];
+          }
+
+          if ($isRelevant && $wasRelevant) {
+            // Nothing to do
+            if (!$restored) {
+              return null;
+            }
+
+            // Restore count indicator if item is restored
+            return $this->updateCacheRecord(
               $this->model->{$foreignKey},
               $config,
               'updated',
-              DB::raw("$summary + $value")
+              DB::raw("$summary + 1"),
+              1
             );
-            $this->updateCacheRecord(
-              $this->model->getOriginal($foreignKey),
+          } elseif ($isRelevant && !$wasRelevant) {
+            // Increment because it was not relevant before but now it is
+            return $this->updateCacheRecord(
+              $this->model->{$foreignKey},
               $config,
               'updated',
-              DB::raw("$summary + (-1 * $value)")
+              DB::raw("$summary + 1"),
+              1
             );
-            return;
+          } elseif (!$isRelevant && $wasRelevant) {
+            // Decrement because it was relevant before but now it is not anymore
+            return $this->updateCacheRecord(
+              $this->model->{$foreignKey},
+              $config,
+              'updated',
+              DB::raw("$summary - 1"),
+              -1
+            );
           }
 
           break;
@@ -153,37 +268,42 @@ class Cache
                 $this->model->{$foreignKey},
                 $config,
                 'updated',
-                DB::raw("$summary + $value")
+                DB::raw("$summary + $value"),
+                $value,
               ),
 
               $this->updateCacheRecord(
                 $this->model->getOriginal($foreignKey),
                 $config,
                 'updated',
-                DB::raw("$summary + (-1 * $value)")
+                DB::raw("$summary + (-1 * $value)"),
+                -1 * $value
               )
             ];
-            return;
           }
 
           if ($isRelevant && $wasRelevant) {
             // We need to add the difference in case it is as relevant as before
-            $difference = $value - $originalValue;
+            $difference = $value - ($originalValue ?? 0);
 
-            if ($difference > 0) {
-              return $this->updateCacheRecord(
-                $this->model->{$foreignKey},
-                $config,
-                'updated',
-                $difference
-              );
+            if ($difference === 0) {
+              return [];
             }
+
+            return $this->updateCacheRecord(
+              $this->model->{$foreignKey},
+              $config,
+              'updated',
+              DB::raw("$summary + $difference"),
+              $difference
+            );
           } elseif ($isRelevant && !$wasRelevant) {
             // Increment because it was not relevant before but now it is
             return $this->updateCacheRecord(
               $this->model->{$foreignKey},
               $config,
               'updated',
+              DB::raw("$summary + $value"),
               $value
             );
           } elseif (!$isRelevant && $wasRelevant) {
@@ -192,7 +312,8 @@ class Cache
               $this->model->{$foreignKey},
               $config,
               'updated',
-              -1 * $originalValue
+              DB::raw("$summary - $originalValue"),
+              -1 * $originalValue,
             );
           }
 
@@ -202,41 +323,6 @@ class Cache
       // Run update with recalculation
       return $this->updateCacheRecord($this->model->{$foreignKey}, $config, 'updated');
     });
-  }
-
-  /**
-   * Takes a registered sum cache, and setups up defaults.
-   *
-   * @param Model $model
-   * @param array $config
-   * @return array
-   */
-  protected static function config($model, $config)
-  {
-    $foreignModelName = $config['model'];
-    $modelName = $model instanceof Model ? get_class($model) : $model;
-    $defaults = [
-      'model' => $foreignModelName,
-      'summary' => self::field($modelName, Str::lower($config['function'])),
-      'field' => 'id',
-      'foreignKey' => self::field($foreignModelName, 'id'),
-      'key' => 'id',
-      'where' => [],
-    ];
-    $config = array_merge($defaults, $config);
-    $function = Str::lower($config['function']);
-    $relatedModel = $config['model'];
-
-    return [
-      'function' => $function,
-      'model' => $foreignModelName,
-      'table' => self::getModelTable($config['model']),
-      'summary' => Str::snake($config['summary']),
-      'field' => $config['field'],
-      'key' => Str::snake(self::key($modelName, $config['key'])),
-      'foreignKey' => Str::snake(self::key($modelName, $config['foreignKey'])),
-      'where' => $config['where'],
-    ];
   }
 
   /**
@@ -255,19 +341,50 @@ class Cache
         return null;
       }
 
-      $updates = $function($config, $isRelevant, $wasRelevant);
-      return Arr::isAssoc($updates) ? collect($updates) : $updates;
-    })->flatten()->filter(function ($update) {
+      return $function($config, $isRelevant, $wasRelevant);
+    })->filter(function ($update) {
       return $update !== null;
-    })->groupBy('model', 'key', 'foreignKey')->each(function ($keys, $model) {
-      dd($keys);
-      $keys->each(function($foreignKeys, $key) use ($model) {
-        $foreignKeys->each(function($updates, $foreignKey) use ($model, $key) {
-          $model::where($key, $foreignKey)->update($updates->map(function($update) use ($model, $key) {
+    })
+    ->reduce(function ($cumulatedUpdates = [], $update) {
+      return collect($cumulatedUpdates)->concat(Arr::isAssoc($update) ? [$update] : $update);
+    })
+    ->groupBy(['model', 'key', 'foreignKey'])->each(function ($keys, $foreignModel) {
+      $keys->each(function($foreignKeys, $key) use ($foreignModel, $keys) {
+        $foreignKeys->each(function($updates, $foreignKey) use ($foreignModel, $key, $keys) {
+          $query = $foreignModel::where($key, $foreignKey);
+          $foreignModelInstance = new $foreignModel();
+
+          // Update entity in one go
+          error_log($updates);
+          $values = $updates->mapWithKeys(function($update) use ($foreignModelInstance) {
+            if (isset($update['propagateValue'])) {
+              $foreignModelInstance->{$update['summary']} = $update['propagateValue'];
+            }
+
             return [
               $update['summary'] => $update['rawValue']
             ];
-          })->toArray());
+          });
+          $query->update($values->toArray());
+
+          // In case we propagate, we need to load the entity (which causes an additional select)
+          $propagate = $updates->filter(function ($update) use ($updates) {
+              return is_array($update['propagate']);
+          })->reduce(function ($cumulatedPropagate, $update) {
+            return collect($cumulatedPropagate)->concat($update['propagate']);
+          }); 
+          error_log($propagate);
+          if ($propagate && $propagate->count() > 0) {
+            $foreignModelInstance->{$key} = $foreignKey;
+            $propagate->each(function ($propagate) use ($foreignModelInstance) {
+              $foreignModelInstance->{$propagate} = $this->model[$propagate];
+            });
+
+             (new Cache($foreignModelInstance, true))->update();
+            /*event(
+                "eloquent.updated: ".$model, $query->first()
+            );*/
+          }
         });
       });
     });
@@ -276,17 +393,19 @@ class Cache
   /**
    * Updates a table's record based on the query information provided in the $config variable.
    *
-   * @param any $foreignModel Foreign model
+   * @param any $foreignKey Foreign key
    * @param array $config
    * @param string $event Possible events: created/deleted/updated
    * @param ?any $rawValue Raw value
+   * @param ?any $rawValue Propagate value
    * @return array
    */
   public function updateCacheRecord(
-    $foreignModel,
+    $foreignKey,
     array $config,
     $event,
-    $rawValue = null
+    $rawValue = null,
+    $propagateValue = null
   ) {
     $model = $config['model'];
     $function = $config['function'];
@@ -294,25 +413,22 @@ class Cache
     $field = $config['field'];
     $key = $config['key'];
     $foreignKey =
-      $foreignModel instanceof Model ? $foreignModel[$key] : $foreignModel;
+      $foreignKey instanceof Model ? $foreignKey[$key] : $foreignKey;
     $defaultValue = $function === 'sum' ? 0 : 'null';
 
     $cacheQuery = $this->model
       ::select(DB::raw("COALESCE($function($field), $defaultValue)"))
       ->where($config['where'])
       ->where($config['foreignKey'], $foreignKey);
-    /*$result = $model::where($config['key'], $foreignKey)->update([
-      $config['summary'] =>
-        $rawValue ??
-        DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
-    ]);*/
 
     return [
-      'model' => $this->model,
+      'model' => $model,
       'summary' => $config['summary'],
       'key' => $config['key'],
       'foreignKey' => $foreignKey,
       'rawValue' => $rawValue ?? DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
+      'propagate' => $config['propagate'],
+      'propagateValue' => $propagateValue
     ];
   }
 
@@ -483,6 +599,19 @@ class Cache
       }
 
       // Determine if model is relevant for count
+      if (
+        $current &&
+        !array_key_exists($attribute, $model->getAttributes())
+      ) {
+        throw new UnableToCacheException(
+          'Unable to cache "' . $config['function'] .'(' .
+            $config['field'] .
+            ')" into "' . $config['summary'] . '" because ' .
+            $attribute .
+            ' is part of the where condition but it is not set explicitly on the entity.'
+        );
+      }
+
       $relevant = false;
       $modelValue = $current
         ? $model->getAttributes()[$attribute]
@@ -506,20 +635,6 @@ class Cache
         case '<>':
           $relevant = $modelValue !== $value;
           break;
-      }
-
-      if (
-        !$relevant &&
-        $current &&
-        !array_key_exists($attribute, $model->getAttributes())
-      ) {
-        throw new UnableToCacheException(
-          'Unable to cache ' .
-            $config['field'] .
-            ' because ' .
-            $attribute .
-            ' is part of the where condition but it is not set explicitly on the entity.'
-        );
       }
 
       if (!$relevant) {

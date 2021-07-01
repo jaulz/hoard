@@ -114,6 +114,20 @@ class SumCacheTest extends AcceptanceTestCase
 
         $this->assertEquals(0, Order::first()->itemTotalComplexConditional);
         $this->assertEquals(0,  Order::get()[1]->itemTotalComplexConditional);
+
+        $item->restore();
+
+        $this->assertEquals(34, Order::first()->itemTotal);
+        $this->assertEquals(40, Order::get()[1]->itemTotal);
+
+        $this->assertEquals(34, Order::first()->itemTotalExplicit);
+        $this->assertEquals(40, Order::get()[1]->itemTotalExplicit);
+
+        $this->assertEquals(0, Order::first()->itemTotalConditional);
+        $this->assertEquals(40,  Order::get()[1]->itemTotalConditional);
+
+        $this->assertEquals(0, Order::first()->itemTotalComplexConditional);
+        $this->assertEquals(40,  Order::get()[1]->itemTotalComplexConditional);
     }
 
     private function setupOrderAndItem()

@@ -30,6 +30,7 @@ class Post extends Model
                 'foreignKey' => 'userId',
                 'key' => 'id',
             ],
+
             [
                 'function' => 'COUNT',
                 'model' => 'Tests\Acceptance\Models\User',
@@ -40,6 +41,7 @@ class Post extends Model
                     'visible' => true, 
                 ]
             ],
+
             [
                 'function' => 'COUNT',
                 'model' => 'Tests\Acceptance\Models\User',
@@ -50,7 +52,16 @@ class Post extends Model
                     'visible' => true,
                     ['weight', '>', 5] 
                 ]
-            ]
+            ],
+
+            [
+                'function' => 'SUM',
+                'model' => 'Tests\Acceptance\Models\User',
+                'summary' => 'post_comment_sum',
+                'field' => 'comment_count',
+                'foreignKey' => 'userId',
+                'key' => 'id',
+            ],
         ];
     }
 

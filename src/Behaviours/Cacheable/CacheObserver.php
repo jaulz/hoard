@@ -17,7 +17,9 @@ class CacheObserver
      */
     public function created($model)
     {
-        (new Cache($model))->create();
+        DB::transaction(function () use ($model) {
+            (new Cache($model))->create();
+        });
     }
 
     /**
@@ -37,6 +39,11 @@ class CacheObserver
      */
     public function updated($model)
     {
+        //if (get_class($model) === 'Tests\Acceptance\Models\User') {
+            error_log(get_class($model));
+            error_log($model);
+            error_log('updated');
+        //}
         (new Cache($model))->update();
     }
 }

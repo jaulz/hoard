@@ -4,11 +4,13 @@ namespace Tests\Acceptance\Models;
 use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 use Jaulz\Eloquence\Behaviours\Cacheable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
 {
     use CamelCasing;
     use Cacheable;
+    use SoftDeletes;
 
     public function caches()
     {
