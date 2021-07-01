@@ -15,9 +15,9 @@ class Cache
   private $model;
 
   /**
-   * @var bool
+   * @var array<string>
    */
-  private $propagated;
+  private $propagatedBy;
 
   /**
    * @var array
@@ -27,16 +27,16 @@ class Cache
   /**
    * @param Model $model
    */
-  public function __construct(Model $model, bool $propagated = false)
+  public function __construct(Model $model, $propagatedBy = [])
   {
     $this->model = $model;
-    $this->propagated = $propagated;
+    $this->propagatedBy = $propagatedBy;
     $this->configs = collect($model->caches())->map(function ($config) use (
       $model
     ) {
       return $this->config($model, $config);
-    })->filter(function ($config) use ($propagated) {
-      return $propagated ? empty($config['where']) : true;
+    })->filter(function ($config) use ($propagatedBy) {
+      return !empty($propagatedBy) ? collect($propagatedBy)->contains($config['field']) : true;
     });
   }
 
@@ -357,10 +357,6 @@ class Cache
           // Update entity in one go
           error_log($updates);
           $values = $updates->mapWithKeys(function($update) use ($foreignModelInstance) {
-            if (isset($update['propagateValue'])) {
-              $foreignModelInstance->{$update['summary']} = $update['propagateValue'];
-            }
-
             return [
               $update['summary'] => $update['rawValue']
             ];
@@ -373,14 +369,22 @@ class Cache
           })->reduce(function ($cumulatedPropagate, $update) {
             return collect($cumulatedPropagate)->concat($update['propagate']);
           }); 
+          error_log('propagate:');
           error_log($propagate);
           if ($propagate && $propagate->count() > 0) {
             $foreignModelInstance->{$key} = $foreignKey;
+
+
+            if (isset($update['propagateValue'])) {
+              $foreignModelInstance->{$update['summary']} = $update['propagateValue'];
+            }
+
+
             $propagate->each(function ($propagate) use ($foreignModelInstance) {
               $foreignModelInstance->{$propagate} = $this->model[$propagate];
             });
 
-             (new Cache($foreignModelInstance, true))->update();
+             (new Cache($foreignModelInstance, $update['summary']))->update();
             /*event(
                 "eloquent.updated: ".$model, $query->first()
             );*/
