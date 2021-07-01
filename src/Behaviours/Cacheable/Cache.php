@@ -67,7 +67,7 @@ class Cache
           break;
       }
 
-      $this->updateCacheRecord(
+      return $this->updateCacheRecord(
         $this->model->{$foreignKey},
         $config,
         'created',
@@ -100,7 +100,7 @@ class Cache
           break;
       }
 
-      $this->updateCacheRecord(
+      return $this->updateCacheRecord(
         $this->model->{$foreignKey},
         $config,
         'deleted',
@@ -148,18 +148,21 @@ class Cache
         case 'sum':
           // In case the foreign key changed, we just transfer the values from one model to the other
           if ($changedForeignKey) {
-            $this->updateCacheRecord(
-              $this->model->{$foreignKey},
-              $config,
-              'updated',
-              DB::raw("$summary + $value")
-            );
-            $this->updateCacheRecord(
-              $this->model->getOriginal($foreignKey),
-              $config,
-              'updated',
-              DB::raw("$summary + (-1 * $value)")
-            );
+            return [
+              $this->updateCacheRecord(
+                $this->model->{$foreignKey},
+                $config,
+                'updated',
+                DB::raw("$summary + $value")
+              ),
+
+              $this->updateCacheRecord(
+                $this->model->getOriginal($foreignKey),
+                $config,
+                'updated',
+                DB::raw("$summary + (-1 * $value)")
+              )
+            ];
             return;
           }
 
@@ -168,7 +171,7 @@ class Cache
             $difference = $value - $originalValue;
 
             if ($difference > 0) {
-              $this->updateCacheRecord(
+              return $this->updateCacheRecord(
                 $this->model->{$foreignKey},
                 $config,
                 'updated',
@@ -177,7 +180,7 @@ class Cache
             }
           } elseif ($isRelevant && !$wasRelevant) {
             // Increment because it was not relevant before but now it is
-            $this->updateCacheRecord(
+            return $this->updateCacheRecord(
               $this->model->{$foreignKey},
               $config,
               'updated',
@@ -185,7 +188,7 @@ class Cache
             );
           } elseif (!$isRelevant && $wasRelevant) {
             // Decrement because it was relevant before but now it is not anymore
-            $this->updateCacheRecord(
+            return $this->updateCacheRecord(
               $this->model->{$foreignKey},
               $config,
               'updated',
@@ -197,7 +200,7 @@ class Cache
       }
 
       // Run update with recalculation
-      $this->updateCacheRecord($this->model->{$foreignKey}, $config, 'updated');
+      return $this->updateCacheRecord($this->model->{$foreignKey}, $config, 'updated');
     });
   }
 
@@ -244,16 +247,30 @@ class Cache
    */
   public function apply(\Closure $function, ?bool $rebuild = false)
   {
-    foreach ($this->configs as $config) {
+    collect($this->configs)->map(function ($config) use ($function) {
       $isRelevant = $this::checkWhereCondition($this->model, true, $config);
       $wasRelevant = $this::checkWhereCondition($this->model, false, $config);
 
       if (!$isRelevant && !$wasRelevant) {
-        continue;
+        return null;
       }
 
-      $function($config, $isRelevant, $wasRelevant);
-    }
+      $updates = $function($config, $isRelevant, $wasRelevant);
+      return Arr::isAssoc($updates) ? collect($updates) : $updates;
+    })->flatten()->filter(function ($update) {
+      return $update !== null;
+    })->groupBy('model', 'key', 'foreignKey')->each(function ($keys, $model) {
+      dd($keys);
+      $keys->each(function($foreignKeys, $key) use ($model) {
+        $foreignKeys->each(function($updates, $foreignKey) use ($model, $key) {
+          $model::where($key, $foreignKey)->update($updates->map(function($update) use ($model, $key) {
+            return [
+              $update['summary'] => $update['rawValue']
+            ];
+          })->toArray());
+        });
+      });
+    });
   }
 
   /**
@@ -263,6 +280,7 @@ class Cache
    * @param array $config
    * @param string $event Possible events: created/deleted/updated
    * @param ?any $rawValue Raw value
+   * @return array
    */
   public function updateCacheRecord(
     $foreignModel,
@@ -283,13 +301,19 @@ class Cache
       ::select(DB::raw("COALESCE($function($field), $defaultValue)"))
       ->where($config['where'])
       ->where($config['foreignKey'], $foreignKey);
-    $result = $model::where($config['key'], $foreignKey)->update([
+    /*$result = $model::where($config['key'], $foreignKey)->update([
       $config['summary'] =>
         $rawValue ??
         DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
-    ]);
+    ]);*/
 
-    return $result;
+    return [
+      'model' => $this->model,
+      'summary' => $config['summary'],
+      'key' => $config['key'],
+      'foreignKey' => $foreignKey,
+      'rawValue' => $rawValue ?? DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
+    ];
   }
 
   /**
