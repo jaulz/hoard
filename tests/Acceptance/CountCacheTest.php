@@ -41,7 +41,6 @@ class CountCacheTest extends AcceptanceTestCase
         $comment = new Comment;
         $comment->userId = $this->data['user']->id;
         $comment->postId = $this->data['post']->id;
-        error_log('start');
         $comment->save();
 
         $this->assertEquals(1, User::first()->commentCount);
@@ -70,6 +69,10 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals(1, User::first()->postCountExplicit);
         $this->assertEquals(0, User::first()->postCountConditional);
         $this->assertEquals(0, User::first()->postCountComplexConditional);
+
+        $comment->delete();
+
+        $this->assertEquals(0, User::first()->postCommentSum);
     }
 
     public function testItCanHandleNegativeCounts()

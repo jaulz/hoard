@@ -6,6 +6,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Jaulz\Eloquence\Exceptions\UnableToCacheException;
+use Jaulz\Eloquence\Exceptions\UnableToPropagateException;
 
 class Cache
 {
@@ -69,16 +70,22 @@ class Cache
 
     // Check if we need to propagate changes by checking if the foreign model is also cacheable
     $propagate = false;
-    /*if (method_exists((new $foreignModelName()), 'bootCacheable')) {
+    if (method_exists((new $foreignModelName()), 'bootCacheable')) {
       $foreignModelInstance = new $foreignModelName();
       $foreignConfig = $foreignModelInstance->caches();
 
-      $propagate = collect($foreignConfig)->some(function($foreignConfig) use ($foreignModelName, $config) {
+      $propagate = collect($foreignConfig)->some(function($foreignConfig) use ($modelName, $foreignModelName, $config) {
         $foreignConfig = static::config($foreignModelName, $foreignConfig);
+        $propagate = $config['summary'] === $foreignConfig['field'];
 
-        return $config['summary'] === $foreignConfig['field'];
+        if ($propagate && !$config['propagate']) {
+          throw new UnableToPropagateException('Unable to propagate "' . $foreignConfig['foreignKey'] . '" from "' . $modelName . '" to "' . $foreignModelName . '" because no propagation field was defined.');
+        }
+
+        return $propagate;
       });
-    }*/
+
+    }
 
     return [
       'function' => $function,
@@ -89,7 +96,7 @@ class Cache
       'key' => Str::snake(self::key($modelName, $config['key'])),
       'foreignKey' => Str::snake(self::key($modelName, $config['foreignKey'])),
       'where' => $config['where'],
-      'propagate' => $config['propagate'],
+      'propagate' => $propagate ? $config['propagate'] ?? [] : false,
     ];
   }
 
@@ -164,6 +171,7 @@ class Cache
           break;
 
         case 'sum':
+          $value = $value ?? 0;
           $rawUpdate = DB::raw("$summary - $value");
           $propagateValue = -1 * $value;
           break;
@@ -194,11 +202,6 @@ class Cache
         $this->model->{$foreignKey} != $this->model->getOriginal($foreignKey);
       $restored =  $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
       $dirty = $this->model->isDirty();
-
-      if ($config['summary'] === 'post_comment_sum' && $this->propagated) {
-        error_log($this->model);
-       error_log($foreignKey);
-                  }
 
       // Handle certain cases more efficiently
       switch ($config['function']) {
@@ -283,6 +286,16 @@ class Cache
           }
 
           if ($isRelevant && $wasRelevant) {
+            if ($restored) {
+              return $this->updateCacheRecord(
+                $this->model->{$foreignKey},
+                $config,
+                'updated',
+                DB::raw("$summary + $value"),
+                $value
+              );
+            }
+
             // We need to add the difference in case it is as relevant as before
             $difference = $value - ($originalValue ?? 0);
 
@@ -345,50 +358,52 @@ class Cache
     })->filter(function ($update) {
       return $update !== null;
     })
-    ->reduce(function ($cumulatedUpdates = [], $update) {
-      return collect($cumulatedUpdates)->concat(Arr::isAssoc($update) ? [$update] : $update);
-    })
-    ->groupBy(['model', 'key', 'foreignKey'])->each(function ($keys, $foreignModel) {
+    ->reduce(function ($cumulatedUpdates, $update) {
+      return $cumulatedUpdates->concat(Arr::isAssoc($update) ? [$update] : $update);
+    }, collect([]))
+    ->groupBy(['model', 'key', 'foreignKey', 'propagate'])->each(function ($keys, $foreignModel) {
       $keys->each(function($foreignKeys, $key) use ($foreignModel, $keys) {
-        $foreignKeys->each(function($updates, $foreignKey) use ($foreignModel, $key, $keys) {
-          $query = $foreignModel::where($key, $foreignKey);
-          $foreignModelInstance = new $foreignModel();
+        $foreignKeys->each(function($propagates, $foreignKey) use ($foreignModel, $key, $keys) {
+          $propagates->each(function($updates, $propagate) use ($foreignModel, $key, $keys, $foreignKey) {
+            $query = $foreignModel::where($key, $foreignKey);
+            $foreignModelInstance = new $foreignModel();
 
-          // Update entity in one go
-          error_log($updates);
-          $values = $updates->mapWithKeys(function($update) use ($foreignModelInstance) {
-            return [
-              $update['summary'] => $update['rawValue']
-            ];
-          });
-          $query->update($values->toArray());
-
-          // In case we propagate, we need to load the entity (which causes an additional select)
-          $propagate = $updates->filter(function ($update) use ($updates) {
-              return is_array($update['propagate']);
-          })->reduce(function ($cumulatedPropagate, $update) {
-            return collect($cumulatedPropagate)->concat($update['propagate']);
-          }); 
-          error_log('propagate:');
-          error_log($propagate);
-          if ($propagate && $propagate->count() > 0) {
-            $foreignModelInstance->{$key} = $foreignKey;
-
-
-            if (isset($update['propagateValue'])) {
-              $foreignModelInstance->{$update['summary']} = $update['propagateValue'];
-            }
-
-
-            $propagate->each(function ($propagate) use ($foreignModelInstance) {
-              $foreignModelInstance->{$propagate} = $this->model[$propagate];
+            // Update entity in one go
+            $values = $updates->mapWithKeys(function($update) use ($foreignModelInstance) {
+              return [
+                $update['summary'] => $update['rawValue']
+              ];
             });
+            $query->update($values->toArray());
 
-             (new Cache($foreignModelInstance, $update['summary']))->update();
-            /*event(
-                "eloquent.updated: ".$model, $query->first()
-            );*/
-          }
+            // Propagate fields and trigger cache update on model above
+            if ($propagate) {
+              $foreignModelInstance->{$key} = $foreignKey;
+
+              // Fill foreign model with field that should be propagated
+              $propagations = $updates->map(function ($update) use ($updates) {
+                return [
+                  'summary' => $update['summary'],
+                  'propagate' => $update['propagate'],
+                  'propagateValue' => $update['propagateValue'],
+                ];
+              }); 
+              $propagations->each(function ($propagation) use ($foreignModelInstance) {
+                $foreignModelInstance->{$propagation['summary']} = $propagation['propagateValue'];
+
+                // Propagations can either be defined as simple strings (in case the field has the same name in both models) or arrays (['source' => 'target'])
+                if (is_array($propagation['propagate'])) {
+                  $foreignModelInstance->{$propagation['propagate'][1]} = $this->model[$propagation['propagate'][0]];
+                } else {
+                  $foreignModelInstance->{$propagation['propagate']} = $this->model[$propagation['propagate']];
+                }
+              });
+
+              (new Cache($foreignModelInstance, $propagations->map(function ($propagation) {
+                return $propagation['summary'];
+              })->toArray()))->update();
+            }
+          });
         });
       });
     });

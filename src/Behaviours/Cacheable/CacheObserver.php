@@ -29,7 +29,9 @@ class CacheObserver
      */
     public function deleted($model)
     {
-        (new Cache($model))->delete();
+        DB::transaction(function () use ($model) {
+            (new Cache($model))->delete();
+        });
     }
 
     /**
@@ -39,11 +41,8 @@ class CacheObserver
      */
     public function updated($model)
     {
-        //if (get_class($model) === 'Tests\Acceptance\Models\User') {
-            error_log(get_class($model));
-            error_log($model);
-            error_log('updated');
-        //}
-        (new Cache($model))->update();
+        DB::transaction(function () use ($model) {
+            (new Cache($model))->update();
+        });
     }
 }

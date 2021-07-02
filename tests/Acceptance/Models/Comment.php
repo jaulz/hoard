@@ -18,7 +18,7 @@ class Comment extends Model
             [
                 'function' => 'count',
                 'model' => 'Tests\Acceptance\Models\Post',
-                'propagate' => ['user_id']
+                'propagate' => 'user_id'
             ],
 
             [
