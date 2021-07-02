@@ -61,7 +61,8 @@ class Cache
       'key' => 'id',
       'where' => [],
       'summary' => self::field($modelName, $function),
-      'propagate' => false
+      'propagate' => null,
+      'context' => null
     ];
 
     // Merge defaults and actual config
@@ -78,13 +79,12 @@ class Cache
         $foreignConfig = static::config($foreignModelName, $foreignConfig);
         $propagate = $config['summary'] === $foreignConfig['field'];
 
-        if ($propagate && !$config['propagate']) {
-          throw new UnableToPropagateException('Unable to propagate "' . $foreignConfig['foreignKey'] . '" from "' . $modelName . '" to "' . $foreignModelName . '" because no propagation field was defined.');
+        if ($propagate && is_null($config['propagate'])) {
+          throw new UnableToPropagateException('Unable to fill "' . $foreignConfig['foreignKey'] . '" in "' . $foreignModelName . '" because no propagation was defined for "' . $modelName . '".');
         }
 
         return $propagate;
       });
-
     }
 
     return [
@@ -96,7 +96,8 @@ class Cache
       'key' => Str::snake(self::key($modelName, $config['key'])),
       'foreignKey' => Str::snake(self::key($modelName, $config['foreignKey'])),
       'where' => $config['where'],
-      'propagate' => $propagate ? $config['propagate'] ?? [] : false,
+      'propagate' => $propagate ? $config['propagate'] : false,
+      'context' => $config['context'],
     ];
   }
 
@@ -388,17 +389,32 @@ class Cache
                   'propagateValue' => $update['propagateValue'],
                 ];
               }); 
-              $propagations->each(function ($propagation) use ($foreignModelInstance) {
+              $propagations->each(function ($propagation) use ($foreignModelInstance, $propagate) {
                 $foreignModelInstance->{$propagation['summary']} = $propagation['propagateValue'];
 
-                // Propagations can either be defined as simple strings (in case the field has the same name in both models) or arrays (['source' => 'target'])
-                if (is_array($propagation['propagate'])) {
-                  $foreignModelInstance->{$propagation['propagate'][1]} = $this->model[$propagation['propagate'][0]];
-                } else {
-                  $foreignModelInstance->{$propagation['propagate']} = $this->model[$propagation['propagate']];
+                // Propagate value to foreign key of foreign model
+                $foreignModelForeignKey = collect($foreignModelInstance->caches())->map(function ($config) use (
+                  $foreignModelInstance
+                ) {
+                  return $this->config($foreignModelInstance, $config);
+                })->filter(function ($config) use ($propagate) {
+                  return $config['foreignKey'] === $propagate;
+                })->map(function ($config) {
+                  return $config['foreignKey'];
+                })->first();
+                $foreignModelInstance->{$foreignModelForeignKey} = $this->model[$propagation['propagate']];
+              });
+
+              // Provide context
+              $updates->each(function ($update) use ($foreignModelInstance) {
+                if ($update['context']) {
+                  collect($update['context']($this->model))->each(function ($value, $key) use ($foreignModelInstance) {
+                    $foreignModelInstance->{$key} = $value;
+                  });
                 }
               });
 
+              // Update foreign model as well
               (new Cache($foreignModelInstance, $propagations->map(function ($propagation) {
                 return $propagation['summary'];
               })->toArray()))->update();
@@ -446,8 +462,9 @@ class Cache
       'key' => $config['key'],
       'foreignKey' => $foreignKey,
       'rawValue' => $rawValue ?? DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
-      'propagate' => $config['propagate'],
-      'propagateValue' => $propagateValue
+      'propagate' => is_callable($config['propagate']) ? $config['propagate']($this->model) : $config['propagate'],
+      'propagateValue' => $propagateValue,
+      'context' => $config['context'],
     ];
   }
 
