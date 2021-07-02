@@ -436,10 +436,10 @@ class Cache
                 $foreignModelInstance->{$key} = $foreignKey;
 
                 // Fill foreign model with field that should be propagated
-                $propagations = $updates->map(function ($update) {
+                $propagations = $updates->map(function ($update) use ($propagate) {
                   return [
+                    'propagate' => $propagate,
                     'summary' => $update['summary'],
-                    'propagate' => $update['propagate'],
                     'propagateValue' => $update['propagateValue'],
                   ];
                 });
