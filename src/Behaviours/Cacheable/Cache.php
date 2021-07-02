@@ -46,9 +46,10 @@ class Cache
    *
    * @param Model $model
    * @param array $config
+   * @param bool $checkForeignModel
    * @return array
    */
-  protected static function config($model, $config)
+  protected static function config($model, $config, ?bool $checkForeignModel = true)
   {
     $foreignModelName = $config['model'];
     $modelName = $model instanceof Model ? get_class($model) : $model;
@@ -71,7 +72,7 @@ class Cache
 
     // Check if we need to propagate changes by checking if the foreign model is also cacheable
     $propagate = false;
-    if (method_exists((new $foreignModelName()), 'bootCacheable')) {
+    if ($checkForeignModel && method_exists((new $foreignModelName()), 'bootCacheable')) {
       $foreignModelInstance = new $foreignModelName();
       $foreignConfig = $foreignModelInstance->caches();
 
@@ -402,7 +403,11 @@ class Cache
                 })->map(function ($config) {
                   return $config['foreignKey'];
                 })->first();
-                $foreignModelInstance->{$foreignModelForeignKey} = $this->model[$propagation['propagate']];
+
+                // Propagate foreign key
+                if (is_string($propagation['propagate'])) {
+                  $foreignModelInstance->{$foreignModelForeignKey} = $this->model[$propagation['propagate']];
+                }
               });
 
               // Provide context
