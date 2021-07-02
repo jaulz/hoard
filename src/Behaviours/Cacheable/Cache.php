@@ -77,7 +77,7 @@ class Cache
       $foreignConfig = $foreignModelInstance->caches();
 
       $propagate = collect($foreignConfig)->some(function($foreignConfig) use ($modelName, $foreignModelName, $config) {
-        $foreignConfig = static::config($foreignModelName, $foreignConfig);
+        $foreignConfig = static::config($foreignModelName, $foreignConfig, false);
         $propagate = $config['summary'] === $foreignConfig['field'];
 
         if ($propagate && is_null($config['propagate'])) {
