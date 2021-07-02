@@ -527,9 +527,7 @@ class Cache
       'rawValue' =>
         $rawValue ??
         DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
-      'propagate' => is_callable($config['propagate'])
-        ? $config['propagate']($this->model)
-        : $config['propagate'],
+      'propagate' => $config['propagate'],
       'propagateValue' => $propagateValue,
       'context' => $config['context'],
     ];
