@@ -570,11 +570,11 @@ class Cache
   /**
    * Returns the true key for a given field.
    *
-   * @param string $model
+   * @param Model|string $model
    * @param string $field
    * @return mixed
    */
-  protected static function key(string $model, $field)
+  protected static function key($model, $field)
   {
     /*if (!($model instanceof Model)) {
             $model = new $model();
@@ -590,11 +590,11 @@ class Cache
   /**
    * Returns the true key for a given field.
    *
-   * @param string $model
+   * @param Model|string $model
    * @param string $field
    * @return mixed
    */
-  protected static function foreignKey(string $model, $field)
+  protected static function foreignKey($model, $field)
   {
     return Str::snake(self::key($model, $field));
   }
