@@ -413,9 +413,13 @@ class Cache
               // Provide context
               $updates->each(function ($update) use ($foreignModelInstance) {
                 if ($update['context']) {
-                  collect($update['context']($this->model))->each(function ($value, $key) use ($foreignModelInstance) {
+                  /*collect($update['context']($this->model))->each(function ($value, $key) use ($foreignModelInstance) {
                     $foreignModelInstance->{$key} = $value;
-                  });
+                  });*/
+
+                  if ($update['context']) {
+                    $foreignModelInstance->setRawAttributes($update['context']($this->model), true);
+                  }
                 }
               });
 
