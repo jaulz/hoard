@@ -58,7 +58,7 @@ class Post extends Model
                 'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\User',
                 'summary' => 'post_comment_sum',
-                'field' => 'comment_count',
+                'value' => 'comment_count',
                 'foreignKey' => 'userId',
                 'key' => 'id',
             ],
@@ -68,5 +68,10 @@ class Post extends Model
     public function slugStrategy()
     {
         return 'id';
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(Post::class);
     }
 }

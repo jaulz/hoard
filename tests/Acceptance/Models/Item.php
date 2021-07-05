@@ -18,7 +18,7 @@ class Item extends Model
             [
                 'function' => 'sum',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'field' => 'total',
+                'value' => 'total',
                 'summary' => 'itemTotal',
             ],
 
@@ -26,7 +26,7 @@ class Item extends Model
                 'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\Order',
                 'summary' => 'itemTotalExplicit',
-                'field' => 'total',
+                'value' => 'total',
                 'foreignKey' => 'orderId',
                 'key' => 'id',
             ],
@@ -35,7 +35,7 @@ class Item extends Model
                 'function' => 'sUm',
                 'model' => 'Tests\Acceptance\Models\Order',
                 'summary' => 'itemTotalConditional',
-                'field' => 'total',
+                'value' => 'total',
                 'foreignKey' => 'orderId',
                 'key' => 'id',
                 'where' => [
@@ -46,7 +46,7 @@ class Item extends Model
                 'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\Order',
                 'summary' => 'itemTotalComplexConditional',
-                'field' => 'total',
+                'value' => 'total',
                 'foreignKey' => 'orderId',
                 'key' => 'id',
                 'where' => [

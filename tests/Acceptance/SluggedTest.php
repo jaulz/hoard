@@ -18,7 +18,13 @@ class SluggedTest extends AcceptanceTestCase
 
     public function testPostSlug()
     {
+        $user = new User;
+        $user->firstName = 'Kirk';
+        $user->lastName = 'Bushell';
+        $user->save();
+
         $post = new Post;
+        $post->user()->associate($user);
         $post->visible = true;
         $post->weight = 0;
         $post->save();

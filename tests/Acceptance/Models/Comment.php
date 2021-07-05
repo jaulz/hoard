@@ -18,7 +18,11 @@ class Comment extends Model
             [
                 'function' => 'count',
                 'model' => 'Tests\Acceptance\Models\Post',
-                'propagate' => 'user_id'
+                'context' => function ($model) {
+                    return [
+                        'user_id' => $model->user_id
+                    ];
+                }
             ],
 
             [
@@ -30,14 +34,14 @@ class Comment extends Model
                 'function' => 'MAX',
                 'model' => 'Tests\Acceptance\Models\Post',
                 'summary' => 'last_commented_at',
-                'field' => 'created_at'
+                'value' => 'created_at'
             ],
 
             [
                 'function' => 'MIN',
                 'model' => 'Tests\Acceptance\Models\Post',
                 'summary' => 'first_commented_at',
-                'field' => 'created_at'
+                'value' => 'created_at'
             ],
         ];
     }

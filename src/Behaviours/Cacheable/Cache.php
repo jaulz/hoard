@@ -38,7 +38,7 @@ class Cache
       })
       ->filter(function ($config) use ($propagatedBy) {
         return !empty($propagatedBy)
-          ? collect($propagatedBy)->contains($config['field'])
+          ? collect($propagatedBy)->contains($config['value'])
           : true;
       });
   }
@@ -62,18 +62,17 @@ class Cache
 
     // Prepare defaults
     $defaults = [
-      'field' => 'id',
+      'value' => 'id',
       'foreignKey' => self::field($foreignModelName, 'id'),
       'key' => 'id',
       'where' => [],
       'summary' => self::field($modelName, $function),
-      'propagate' => null,
       'context' => null,
     ];
 
     // Merge defaults and actual config
     $config = array_merge($defaults, $config);
-    $relatedModel = $config['model'];
+    $relatedModelName = $config['model'];
 
     // Check if we need to propagate changes by checking if the foreign model is also cacheable
     $propagate = false;
@@ -94,35 +93,44 @@ class Cache
           $foreignConfig,
           false
         );
-        $propagate = $config['summary'] === $foreignConfig['field'];
-
-        if ($propagate && is_null($config['propagate'])) {
-          throw new UnableToPropagateException(
-            'Unable to fill "' .
-              $foreignConfig['foreignKey'] .
-              '" in "' .
-              $foreignModelName .
-              '" because no propagation was defined for "' .
-              $modelName .
-              '".'
-          );
-        }
+        $propagate = $config['summary'] === $foreignConfig['value'];
 
         return $propagate;
       });
     }
+
+    // Prepare options
+    $foreignKey = Str::snake(
+      self::key(
+        $modelName,
+        is_array($config['foreignKey'])
+          ? $config['foreignKey'][0]
+          : $config['foreignKey']
+      )
+    );
 
     return [
       'function' => $function,
       'model' => $foreignModelName,
       'table' => self::getModelTable($config['model']),
       'summary' => Str::snake($config['summary']),
-      'field' => $config['field'],
+      'value' => $config['value'],
       'key' => Str::snake(self::key($modelName, $config['key'])),
-      'foreignKey' => Str::snake(self::key($modelName, $config['foreignKey'])),
+      'foreignKey' => $foreignKey,
+      'foreignKeyExtractor' => is_array($config['foreignKey'])
+        ? $config['foreignKey'][1]
+        : function ($value) {
+          return $value;
+        },
+      'foreignKeySelector' => is_array($config['foreignKey'])
+        ? $config['foreignKey'][2]
+        : function ($query, $key) use ($foreignKey) {
+          $query->where($foreignKey, $key);
+        },
       'where' => $config['where'],
-      'propagate' => $propagate ? $config['propagate'] : false,
+      'propagate' => $config['propagate'] ?? $propagate,
       'context' => $config['context'],
+      'recursive' => $foreignModelName === $modelName,
     ];
   }
 
@@ -143,30 +151,33 @@ class Cache
   public function create()
   {
     $this->apply(function ($config) {
-      $foreignKey = self::foreignKey($this->model, $config['foreignKey']);
+      $foreignKeyColumn = self::foreignKey($this->model, $config['foreignKey']);
+      $foreignKeys = collect(
+        $config['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
+      );
       $function = $config['function'];
-      $summary = $config['summary'];
-      $field = $config['field'];
-      $value = $this->model->{$field};
+      $summaryColumn = $config['summary'];
+      $valueColumn = $config['value'];
+      $value = $this->model->{$valueColumn};
 
       // Handle certain cases more efficiently
       $rawUpdate = null;
       $propagateValue = null;
       switch ($function) {
         case 'count':
-          $rawUpdate = DB::raw("$summary + 1");
+          $rawUpdate = DB::raw("$summaryColumn + 1");
           $propagateValue = 1;
           break;
 
         case 'sum':
           $value = $value ?? 0;
-          $rawUpdate = DB::raw("$summary + $value");
+          $rawUpdate = DB::raw("$summaryColumn + $value");
           $propagateValue = $value;
           break;
       }
 
-      return $this->updateCacheRecord(
-        $this->model->{$foreignKey},
+      return $this->prepareCacheUpdate(
+        $foreignKeys,
         $config,
         'created',
         $rawUpdate,
@@ -182,29 +193,32 @@ class Cache
   {
     $this->apply(function ($config) {
       $foreignKey = self::foreignKey($this->model, $config['foreignKey']);
+      $foreignModelKeys = collect(
+        $config['foreignKeyExtractor']($this->model->{$foreignKey})
+      );
       $function = $config['function'];
-      $summary = $config['summary'];
-      $field = $config['field'];
-      $value = $this->model->{$field};
+      $summaryColumn = $config['summary'];
+      $valueColumn = $config['value'];
+      $value = $this->model->{$valueColumn};
 
       // Handle certain cases more efficiently
       $rawUpdate = null;
       $propagateValue = null;
       switch ($function) {
         case 'count':
-          $rawUpdate = DB::raw("$summary - 1");
+          $rawUpdate = DB::raw("$summaryColumn - 1");
           $propagateValue = -1;
           break;
 
         case 'sum':
           $value = $value ?? 0;
-          $rawUpdate = DB::raw("$summary - $value");
+          $rawUpdate = DB::raw("$summaryColumn - $value");
           $propagateValue = -1 * $value;
           break;
       }
 
-      return $this->updateCacheRecord(
-        $this->model->{$foreignKey},
+      return $this->prepareCacheUpdate(
+        $foreignModelKeys,
         $config,
         'deleted',
         $rawUpdate,
@@ -219,13 +233,28 @@ class Cache
   public function update()
   {
     $this->apply(function ($config, $isRelevant, $wasRelevant) {
-      $foreignKey = self::foreignKey($this->model, $config['foreignKey']);
-      $summary = $config['summary'];
-      $value = $this->model->{$config['field']};
-      $originalValue = $this->model->getOriginal($config['field']);
-      $changedForeignKey =
-        $this->model->getOriginal($foreignKey) &&
-        $this->model->{$foreignKey} != $this->model->getOriginal($foreignKey);
+      $foreignKeyColumn = self::foreignKey($this->model, $config['foreignKey']);
+      $foreignKeys = collect(
+        $config['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
+      );
+      $originalForeignKeys = collect(
+        $config['foreignKeyExtractor'](
+          $this->model->getOriginal($foreignKeyColumn)
+        )
+      );
+      $removedForeignModelKeys = collect($originalForeignKeys)->diff(
+        $foreignKeys
+      );
+      $addedForeignModelKeys = collect($foreignKeys)->diff(
+        $originalForeignKeys
+      );
+      $changedForeignKeys =
+        $addedForeignModelKeys->count() > 0 ||
+        $removedForeignModelKeys->count() > 0;
+      $summaryColumn = $config['summary'];
+      $valueColumn = $config['value'];
+      $value = $this->model->{$valueColumn};
+      $originalValue = $this->model->getOriginal($valueColumn);
       $restored =
         $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
       $dirty = $this->model->isDirty();
@@ -233,25 +262,28 @@ class Cache
       // Handle certain cases more efficiently
       switch ($config['function']) {
         case 'count':
-          // In case the foreign key changed, we just transfer the values from one model to the other
-          if ($changedForeignKey) {
-            return [
-              $this->updateCacheRecord(
-                $this->model->{$foreignKey},
-                $config,
-                'updated',
-                DB::raw("$summary + $value"),
-                $value
-              ),
-
-              $this->updateCacheRecord(
-                $this->model->getOriginal($foreignKey),
-                $config,
-                'updated',
-                DB::raw("$summary + (-1 * $value)"),
-                -1 * $value
-              ),
-            ];
+          // In case the foreign keys changed, we just transfer the values from one model to the other
+          if ($changedForeignKeys) {
+            return collect([])
+              ->concat(
+                $this->prepareCacheUpdate(
+                  $addedForeignModelKeys,
+                  $config,
+                  'updated',
+                  DB::raw("$summaryColumn + $value"),
+                  $value
+                )
+              )
+              ->concat(
+                $this->prepareCacheUpdate(
+                  $removedForeignModelKeys,
+                  $config,
+                  'updated',
+                  DB::raw("$summaryColumn + (-1 * $value)"),
+                  -1 * $value
+                )
+              )
+              ->toArray();
           }
 
           if ($isRelevant && $wasRelevant) {
@@ -261,29 +293,29 @@ class Cache
             }
 
             // Restore count indicator if item is restored
-            return $this->updateCacheRecord(
-              $this->model->{$foreignKey},
+            return $this->prepareCacheUpdate(
+              $foreignKeys,
               $config,
               'updated',
-              DB::raw("$summary + 1"),
+              DB::raw("$summaryColumn + 1"),
               1
             );
           } elseif ($isRelevant && !$wasRelevant) {
             // Increment because it was not relevant before but now it is
-            return $this->updateCacheRecord(
-              $this->model->{$foreignKey},
+            return $this->prepareCacheUpdate(
+              $foreignKeys,
               $config,
               'updated',
-              DB::raw("$summary + 1"),
+              DB::raw("$summaryColumn + 1"),
               1
             );
           } elseif (!$isRelevant && $wasRelevant) {
             // Decrement because it was relevant before but now it is not anymore
-            return $this->updateCacheRecord(
-              $this->model->{$foreignKey},
+            return $this->prepareCacheUpdate(
+              $foreignKeys,
               $config,
               'updated',
-              DB::raw("$summary - 1"),
+              DB::raw("$summaryColumn - 1"),
               -1
             );
           }
@@ -292,33 +324,37 @@ class Cache
 
         case 'sum':
           // In case the foreign key changed, we just transfer the values from one model to the other
-          if ($changedForeignKey) {
-            return [
-              $this->updateCacheRecord(
-                $this->model->{$foreignKey},
-                $config,
-                'updated',
-                DB::raw("$summary + $value"),
-                $value
-              ),
+          if ($changedForeignKeys) {
+            return collect([])
+              ->concat(
+                $this->prepareCacheUpdate(
+                  $foreignKeys,
+                  $config,
+                  'updated',
+                  DB::raw("$summaryColumn + $value"),
+                  $value
+                )
+              )
 
-              $this->updateCacheRecord(
-                $this->model->getOriginal($foreignKey),
-                $config,
-                'updated',
-                DB::raw("$summary + (-1 * $value)"),
-                -1 * $value
-              ),
-            ];
+              ->concat(
+                $this->prepareCacheUpdate(
+                  $originalForeignKeys,
+                  $config,
+                  'updated',
+                  DB::raw("$summaryColumn + (-1 * $value)"),
+                  -1 * $value
+                )
+              )
+              ->toArray();
           }
 
           if ($isRelevant && $wasRelevant) {
             if ($restored) {
-              return $this->updateCacheRecord(
-                $this->model->{$foreignKey},
+              return $this->prepareCacheUpdate(
+                $foreignKeys,
                 $config,
                 'updated',
-                DB::raw("$summary + $value"),
+                DB::raw("$summaryColumn + $value"),
                 $value
               );
             }
@@ -330,29 +366,29 @@ class Cache
               return [];
             }
 
-            return $this->updateCacheRecord(
-              $this->model->{$foreignKey},
+            return $this->prepareCacheUpdate(
+              $foreignKeys,
               $config,
               'updated',
-              DB::raw("$summary + $difference"),
+              DB::raw("$summaryColumn + $difference"),
               $difference
             );
           } elseif ($isRelevant && !$wasRelevant) {
             // Increment because it was not relevant before but now it is
-            return $this->updateCacheRecord(
-              $this->model->{$foreignKey},
+            return $this->prepareCacheUpdate(
+              $foreignKeys,
               $config,
               'updated',
-              DB::raw("$summary + $value"),
+              DB::raw("$summaryColumn + $value"),
               $value
             );
           } elseif (!$isRelevant && $wasRelevant) {
             // Decrement because it was relevant before but now it is not anymore
-            return $this->updateCacheRecord(
-              $this->model->{$foreignKey},
+            return $this->prepareCacheUpdate(
+              $foreignKeys,
               $config,
               'updated',
-              DB::raw("$summary - $originalValue"),
+              DB::raw("$summaryColumn - $originalValue"),
               -1 * $originalValue
             );
           }
@@ -361,11 +397,7 @@ class Cache
       }
 
       // Run update with recalculation
-      return $this->updateCacheRecord(
-        $this->model->{$foreignKey},
-        $config,
-        'updated'
-      );
+      return $this->prepareCacheUpdate($foreignKeys, $config, 'updated');
     });
   }
 
@@ -377,7 +409,8 @@ class Cache
    */
   public function apply(\Closure $function, ?bool $rebuild = false)
   {
-    collect($this->configs)
+    // Gather all updates from every config
+    $allUpdates = collect($this->configs)
       ->map(function ($config) use ($function) {
         $isRelevant = $this::checkWhereCondition($this->model, true, $config);
         $wasRelevant = $this::checkWhereCondition($this->model, false, $config);
@@ -395,89 +428,69 @@ class Cache
         return $cumulatedUpdates->concat(
           Arr::isAssoc($update) ? [$update] : $update
         );
-      }, collect([]))
+      }, collect([]));
+
+    // Group updates by model, key, foreign key and propagate and update each group independently
+    $allUpdates
       ->groupBy(['model', 'key', 'foreignKey', 'propagate'])
-      ->each(function ($keys, $foreignModel) {
-        $keys->each(function ($foreignKeys, $key) use ($foreignModel, $keys) {
+      ->each(function ($keys, $foreignModelName) {
+        $keys->each(function ($foreignKeys, $key) use ($foreignModelName) {
           $foreignKeys->each(function ($propagates, $foreignKey) use (
-            $foreignModel,
-            $key,
-            $keys
+            $foreignModelName,
+            $key
           ) {
             $propagates->each(function ($updates, $propagate) use (
-              $foreignModel,
+              $foreignModelName,
               $key,
-              $keys,
               $foreignKey
             ) {
-              $query = $foreignModel::where($key, $foreignKey);
-              $foreignModelInstance = new $foreignModel();
+              $query = $foreignModelName::where($key, $foreignKey);
+              $foreignModel = new $foreignModelName();
 
               // Update entity in one go
               $values = $updates->mapWithKeys(function ($update) {
                 return [
-                  $update['summary'] => $update['rawValue'],
+                  $update['summaryColumn'] => $update['rawValue'],
                 ];
               });
               $query->update($values->toArray());
 
-              // Provide context (must be set before propagation fields!)
-              $updates->each(function ($update) use ($foreignModelInstance) {
-                if ($update['context']) {
-                  $foreignModelInstance->setRawAttributes(
-                    $update['context']($this->model),
-                    true
-                  );
-                }
-              });
-
               // Propagate fields and trigger cache update on model above
               if ($propagate) {
-                $foreignModelInstance->{$key} = $foreignKey;
+                // Provide context (must be set before propagation fields!)
+                $updates->each(function ($update) use ($foreignModel) {
+                  if ($update['context']) {
+                    $foreignModel->setRawAttributes(
+                      $update['context']($this->model),
+                      true
+                    );
+                  }
+                });
+
+                // Set foreign key
+                $foreignModel->{$key} = $foreignKey;
 
                 // Fill foreign model with field that should be propagated
-                $propagations = $updates->map(function ($update) use ($propagate) {
+                $propagations = $updates->map(function ($update) {
                   return [
-                    'propagate' => $propagate,
-                    'summary' => $update['summary'],
+                    'summaryColumn' => $update['summaryColumn'],
                     'propagateValue' => $update['propagateValue'],
                   ];
                 });
                 $propagations->each(function ($propagation) use (
-                  $foreignModelInstance,
+                  $foreignModel,
                   $propagate
                 ) {
-                  $foreignModelInstance->{$propagation['summary']} =
+                  $foreignModel->{$propagation['summaryColumn']} =
                     $propagation['propagateValue'];
-
-                  // Propagate value to foreign key of foreign model
-                  $foreignModelForeignKey = collect(
-                    $foreignModelInstance->caches()
-                  )
-                    ->map(function ($config) use ($foreignModelInstance) {
-                      return $this->config($foreignModelInstance, $config);
-                    })
-                    ->filter(function ($config) use ($propagate) {
-                      return $config['foreignKey'] === $propagate;
-                    })
-                    ->map(function ($config) {
-                      return $config['foreignKey'];
-                    })
-                    ->first();
-
-                  // Propagate foreign key
-                  if (is_string($propagation['propagate'])) {
-                    $foreignModelInstance->{$foreignModelForeignKey} =
-                      $this->model[$propagation['propagate']];
-                  }
                 });
 
                 // Update foreign model as well
                 (new Cache(
-                  $foreignModelInstance,
+                  $foreignModel,
                   $propagations
                     ->map(function ($propagation) {
-                      return $propagation['summary'];
+                      return $propagation['summaryColumn'];
                     })
                     ->toArray()
                 ))->update();
@@ -489,48 +502,74 @@ class Cache
   }
 
   /**
-   * Updates a table's record based on the query information provided in the $config variable.
+   * Prepares a cache update by collecting all information for the update.
    *
-   * @param any $foreignKey Foreign key
+   * @param Collection $foreignKeys Foreign model key
    * @param array $config
    * @param string $event Possible events: created/deleted/updated
    * @param ?any $rawValue Raw value
-   * @param ?any $rawValue Propagate value
+   * @param ?any $propagateValue Value to propagate
    * @return array
    */
-  public function updateCacheRecord(
-    $foreignKey,
+  public function prepareCacheUpdate(
+    $foreignKeys,
     array $config,
     $event,
     $rawValue = null,
     $propagateValue = null
   ) {
-    $model = $config['model'];
-    $function = $config['function'];
-    $summary = $config['summary'];
-    $field = $config['field'];
-    $key = $config['key'];
-    $foreignKey =
-      $foreignKey instanceof Model ? $foreignKey[$key] : $foreignKey;
-    $defaultValue = $function === 'sum' ? 0 : 'null';
+    $validForeignKeys = $foreignKeys->filter(function ($foreignKey) {
+      return !!$foreignKey;
+    });
 
-    $cacheQuery = $this->model
-      ::select(DB::raw("COALESCE($function($field), $defaultValue)"))
-      ->where($config['where'])
-      ->where($config['foreignKey'], $foreignKey);
+    if ($validForeignKeys->count() === 0) {
+      if ($config['recursive']) {
+        return [];
+      }
 
-    return [
-      'model' => $model,
-      'summary' => $config['summary'],
-      'key' => $config['key'],
-      'foreignKey' => $foreignKey,
-      'rawValue' =>
-        $rawValue ??
-        DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
-      'propagate' => $config['propagate'],
-      'propagateValue' => $propagateValue,
-      'context' => $config['context'],
-    ];
+      throw new UnableToPropagateException(
+        'Unable to propagate cache update to "' .
+          $config['function'] .
+          '(' .
+          $config['value'] .
+          ')" into "' .
+          $config['table'] .
+          '"."' .
+          $config['summary'] .
+          '" because "' .
+          $config['foreignKey'] .
+          '" was not part of the context.'
+      );
+    }
+
+    return collect($validForeignKeys)
+      ->map(function ($foreignKey) use ($config, $propagateValue, $rawValue) {
+        $model = $config['model'];
+        $function = $config['function'];
+        $summaryColumn = $config['summary'];
+        $valueColumn = $config['value'];
+        $keyColumn = $config['key'];
+        $defaultValue = static::getDefaultValue($function);
+
+        $cacheQuery = $this->model
+          ::select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))
+          ->where($config['where'])
+          ->where($config['foreignKey'], $foreignKey);
+
+        return [
+          'model' => $model,
+          'summaryColumn' => $summaryColumn,
+          'key' => $keyColumn,
+          'foreignKey' => $foreignKey,
+          'rawValue' =>
+            $rawValue ??
+            DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
+          'propagate' => $config['propagate'],
+          'propagateValue' => $propagateValue,
+          'context' => $config['context'],
+        ];
+      })
+      ->toArray();
   }
 
   /**
@@ -545,33 +584,39 @@ class Cache
     array $foreignConfigs
   ) {
     // Get all update statements
-    $fields = collect([]);
+    $valueColumns = collect([]);
     $updates = collect($foreignConfigs)
-      ->mapWithKeys(function ($configs, $foreignModel) use ($model, $fields) {
+      ->mapWithKeys(function ($configs, $foreignModelName) use (
+        $model,
+        $valueColumns
+      ) {
         return collect($configs)
-          ->map(function ($config) use ($foreignModel, $fields) {
+          ->map(function ($config) use ($foreignModelName, $valueColumns) {
             // Normalize config
-            $config = self::config($foreignModel, $config);
+            $config = self::config($foreignModelName, $config);
 
-            // Collect all fields
-            $fields->push($config['field']);
+            // Collect all value columns
+            $valueColumns->push($config['value']);
 
             return $config;
           })
-          ->mapWithKeys(function ($config) use ($model, $foreignModel) {
+          ->mapWithKeys(function ($config) use ($model, $foreignModelName) {
             // Create query that selects the aggregated field from the foreign table
             $function = $config['function'];
-            $field = $config['field'];
-            $defaultValue = $function === 'sum' ? 0 : 'null';
-            $query = $foreignModel
-              ::select(DB::raw("COALESCE($function($field), $defaultValue)"))
-              ->where($config['where'])
-              ->where($config['foreignKey'], $model[$config['key']])
-              ->take(1);
+            $valueColumn = $config['value'];
+            $defaultValue = static::getDefaultValue($function);
+            $query = $foreignModelName
+              ::select(
+                DB::raw("COALESCE($function($valueColumn), $defaultValue)")
+              )
+              ->where($config['where']);
+
+            // Use selector from config
+            $config['foreignKeySelector']($query, $model[$config['key']]);
 
             return [
               $config['summary'] => DB::raw(
-                '(' . Cache::convertQueryToRawSQL($query) . ')'
+                '(' . Cache::convertQueryToRawSQL($query->take(1)) . ')'
               ),
             ];
           });
@@ -579,20 +624,40 @@ class Cache
       ->toArray();
 
     // Run updates unguarded and without timestamps
-    $before = collect($model->getAttributes())->only($fields);
+    $before = collect($model->getAttributes())->only($valueColumns);
     $success = $model::unguarded(function () use ($model, $updates) {
       $model->fill($updates);
       $model->timestamps = false;
 
       return $model->saveQuietly();
     });
-    $after = collect($model->refresh()->getAttributes())->only($fields);
+    $after = collect($model->refresh()->getAttributes())->only($valueColumns);
 
     return [
       'before' => $before->toArray(),
       'after' => $after->toArray(),
       'difference' => $before->diffAssoc($after)->toArray(),
     ];
+  }
+
+  /**
+   * Get default value for specified function
+   *
+   * @param string $function
+   *
+   * @return string
+   */
+  protected static function getDefaultValue($function)
+  {
+    switch ($function) {
+      case 'sum':
+        return 0;
+
+      case 'count':
+        return 0;
+    }
+
+    return 'null';
   }
 
   /**
@@ -705,12 +770,14 @@ class Cache
           'Unable to cache "' .
             $config['function'] .
             '(' .
-            $config['field'] .
+            $config['value'] .
             ')" into "' .
+            $config['table'] .
+            '"."' .
             $config['summary'] .
-            '" because ' .
+            '" because "' .
             $attribute .
-            ' is part of the where condition but it is not set explicitly on the entity.'
+            '" is part of the where condition but it is not set explicitly on the entity.'
         );
       }
 
