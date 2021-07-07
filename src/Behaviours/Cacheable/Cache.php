@@ -119,8 +119,8 @@ class Cache
       'foreignKey' => $foreignKey,
       'foreignKeyExtractor' => is_array($config['foreignKey'])
         ? $config['foreignKey'][1]
-        : function ($value) {
-          return $value;
+        : function ($foreignKey) {
+          return $foreignKey;
         },
       'foreignKeySelector' => is_array($config['foreignKey'])
         ? $config['foreignKey'][2]
