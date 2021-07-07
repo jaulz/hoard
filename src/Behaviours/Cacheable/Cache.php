@@ -174,6 +174,16 @@ class Cache
           $rawUpdate = DB::raw("$summaryColumn + $value");
           $propagateValue = $value;
           break;
+
+        case 'max':
+          $rawUpdate = DB::raw("CASE WHEN $summaryColumn > '$value' then $summaryColumn ELSE '$value' END");
+          $propagateValue = $value;
+          break;
+
+        case 'min':
+          $rawUpdate = DB::raw("CASE WHEN $summaryColumn < '$value' then $summaryColumn ELSE '$value' END");
+          $propagateValue = $value;
+          break;
       }
 
       return $this->prepareCacheUpdate(

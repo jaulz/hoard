@@ -93,11 +93,22 @@ class CountCacheTest extends AcceptanceTestCase
 
         $this->assertEquals(0, Post::first()->commentCount);
         $this->assertEquals(null, Post::first()->firstCommentedAt);
+        $this->assertEquals(null, Post::first()->lastCommentedAt);
+
+        $secondComment = new Comment;
+        $secondComment->userId = $this->data['user']->id;
+        $secondComment->postId = $this->data['post']->id;
+        $secondComment->save();
+
+        $this->assertEquals(1, Post::first()->commentCount);
+        $this->assertEquals($secondComment->createdAt, Post::first()->firstCommentedAt);
+        $this->assertEquals($secondComment->createdAt, Post::first()->lastCommentedAt);
         
         $comment->restore();
 
-        $this->assertEquals(1, Post::first()->commentCount);
+        $this->assertEquals(2, Post::first()->commentCount);
         $this->assertEquals($comment->createdAt, Post::first()->firstCommentedAt);
+        $this->assertEquals($secondComment->createdAt, Post::first()->lastCommentedAt);
     }
 
     private function setupUserAndPost()
