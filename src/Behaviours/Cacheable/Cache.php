@@ -66,7 +66,7 @@ class Cache
       'foreignKey' => self::field($foreignModelName, 'id'),
       'key' => 'id',
       'where' => [],
-      'summary' => self::field($modelName, $function),
+      'summary' => self::field(Str::plural($modelName), $function),
       'context' => null,
     ];
 
