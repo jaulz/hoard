@@ -10,6 +10,11 @@ use ReflectionClass;
 trait Cacheable
 {
     /**
+     * @var object
+     */
+    private static $foreignCacheConfigs;
+
+    /**
      * Boot the trait and its event bindings when a model is created.
      */
     public static function bootCacheable()
@@ -31,41 +36,41 @@ trait Cacheable
      */
     public function cache()
     {
-        $className = get_class($this);
+        if (!static::$foreignCacheConfigs) {
+            // Get all other model classes
+            $className = get_class($this);
+            $reflector = new ReflectionClass($className);
+            $directory = dirname($reflector->getFileName());
+            $classNames = (new FindCacheableClasses($directory))->getAllCacheableClasses();
 
-        // Get all other model classes
-        $reflector = new ReflectionClass($className);
-        $directory = dirname($reflector->getFileName());
-        $classNames = (new FindCacheableClasses($directory))->getAllCacheableClasses();
+            // Go through all other classes and check if they reference the current class
+            static::$foreignCacheConfigs = collect([]);
+            collect($classNames)->each(function ($foreignClassName) use (
+                $className
+            ) {
+                // Go through options and see where the model is referenced
+                $foreignConfigs = collect([]);
+                $foreignModel = new $foreignClassName();
+                collect($foreignModel->caches())
+                    ->filter(function ($config) use ($className) {
+                        return $config['model'] === $className;
+                    })
+                    ->each(function ($config) use ($foreignConfigs) {
+                        $foreignConfigs->push($config);
+                    });
 
-        // Go through all other classes and check if they reference the current class
-        $configs = collect([]);
-        collect($classNames)->each(function ($foreignClassName) use (
-            $className,
-            $configs
-        ) {
-            // Go through options and see where the model is referenced
-            $foreignConfigs = collect([]);
-            $foreignModel = new $foreignClassName();
-            collect($foreignModel->caches())
-                ->filter(function ($config) use ($className) {
-                    return $config['model'] === $className;
-                })
-                ->each(function ($config) use ($foreignConfigs) {
-                    $foreignConfigs->push($config);
-                });
+                // If there are no configurations that affect this model 
+                if ($foreignConfigs->count() === 0) {
+                    return true;
+                }
 
-            // If there are no configurations that affect this model 
-            if ($foreignConfigs->count() === 0) {
-                return true;
-            }
-
-            $configs->put($foreignClassName, $foreignConfigs->toArray());
-        });
+                static::$foreignCacheConfigs->put($foreignClassName, $foreignConfigs->toArray());
+            });
+        }
 
         // Rebuild cache of instance
         $cache = new Cache($this);
-        $cache->rebuild($configs->toArray());
+        $cache->rebuild(static::$foreignCacheConfigs->toArray());
 
         return $this;
     }
