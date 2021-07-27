@@ -3,6 +3,7 @@ namespace Jaulz\Eloquence\Commands;
 
 use Illuminate\Console\Command;
 use Jaulz\Eloquence\Behaviours\Cacheable\Cache;
+use Jaulz\Eloquence\Support\FindCacheableClasses;
 
 class RebuildCaches extends Command
 {
@@ -40,54 +41,66 @@ class RebuildCaches extends Command
       $directory
     ))->getAllCacheableClasses();
 
-    $this->rebuild($this->mapUsages($classNames, $this->option('class')));
-  }
+    // Iterate through all cacheable classes and rebuild cache
+    $classNames->each(function ($className) {
+      return !!$this->option('filter') ? $className === $this->option('filter') : true;
+    })->each(function ($className) {
+      // Load all instances lazily
+      $models = $className::lazy();
+      $count = $models->count();
+      $bar = $this->output->createProgressBar($count);
+      $startTime = microtime(true);
 
-  /**
-   * Get a map of all cacheable classes including their usages
-   *
-   * @param string $className
-   * @param ?string $filter
-   */
-  private function mapUsages(array $classNames, ?string $filter)
-  {
-    return collect($classNames)
-      ->filter(function ($className) use ($filter) {
-        return $filter ? $filter === $className : true;
-      })
-      ->mapWithKeys(function ($className) use ($classNames) {
-        $options = collect([]);
+      // Run through each model and rebuild cache
+      $bar->start();
+      $models->each(function ($model, $index) use (
+        $className,
+        $count
+      ) {
+        $iteration = $index + 1;
+        $keyName = $model->getKeyName();
+        $key = $model->getKey();
 
-        // Go through all other classes and check if they reference the current class
-        collect($classNames)->each(function ($foreignClassName) use (
-          $className,
-          $options
-        ) {
-          // Get specific cache options
-          if (!method_exists($foreignClassName, 'caches')) {
-            return true;
-          }
+        $this->comment(
+          "($iteration/$count) Rebuilding $className($keyName=$key) caches"
+        );
 
-          // Go through options and see where the model is referenced
-          $foreignOptions = collect([]);
-          $foreignModel = new $foreignClassName();
-          collect($foreignModel->caches())
-            ->filter(function ($options) use ($className) {
-              return $options['model'] === $className;
-            })
-            ->each(function ($options) use ($foreignOptions) {
-              $foreignOptions->push($options);
-            });
+        $model->cache();
 
-          if ($foreignOptions->count() === 0) {
-            return true;
-          }
+          /*if (!empty($result['difference'])) {
+            $this->warn('Fixed cached fields:');
+            $this->warn('Before: ' . json_encode($result['before']));
+            $this->warn('After: ' . json_encode($result['after']));
+            $this->warn('Difference: ' . json_encode($result['difference']));
+          }*/
 
-          $options->put($foreignClassName, $foreignOptions->toArray());
-        });
-
-        return [$className => $options->toArray()];
+        $bar->advance();
       });
+      $bar->finish();
+
+      $endTime = microtime(true);
+      $executionTime = intval(($endTime - $startTime) * 1000);
+      $this->info(
+        "Finished rebuilding $className caches in $executionTime milliseconds"
+      );
+    });
+
+
+    $before = collect($model->getAttributes())->only($valueColumns);
+    $success = $model::unguarded(function () use ($model, $updates) {
+      $model->fill($updates);
+      $model->timestamps = false;
+
+      return $model->saveQuietly();
+    });
+    $after = collect($model->refresh()->getAttributes())->only($valueColumns);
+
+    return [
+      'before' => $before->toArray(),
+      'after' => $after->toArray(),
+      'difference' => $before->diffAssoc($after)->toArray(),
+    ];
+    $this->rebuild($this->mapUsages($classNames, $this->option('class')));
   }
 
   /**

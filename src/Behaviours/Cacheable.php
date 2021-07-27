@@ -4,7 +4,7 @@ namespace Jaulz\Eloquence\Behaviours;
 
 use Jaulz\Eloquence\Behaviours\Cacheable\Cache;
 use Jaulz\Eloquence\Behaviours\Cacheable\CacheObserver;
-use Jaulz\Eloquence\Commands\FindCacheableClasses;
+use Jaulz\Eloquence\Support\FindCacheableClasses;
 use ReflectionClass;
 
 trait Cacheable
@@ -63,7 +63,10 @@ trait Cacheable
             $configs->put($foreignClassName, $foreignConfigs->toArray());
         });
 
+        // Rebuild cache of instance
         $cache = new Cache($this);
-        return $cache->rebuild($configs->toArray());
+        $cache->rebuild($configs->toArray());
+
+        return $this;
     }
 }
