@@ -164,7 +164,7 @@ class Cache
             $valueColumn = $config['value'];
             $defaultValue = static::getDefaultValue($function);
             $query = $foreignModelName
-              ::select(
+              ::withoutGlobalScopes()->select(
                 DB::raw("COALESCE($function($valueColumn), $defaultValue)")
               )
               ->where($config['where']);
@@ -182,20 +182,14 @@ class Cache
       ->toArray();
 
     // Run updates unguarded and without timestamps
-    $before = collect($this->model->getAttributes())->only($valueColumns);
     $success = $this->model::unguarded(function () use ($updates) {
       $this->model->fill($updates);
       $this->model->timestamps = false;
 
       return $this->model->saveQuietly();
     });
-    $after = collect($this->model->refresh()->getAttributes())->only($valueColumns);
 
-    return [
-      'before' => $before->toArray(),
-      'after' => $after->toArray(),
-      'difference' => $before->diffAssoc($after)->toArray(),
-    ];
+    return $this->model;
   }
 
   /*
@@ -507,10 +501,11 @@ class Cache
               $key,
               $foreignKey
             ) {
-              $query = $foreignModelName::where($key, $foreignKey);
               $foreignModel = new $foreignModelName();
+              $foreignModel->timestamps = false;
 
               // Update entity in one go
+              $query = $foreignModel->newModelQuery()->where($key, $foreignKey);
               $values = $updates->mapWithKeys(function ($update) {
                 return [
                   $update['summaryColumn'] => $update['rawValue'],
@@ -615,7 +610,7 @@ class Cache
         $defaultValue = static::getDefaultValue($function);
 
         $cacheQuery = $this->model
-          ::select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))
+          ::withoutGlobalScopes()->select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))
           ->where($config['where'])
           ->where($config['foreignKey'], $foreignKey);
 
@@ -633,74 +628,6 @@ class Cache
         ];
       })
       ->toArray();
-  }
-
-  /**
-   * Rebuilds the cache for the records in question.
-   *
-   * @param Model $model
-   * @param array $foreignConfigs
-   * @return array
-   */
-  public static function rebuildCache(
-    Model $model,
-    array $foreignConfigs
-  ) {
-    // Get all update statements
-    $valueColumns = collect([]);
-    $updates = collect($foreignConfigs)
-      ->mapWithKeys(function ($configs, $foreignModelName) use (
-        $model,
-        $valueColumns
-      ) {
-        return collect($configs)
-          ->map(function ($config) use ($foreignModelName, $valueColumns) {
-            // Normalize config
-            $config = self::config($foreignModelName, $config);
-
-            // Collect all value columns
-            $valueColumns->push($config['value']);
-
-            return $config;
-          })
-          ->mapWithKeys(function ($config) use ($model, $foreignModelName) {
-            // Create query that selects the aggregated field from the foreign table
-            $function = $config['function'];
-            $valueColumn = $config['value'];
-            $defaultValue = static::getDefaultValue($function);
-            $query = $foreignModelName
-              ::select(
-                DB::raw("COALESCE($function($valueColumn), $defaultValue)")
-              )
-              ->where($config['where']);
-
-            // Use selector from config
-            $config['foreignKeySelector']($query, $model[$config['key']]);
-
-            return [
-              $config['summary'] => DB::raw(
-                '(' . Cache::convertQueryToRawSQL($query->take(1)) . ')'
-              ),
-            ];
-          });
-      })
-      ->toArray();
-
-    // Run updates unguarded and without timestamps
-    $before = collect($model->getAttributes())->only($valueColumns);
-    $success = $model::unguarded(function () use ($model, $updates) {
-      $model->fill($updates);
-      $model->timestamps = false;
-
-      return $model->saveQuietly();
-    });
-    $after = collect($model->refresh()->getAttributes())->only($valueColumns);
-
-    return [
-      'before' => $before->toArray(),
-      'after' => $after->toArray(),
-      'difference' => $before->diffAssoc($after)->toArray(),
-    ];
   }
 
   /**
