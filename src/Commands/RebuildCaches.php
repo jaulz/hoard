@@ -12,7 +12,7 @@ class RebuildCaches extends Command
    *
    * @var string
    */
-  protected $signature = 'eloquence:rebuild {--class= : Optional classes to update} {--dir= : Directory in which to look for classes}';
+  protected $signature = 'caches:rebuild {--class= : Optional classes to update} {--dir= : Directory in which to look for classes}';
 
   /**
    * The console command description.
@@ -43,7 +43,7 @@ class RebuildCaches extends Command
 
     // Iterate through all cacheable classes and rebuild cache
     $classNames->each(function ($className) {
-      return !!$this->option('filter') ? $className === $this->option('filter') : true;
+      return !!$this->option('class') ? $className === $this->option('class') : true;
     })->each(function ($className) {
       // Load all instances lazily
       $models = $className::lazy();
