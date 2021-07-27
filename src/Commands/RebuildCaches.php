@@ -44,18 +44,25 @@ class RebuildCaches extends Command
 
     // Iterate through all cacheable classes and rebuild cache
     collect($classNames)->each(function ($className) {
-      return !!$this->option('class') ? $className === $this->option('class') : true;
-    })->each(function ($className) {
       // Load all instances lazily
       $models = $className::lazy();
       $count = $models->count();
-      $bar = $this->output->createProgressBar($count);
-      $bar->setFormat('%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message%');
+
+      // Check if we need to skip this class
+      if (!$count || (!!$this->option('class') && $className !== $this->option('class'))) {
+        $this->comment(
+          "Rebuild $className caches skipped"
+        );
+        return;
+      }
 
       // Run through each model and rebuild cache
       $this->comment(
         "Rebuild $className caches"
       );
+      $bar = $this->output->createProgressBar($count);
+      $bar->setFormat('%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message%');
+      $bar->setMessage("");
       $bar->start();
       $models->each(function ($model) use (
         $bar,
@@ -63,17 +70,19 @@ class RebuildCaches extends Command
         $keyName = $model->getKeyName();
         $key = $model->getKey();
 
+        // Set information message to bar
         $bar->setMessage("$keyName=$key");
 
+        // Check differences between the model before and after
         $before = collect($model->getAttributes());
         $model->cache();
         $after = collect($model->refresh()->getAttributes());
         $difference = $before->diffAssoc($after)->toArray();
 
+        // Progress bar
         $bar->advance();
       });
 
-      $endTime = microtime(true);
       $bar->finish();
       $this->newLine();
     });

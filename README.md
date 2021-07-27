@@ -144,6 +144,20 @@ The example above uses the following conventions:
 
 With these settings configured, you will now see the related model's cache updated every time an item is added, updated, or removed.
 
+#### Rebuild command
+
+You can rebuild the cache via the following command at any time:
+```
+php artisan caches:rebuild
+```
+
+In case you face an memory exception it might be related to Telescope and you should consider to add the command to the `ignore_command` config:
+```php
+    'ignore_commands' => [
+        'caches:rebuild'
+    ],
+```
+
 ### Sluggable models
 
 Sluggable is another behaviour that allows for the easy addition of model slugs. To use, implement the Sluggable trait:
