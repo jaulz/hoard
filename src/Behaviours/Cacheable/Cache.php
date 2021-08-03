@@ -182,12 +182,11 @@ class Cache
       ->toArray();
 
     // Run updates unguarded and without timestamps
-    $success = $this->model::unguarded(function () use ($updates) {
-      $this->model->fill($updates);
-      $this->model->timestamps = false;
-
-      return $this->model->saveQuietly();
-    });
+    if (count($updates) > 0) {
+      DB::table($this->model->getTable())
+      ->where($this->model->getKeyName(), $this->model->getKey())
+      ->update($updates);
+    }
 
     return $this->model;
   }
