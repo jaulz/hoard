@@ -1,14 +1,11 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Jaulz\Eloquence\Behaviours\Sluggable;
 use Illuminate\Database\Eloquent\Model;
 
 class User extends Model
-{
-    use CamelCasing;
-    use Sluggable;
+{    use Sluggable;
 
     public function posts()
     {
@@ -17,6 +14,6 @@ class User extends Model
 
     public function slugStrategy()
     {
-        return ['firstName', 'lastName'];
+        return ['first_name', 'last_name'];
     }
 }

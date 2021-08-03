@@ -9,11 +9,11 @@ class GuardedColumnsTest extends AcceptanceTestCase
     public function testGuardedUser()
     {
         $user = GuardedUser::create([
-            'firstName' => 'Stuart',
+            'first_name' => 'Stuart',
             'last_name' => 'Jones',
         ]);
 
-        $this->assertEquals('Stuart', $user->firstName);
-        $this->assertEquals('Jones', $user->lastName);
+        $this->assertEquals('Stuart', $user->first_name);
+        $this->assertEquals('Jones', $user->last_name);
     }
 }

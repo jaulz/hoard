@@ -1,15 +1,12 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 use Jaulz\Eloquence\Behaviours\Cacheable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
-{
-    use CamelCasing;
-    use Cacheable;
+{    use Cacheable;
     use SoftDeletes;
 
     public function caches()
@@ -19,24 +16,24 @@ class Item extends Model
                 'function' => 'sum',
                 'model' => 'Tests\Acceptance\Models\Order',
                 'value' => 'total',
-                'summary' => 'itemTotal',
+                'summary' => 'item_total',
             ],
 
             [
                 'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'summary' => 'itemTotalExplicit',
+                'summary' => 'item_total_explicit',
                 'value' => 'total',
-                'foreignKey' => 'orderId',
+                'foreignKey' => 'order_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'sUm',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'summary' => 'itemTotalConditional',
+                'summary' => 'item_total_conditional',
                 'value' => 'total',
-                'foreignKey' => 'orderId',
+                'foreignKey' => 'order_id',
                 'key' => 'id',
                 'where' => [
                     'billable' => true 
@@ -45,9 +42,9 @@ class Item extends Model
             [
                 'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\Order',
-                'summary' => 'itemTotalComplexConditional',
+                'summary' => 'item_total_complex_conditional',
                 'value' => 'total',
-                'foreignKey' => 'orderId',
+                'foreignKey' => 'order_id',
                 'key' => 'id',
                 'where' => [
                     'billable' => true,

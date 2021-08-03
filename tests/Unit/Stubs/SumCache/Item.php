@@ -19,7 +19,7 @@ class Item extends Model
             [
                 'function' => 'sum',
                 'model' => 'Tests\Unit\Stubs\SumCache\Order',
-                'summary' => 'itemTotalExplicit',
+                'summary' => 'item_total_explicit',
                 'field' => 'total',
                 'foreignKey' => 'itemId',
                 'key' => 'id',

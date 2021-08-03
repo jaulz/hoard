@@ -28,18 +28,6 @@ information and traits that may be needed.
 
 You should now be good to go with your models.
 
-## Camel case all the things!
-
-For those of us who prefer to work with a single coding standard right across our applications, 
-using the CamelCaseModel trait will ensure that all those attributes, relationships and associated 
-data from our Eloquent models persist through to our APIs in a camel-case manner. This is important 
-if you are writing front-end applications, which are also using camelCase. This allows for a 
-better standard across our application. To use:
-
-    use \Jaulz\Eloquence\Behaviours\CamelCasing;
-
-Put the above line in your models and that's it.
-
 ### Note!
 
 Eloquence DOES NOT CHANGE how you write your schema migrations. You should still be using snake_case 

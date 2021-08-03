@@ -2,13 +2,11 @@
 namespace Tests\Acceptance\Models;
 
 use Jaulz\Eloquence\Behaviours\Cacheable;
-use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Comment extends Model
 {
-    use CamelCasing;
     use Cacheable;
     use SoftDeletes;
 

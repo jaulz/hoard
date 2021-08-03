@@ -2,14 +2,11 @@
 namespace Tests\Acceptance\Models;
 
 use Jaulz\Eloquence\Behaviours\Cacheable;
-use Jaulz\Eloquence\Behaviours\CamelCasing;
 use Jaulz\Eloquence\Behaviours\Sluggable;
 use Illuminate\Database\Eloquent\Model;
 
 class Post extends Model
-{
-    use CamelCasing;
-    use Sluggable;
+{    use Sluggable;
     use Cacheable;
 
     public function caches()
@@ -18,24 +15,24 @@ class Post extends Model
             [
                 'function' => 'COUNT',
                 'model' => 'Tests\Acceptance\Models\User',
-                'summary' => 'postCount',
-                'foreignKey' => 'userId',
+                'summary' => 'posts_count',
+                'foreignKey' => 'user_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'COUNT',
                 'model' => 'Tests\Acceptance\Models\User',
-                'summary' => 'postCountExplicit',
-                'foreignKey' => 'userId',
+                'summary' => 'posts_count_explicit',
+                'foreignKey' => 'user_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'COUNT',
                 'model' => 'Tests\Acceptance\Models\User',
-                'summary' => 'postCountConditional',
-                'foreignKey' => 'userId',
+                'summary' => 'posts_count_conditional',
+                'foreignKey' => 'user_id',
                 'key' => 'id',
                 'where' => [
                     'visible' => true, 
@@ -45,8 +42,8 @@ class Post extends Model
             [
                 'function' => 'COUNT',
                 'model' => 'Tests\Acceptance\Models\User',
-                'summary' => 'postCountComplexConditional',
-                'foreignKey' => 'userId',
+                'summary' => 'posts_count_complex_conditional',
+                'foreignKey' => 'user_id',
                 'key' => 'id',
                 'where' => [
                     'visible' => true,
@@ -57,9 +54,9 @@ class Post extends Model
             [
                 'function' => 'SUM',
                 'model' => 'Tests\Acceptance\Models\User',
-                'summary' => 'post_comment_sum',
-                'value' => 'comment_count',
-                'foreignKey' => 'userId',
+                'summary' => 'post_comments_sum',
+                'value' => 'comments_count',
+                'foreignKey' => 'user_id',
                 'key' => 'id',
             ],
         ];

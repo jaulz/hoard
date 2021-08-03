@@ -9,8 +9,8 @@ class SluggedTest extends AcceptanceTestCase
     public function testUserSlug()
     {
         $user = new User;
-        $user->firstName = 'Kirk';
-        $user->lastName = 'Bushell';
+        $user->first_name = 'Kirk';
+        $user->last_name = 'Bushell';
         $user->save();
 
         $this->assertEquals('kirk-bushell', (string) $user->slug);
@@ -19,8 +19,8 @@ class SluggedTest extends AcceptanceTestCase
     public function testPostSlug()
     {
         $user = new User;
-        $user->firstName = 'Kirk';
-        $user->lastName = 'Bushell';
+        $user->first_name = 'Kirk';
+        $user->last_name = 'Bushell';
         $user->save();
 
         $post = new Post;

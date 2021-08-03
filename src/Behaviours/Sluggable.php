@@ -144,7 +144,7 @@ trait Sluggable
      *
      * If you're using the camelcase model trait, then you can use that format:
      *
-     *  return 'firstName.lastName';
+     *  return 'first_name.last_name';
      *
      * @return string
      */

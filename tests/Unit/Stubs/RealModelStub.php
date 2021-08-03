@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 class RealModelStub extends Model
 {
     use \Jaulz\Eloquence\Behaviours\Cacheable;
-    use \Jaulz\Eloquence\Behaviours\CamelCasing;
 
     protected $dateFormat = \DateTime::ISO8601;
 
