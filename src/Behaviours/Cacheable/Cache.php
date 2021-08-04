@@ -76,9 +76,12 @@ class Cache
     // Check if we need to propagate changes by checking if the foreign model is also cacheable
     $propagate = false;
     if (
-      $checkForeignModel &&
-      method_exists(new $foreignModelName(), 'bootCacheable')
+      $checkForeignModel
     ) {
+      if (!method_exists(new $foreignModelName(), 'bootCacheable')) {
+        throw new UnableToCacheException('Referenced model "' . $config['$foreignModelName'] . '" must use Cacheable trait.');
+      }
+
       $foreignModelInstance = new $foreignModelName();
       $foreignConfig = $foreignModelInstance->caches();
 
