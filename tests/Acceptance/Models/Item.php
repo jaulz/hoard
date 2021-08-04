@@ -14,26 +14,26 @@ class Item extends Model
         return [
             [
                 'function' => 'sum',
-                'model' => 'Tests\Acceptance\Models\Order',
+                'foreign_model' => 'Tests\Acceptance\Models\Order',
                 'value' => 'total',
                 'summary' => 'item_total',
             ],
 
             [
                 'function' => 'SUM',
-                'model' => 'Tests\Acceptance\Models\Order',
+                'foreign_model' => 'Tests\Acceptance\Models\Order',
                 'summary' => 'item_total_explicit',
                 'value' => 'total',
-                'foreignKey' => 'order_id',
+                'foreign_key' => 'order_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'sUm',
-                'model' => 'Tests\Acceptance\Models\Order',
+                'foreign_model' => 'Tests\Acceptance\Models\Order',
                 'summary' => 'item_total_conditional',
                 'value' => 'total',
-                'foreignKey' => 'order_id',
+                'foreign_key' => 'order_id',
                 'key' => 'id',
                 'where' => [
                     'billable' => true 
@@ -41,10 +41,10 @@ class Item extends Model
             ],
             [
                 'function' => 'SUM',
-                'model' => 'Tests\Acceptance\Models\Order',
+                'foreign_model' => 'Tests\Acceptance\Models\Order',
                 'summary' => 'item_total_complex_conditional',
                 'value' => 'total',
-                'foreignKey' => 'order_id',
+                'foreign_key' => 'order_id',
                 'key' => 'id',
                 'where' => [
                     'billable' => true,

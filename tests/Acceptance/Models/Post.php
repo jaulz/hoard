@@ -14,25 +14,25 @@ class Post extends Model
         return [
             [
                 'function' => 'COUNT',
-                'model' => 'Tests\Acceptance\Models\User',
+                'foreign_model' => 'Tests\Acceptance\Models\User',
                 'summary' => 'posts_count',
-                'foreignKey' => 'user_id',
+                'foreign_key' => 'user_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'COUNT',
-                'model' => 'Tests\Acceptance\Models\User',
+                'foreign_model' => 'Tests\Acceptance\Models\User',
                 'summary' => 'posts_count_explicit',
-                'foreignKey' => 'user_id',
+                'foreign_key' => 'user_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'COUNT',
-                'model' => 'Tests\Acceptance\Models\User',
+                'foreign_model' => 'Tests\Acceptance\Models\User',
                 'summary' => 'posts_count_conditional',
-                'foreignKey' => 'user_id',
+                'foreign_key' => 'user_id',
                 'key' => 'id',
                 'where' => [
                     'visible' => true, 
@@ -41,9 +41,9 @@ class Post extends Model
 
             [
                 'function' => 'COUNT',
-                'model' => 'Tests\Acceptance\Models\User',
+                'foreign_model' => 'Tests\Acceptance\Models\User',
                 'summary' => 'posts_count_complex_conditional',
-                'foreignKey' => 'user_id',
+                'foreign_key' => 'user_id',
                 'key' => 'id',
                 'where' => [
                     'visible' => true,
@@ -53,10 +53,10 @@ class Post extends Model
 
             [
                 'function' => 'SUM',
-                'model' => 'Tests\Acceptance\Models\User',
+                'foreign_model' => 'Tests\Acceptance\Models\User',
                 'summary' => 'post_comments_sum',
                 'value' => 'comments_count',
-                'foreignKey' => 'user_id',
+                'foreign_key' => 'user_id',
                 'key' => 'id',
             ],
         ];

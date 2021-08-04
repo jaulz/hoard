@@ -15,7 +15,7 @@ class Comment extends Model
         return [
             [
                 'function' => 'count',
-                'model' => 'Tests\Acceptance\Models\Post',
+                'foreign_model' => 'Tests\Acceptance\Models\Post',
                 'context' => function ($model) {
                     return [
                         'user_id' => $model->user_id
@@ -25,19 +25,19 @@ class Comment extends Model
 
             [
                 'function' => 'COUNT',
-                'model' => 'Tests\Acceptance\Models\User',
+                'foreign_model' => 'Tests\Acceptance\Models\User',
             ],
 
             [
                 'function' => 'MAX',
-                'model' => 'Tests\Acceptance\Models\Post',
+                'foreign_model' => 'Tests\Acceptance\Models\Post',
                 'summary' => 'last_commented_at',
                 'value' => 'created_at'
             ],
 
             [
                 'function' => 'MIN',
-                'model' => 'Tests\Acceptance\Models\Post',
+                'foreign_model' => 'Tests\Acceptance\Models\Post',
                 'summary' => 'first_commented_at',
                 'value' => 'created_at'
             ],

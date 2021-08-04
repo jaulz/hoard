@@ -46,8 +46,8 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals(1, User::first()->comments_count);
         $this->assertEquals(1, User::first()->post_comments_sum);
         $this->assertEquals(1, Post::first()->comments_count);
-        $this->assertEquals($comment->createdAt, Post::first()->first_commented_at);
-        $this->assertEquals($comment->createdAt, Post::first()->last_commented_at);
+        $this->assertEquals($comment->created_at, Post::first()->first_commented_at);
+        $this->assertEquals($comment->created_at, Post::first()->last_commented_at);
 
         $comment->post_id = $post->id;
         $comment->save();
@@ -101,14 +101,14 @@ class CountCacheTest extends AcceptanceTestCase
         $secondComment->save();
 
         $this->assertEquals(1, Post::first()->comments_count);
-        $this->assertEquals($secondComment->createdAt, Post::first()->first_commented_at);
-        $this->assertEquals($secondComment->createdAt, Post::first()->last_commented_at);
+        $this->assertEquals($secondComment->created_at, Post::first()->first_commented_at);
+        $this->assertEquals($secondComment->created_at, Post::first()->last_commented_at);
         
         $comment->restore();
 
         $this->assertEquals(2, Post::first()->comments_count);
-        $this->assertEquals($comment->createdAt, Post::first()->first_commented_at);
-        $this->assertEquals($secondComment->createdAt, Post::first()->last_commented_at);
+        $this->assertEquals($comment->created_at, Post::first()->first_commented_at);
+        $this->assertEquals($secondComment->created_at, Post::first()->last_commented_at);
     }
 
     private function setupUserAndPost()
