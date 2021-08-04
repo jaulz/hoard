@@ -53,7 +53,7 @@ trait Cacheable
                 $foreignModel = new $foreignClassName();
                 collect($foreignModel->caches())
                     ->filter(function ($config) use ($className) {
-                        return $config['model'] === $className;
+                        return $config['foreign_model'] === $className;
                     })
                     ->each(function ($config) use ($foreignConfigs) {
                         $foreignConfigs->push($config);

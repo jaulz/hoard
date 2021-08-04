@@ -79,7 +79,7 @@ class Cache
       $checkForeignModel
     ) {
       if (!method_exists(new $foreignModelName(), 'bootCacheable')) {
-        throw new UnableToCacheException('Referenced model "' . $config['$foreignModelName'] . '" must use Cacheable trait.');
+        throw new UnableToCacheException('Referenced model "' . $config['foreign_model'] . '" must use Cacheable trait.');
       }
 
       $foreignModelInstance = new $foreignModelName();
@@ -161,7 +161,7 @@ class Cache
             return $config;
           })
           ->mapWithKeys(function ($config) use ($foreignModelName) {
-            $cacheQuery = static::prepareCacheQuery($this->model, $config);
+            $cacheQuery = static::prepareCacheQuery($foreignModelName, $config);
             $config['foreign_key_selector']($cacheQuery, $this->model[$config['key']]);
 
             return [
@@ -623,12 +623,11 @@ class Cache
   /**
    * Create cache query
    *
-   * @param Model $model
    * @param mixed $config
    *
    * @return \Illuminate\Database\Query\Builder
    */
-  protected static function prepareCacheQuery(Model $model, $config)
+  protected static function prepareCacheQuery($model, $config)
   {
     $foreignModel = $config['foreign_model'];
     $function = $config['function'];
