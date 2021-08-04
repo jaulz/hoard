@@ -80,6 +80,7 @@ class RebuildCaches extends Command
         $difference = $before->diffAssoc($after)->toArray();
 
         // Progress bar
+        $bar->setMessage("");
         $bar->advance();
       });
 
