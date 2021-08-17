@@ -2,11 +2,10 @@
 namespace Tests\Acceptance\Models;
 
 use Jaulz\Eloquence\Behaviours\Cacheable;
-use Jaulz\Eloquence\Behaviours\Sluggable;
 use Illuminate\Database\Eloquent\Model;
 
 class Post extends Model
-{    use Sluggable;
+{  
     use Cacheable;
 
     public function caches()

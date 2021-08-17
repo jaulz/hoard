@@ -146,32 +146,6 @@ In case you face an memory exception it might be related to Telescope and you sh
     ],
 ```
 
-### Sluggable models
-
-Sluggable is another behaviour that allows for the easy addition of model slugs. To use, implement the Sluggable trait:
-
-```php
-class User extends Eloquent {
-    use Sluggable;
-
-    public function slugStrategy() {
-        return 'username';
-    }
-}
-```
-
-In the example above, a slug will be created based on the username field of the User model. There are two other
-slugs that are supported however, as well:
-
-* id and
-* uuid
-
-The only difference between the two above, is that if you're using UUIDs, the slug will be generated previous
-to the save, based on the uuid field. With ids, which are generally auto-increase strategies - the slug has
-to be generated after the record has been saved - which results in a secondary save call to the database.
-
-That's it! Easy huh?
-
 ## Changelog
 
 #### 8.0.0

@@ -1,11 +1,11 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\Sluggable;
 use Illuminate\Database\Eloquent\Model;
+use Jaulz\Eloquence\Behaviours\Cacheable;
 
-class User extends Model
-{    use Sluggable;
+class User extends Model {
+    use Cacheable;
 
     public function posts()
     {

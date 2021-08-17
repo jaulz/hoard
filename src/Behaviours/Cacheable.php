@@ -27,7 +27,9 @@ trait Cacheable
      *
      * @return array
      */
-    abstract public function caches();
+    public function caches() {
+        return [];
+    }
 
     /**
      * Rebuild cache for the model.
