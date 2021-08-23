@@ -2,11 +2,11 @@
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 
 class Order extends Model
 {
-    use Cacheable;
+    use IsCacheableTrait;
     
     public function items()
     {

@@ -2,11 +2,11 @@
 namespace Tests\Unit\Stubs\CountCache;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 
 class Comment extends Model
 {
-    use Cacheable;
+    use IsCacheableTrait;
 
     public function caches()
     {

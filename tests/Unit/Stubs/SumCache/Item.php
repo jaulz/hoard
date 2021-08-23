@@ -2,11 +2,11 @@
 namespace Tests\Unit\Stubs\SumCache;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 
 class Item extends Model
 {
-    use Cacheable;
+    use IsCacheableTrait;
 
     public function caches()
     {

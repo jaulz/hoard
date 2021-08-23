@@ -1,14 +1,14 @@
 <?php
 namespace Tests\Unit\Stubs;
 
-use Jaulz\Eloquence\Behaviours\CountCache\CacheConfig;
-use Jaulz\Eloquence\Behaviours\CountCache\Countable;
-use Jaulz\Eloquence\Behaviours\CountCache\CountCache;
+use Jaulz\Eloquence\Traits\CountCache\CacheConfig;
+use Jaulz\Eloquence\Traits\CountCache\Countable;
+use Jaulz\Eloquence\Traits\CountCache\CountCache;
 use Illuminate\Database\Eloquent\Model;
 
 class RealModelStub extends Model
 {
-    use \Jaulz\Eloquence\Behaviours\Cacheable;
+    use \Jaulz\Eloquence\Traits\IsCacheableTrait;
 
     protected $dateFormat = \DateTime::ISO8601;
 

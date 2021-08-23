@@ -1,13 +1,13 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Comment extends Model
 {
-    use Cacheable;
+    use IsCacheableTrait;
     use SoftDeletes;
 
     public function caches()

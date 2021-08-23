@@ -2,10 +2,10 @@
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 
 class User extends Model {
-    use Cacheable;
+    use IsCacheableTrait;
 
     public function posts()
     {

@@ -2,11 +2,11 @@
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
-{    use Cacheable;
+{    use IsCacheableTrait;
     use SoftDeletes;
 
     public function caches()

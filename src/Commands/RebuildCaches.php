@@ -3,8 +3,8 @@
 namespace Jaulz\Eloquence\Commands;
 
 use Illuminate\Console\Command;
-use Jaulz\Eloquence\Behaviours\Cacheable\Cache;
-use Jaulz\Eloquence\Support\FindCacheableClasses;
+use Jaulz\Eloquence\Traits\IsCacheableTrait\Cache;
+use Jaulz\Eloquence\Support\FindIsCacheableTraitClasses;
 
 class RebuildCaches extends Command
 {
@@ -38,9 +38,9 @@ class RebuildCaches extends Command
   public function handle()
   {
     $directory = $this->option('dir') ?: app_path();
-    $classNames = (new FindCacheableClasses(
+    $classNames = (new FindIsCacheableTraitClasses(
       $directory
-    ))->getAllCacheableClasses();
+    ))->getAllIsCacheableTraitClasses();
 
     // Iterate through all cacheable classes and rebuild cache
     collect($classNames)->each(function ($className) {

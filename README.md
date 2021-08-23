@@ -41,7 +41,7 @@ Eloquence comes bundled with UUID capabilities that you can use in your models.
 
 Simply include the Uuid trait:
 
-    use Jaulz\Eloquence\Behaviours\Uuid;
+    use Jaulz\Eloquence\Traits\Uuid;
 
 And then disable auto incrementing ids:
 
@@ -65,9 +65,9 @@ Should you need a custom UUID solution (aka, maybe you don't want to use a UUID4
 the id field. The UUID model trait will not set the id if it has already been defined. In this use-case however, it's probably no good
 to use the Uuid trait, as it's practically useless in this scenario.
 
-## Behaviours
+## Traits
 
-Eloquence comes with a system for setting up behaviours, which are really just small libraries that you can use with your Eloquent models.
+Eloquence comes with a system for setting up Traits, which are really just small libraries that you can use with your Eloquent models.
 The first of these is the count cache.
 
 ### Cache
@@ -79,7 +79,7 @@ has created on the user's record.
 
 To get this working, you need to do two steps:
 
-1. Use the Cacheable trait on the model and 
+1. Use the IsCacheableTrait trait on the model and 
 2. Configure the cache settings
 
 #### Configure the cache
@@ -102,7 +102,7 @@ on the Order model.
 
 ```php
 class Item extends Eloquent {
-    use Cacheable;
+    use IsCacheableTrait;
     
     public function caches() {
         return [
@@ -184,13 +184,13 @@ In case you face an memory exception it might be related to Telescope and you sh
 #### 2.0.2
 
 * Updated PHP dependency to 5.6+
-* CountCache and SumCache behaviours now supported via a service layer
+* CountCache and SumCache Traits now supported via a service layer
 
 #### 2.0.0
 
 * Sum cache model behaviour added
-* Booting of behaviours now done via Laravel trait booting
-* Simplification of all behaviours and their uses
+* Booting of Traits now done via Laravel trait booting
+* Simplification of all Traits and their uses
 * Updated readme/configuration guide
 
 #### 1.4.0

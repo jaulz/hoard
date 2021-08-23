@@ -1,5 +1,5 @@
 <?php
-namespace Jaulz\Eloquence\Behaviours\Cacheable;
+namespace Jaulz\Eloquence\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -78,8 +78,8 @@ class Cache
     if (
       $checkForeignModel
     ) {
-      if (!method_exists(new $foreignModelName(), 'bootCacheable')) {
-        throw new UnableToCacheException('Referenced model "' . $config['foreign_model'] . '" must use Cacheable trait.');
+      if (!method_exists(new $foreignModelName(), 'bootIsCacheableTrait')) {
+        throw new UnableToCacheException('Referenced model "' . $config['foreign_model'] . '" must use IsCacheableTrait trait.');
       }
 
       $foreignModelInstance = new $foreignModelName();

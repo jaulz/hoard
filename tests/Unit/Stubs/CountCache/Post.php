@@ -1,7 +1,7 @@
 <?php
 namespace Tests\Unit\Stubs\CountCache;
 
-use Jaulz\Eloquence\Behaviours\CountCache\Countable;
+use Jaulz\Eloquence\Traits\CountCache\Countable;
 use Illuminate\Database\Eloquent\Model;
 
 class Post extends Model

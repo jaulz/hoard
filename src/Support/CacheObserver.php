@@ -1,6 +1,6 @@
 <?php
 
-namespace Jaulz\Eloquence\Behaviours\Cacheable;
+namespace Jaulz\Eloquence\Support;
 
 use Illuminate\Support\Facades\DB;
 

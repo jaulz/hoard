@@ -1,12 +1,12 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Behaviours\Cacheable;
+use Jaulz\Eloquence\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\Model;
 
 class Post extends Model
 {  
-    use Cacheable;
+    use IsCacheableTrait;
 
     public function caches()
     {

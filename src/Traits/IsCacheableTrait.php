@@ -1,13 +1,13 @@
 <?php
 
-namespace Jaulz\Eloquence\Behaviours;
+namespace Jaulz\Eloquence\Traits;
 
-use Jaulz\Eloquence\Behaviours\Cacheable\Cache;
-use Jaulz\Eloquence\Behaviours\Cacheable\CacheObserver;
-use Jaulz\Eloquence\Support\FindCacheableClasses;
+use Jaulz\Eloquence\Support\Cache;
+use Jaulz\Eloquence\Support\CacheObserver;
+use Jaulz\Eloquence\Support\FindIsCacheableTraitClasses;
 use ReflectionClass;
 
-trait Cacheable
+trait IsCacheableTrait
 {
     /**
      * @var object
@@ -17,7 +17,7 @@ trait Cacheable
     /**
      * Boot the trait and its event bindings when a model is created.
      */
-    public static function bootCacheable()
+    public static function bootIsCacheableTrait()
     {
         static::observe(CacheObserver::class);
     }
@@ -36,14 +36,14 @@ trait Cacheable
      *
      * @return array
      */
-    public function cache()
+    public function rebuildCache()
     {
         if (!static::$foreignCacheConfigs) {
             // Get all other model classes
             $className = get_class($this);
             $reflector = new ReflectionClass($className);
             $directory = dirname($reflector->getFileName());
-            $classNames = (new FindCacheableClasses($directory))->getAllCacheableClasses();
+            $classNames = (new FindIsCacheableTraitClasses($directory))->getAllIsCacheableTraitClasses();
 
             // Go through all other classes and check if they reference the current class
             static::$foreignCacheConfigs = collect([]);

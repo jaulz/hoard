@@ -4,7 +4,7 @@ use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\Finder\Finder;
 
-class FindCacheableClasses
+class FindIsCacheableTraitClasses
 {
   /**
    * @var null|string
@@ -16,7 +16,7 @@ class FindCacheableClasses
     $this->directory = realpath($directory);
   }
 
-  public function getAllCacheableClasses()
+  public function getAllIsCacheableTraitClasses()
   {
     $finder = new Finder();
     $iterator = new ClassIterator($finder->in($this->directory));
@@ -34,7 +34,7 @@ class FindCacheableClasses
   }
 
   /**
-   * Decide if the class uses any of the caching behaviours.
+   * Decide if the class uses any of the caching Traits.
    *
    * @param \ReflectionClass $class
    *
@@ -42,6 +42,6 @@ class FindCacheableClasses
    */
   private function usesCaching(\ReflectionClass $class)
   {
-    return $class->hasMethod('bootCacheable');
+    return $class->hasMethod('bootIsCacheableTrait');
   }
 }
