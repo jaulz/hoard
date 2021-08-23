@@ -23,7 +23,7 @@ class Cache
   /**
    * @var array
    */
-  private $configs;
+  private $configurations;
 
   /**
    * @param Model $model
@@ -32,13 +32,13 @@ class Cache
   {
     $this->model = $model;
     $this->propagatedBy = $propagatedBy;
-    $this->configs = collect($model->caches())
-      ->map(function ($config) use ($model) {
-        return $this->config($model, $config);
+    $this->configurations = collect($model->getCacheConfigurations())
+      ->map(function ($configuration) use ($model) {
+        return $this->config($model, $configuration);
       })
-      ->filter(function ($config) use ($propagatedBy) {
+      ->filter(function ($configuration) use ($propagatedBy) {
         return !empty($propagatedBy)
-          ? collect($propagatedBy)->contains($config['value'])
+          ? collect($propagatedBy)->contains($configuration['value'])
           : true;
       });
   }
@@ -47,18 +47,18 @@ class Cache
    * Takes a registered sum cache, and setups up defaults.
    *
    * @param Model $model
-   * @param array $config
+   * @param array $configuration
    * @param bool $checkForeignModel
    * @return array
    */
   protected static function config(
     $model,
-    $config,
+    $configuration,
     ?bool $checkForeignModel = true
   ) {
-    $foreignModelName = $config['foreign_model'];
+    $foreignModelName = $configuration['foreign_model'];
     $modelName = $model instanceof Model ? get_class($model) : $model;
-    $function = Str::lower($config['function']);
+    $function = Str::lower($configuration['function']);
 
     // Prepare defaults
     $defaults = [
@@ -68,10 +68,11 @@ class Cache
       'where' => [],
       'summary' => self::field(Str::plural($modelName), $function),
       'context' => null,
+      'through' => null,
     ];
 
     // Merge defaults and actual config
-    $config = array_merge($defaults, $config);
+    $configuration = array_merge($defaults, $configuration);
 
     // Check if we need to propagate changes by checking if the foreign model is also cacheable
     $propagate = false;
@@ -79,23 +80,23 @@ class Cache
       $checkForeignModel
     ) {
       if (!method_exists(new $foreignModelName(), 'bootIsCacheableTrait')) {
-        throw new UnableToCacheException('Referenced model "' . $config['foreign_model'] . '" must use IsCacheableTrait trait.');
+        throw new UnableToCacheException('Referenced model "' . $configuration['foreign_model'] . '" must use IsCacheableTrait trait.');
       }
 
       $foreignModelInstance = new $foreignModelName();
-      $foreignConfig = $foreignModelInstance->caches();
+      $foreignConfiguration = $foreignModelInstance->getCacheConfigurations();
 
-      $propagate = collect($foreignConfig)->some(function ($foreignConfig) use (
+      $propagate = collect($foreignConfiguration)->some(function ($foreignConfiguration) use (
         $modelName,
         $foreignModelName,
-        $config
+        $configuration
       ) {
-        $foreignConfig = static::config(
+        $foreignConfiguration = static::config(
           $foreignModelName,
-          $foreignConfig,
+          $foreignConfiguration,
           false
         );
-        $propagate = $config['summary'] === $foreignConfig['value'];
+        $propagate = $configuration['summary'] === $foreignConfiguration['value'];
 
         return $propagate;
       });
@@ -105,67 +106,69 @@ class Cache
     $foreignKey = Str::snake(
       self::key(
         $modelName,
-        is_array($config['foreign_key'])
-          ? $config['foreign_key'][0]
-          : $config['foreign_key']
+        is_array($configuration['foreign_key'])
+          ? $configuration['foreign_key'][0]
+          : $configuration['foreign_key']
       )
     );
+    $foreignKeyExtractor = function ($foreignKey) {
+      return $foreignKey;
+    };
+    $foreignKeySelector = function ($query, $key) use ($foreignKey) {
+      $query->where($foreignKey, $key);
+    };
+    if (is_array($configuration['foreign_key'])) {
+      $foreignKeyExtractor = $configuration['foreign_key'][1];
+      $foreignKeySelector = $configuration['foreign_key'][2];
+    }
 
     return [
       'function' => $function,
-      'foreign_model' => $foreignModelName,
-      'table' => self::getModelTable($config['foreign_model']),
-      'summary' => Str::snake($config['summary']),
-      'value' => $config['value'],
-      'key' => Str::snake(self::key($modelName, $config['key'])),
-      'foreign_key' => $foreignKey,
-      'foreign_key_extractor' => is_array($config['foreign_key'])
-        ? $config['foreign_key'][1]
-        : function ($foreignKey) {
-          return $foreignKey;
-        },
-      'foreign_key_selector' => is_array($config['foreign_key'])
-        ? $config['foreign_key'][2]
-        : function ($query, $key) use ($foreignKey) {
-          $query->where($foreignKey, $key);
-        },
-      'where' => $config['where'],
-      'propagate' => $config['propagate'] ?? $propagate,
-      'context' => $config['context'],
-      'recursive' => $foreignModelName === $modelName,
+      'foreignModel' => $foreignModelName,
+      'table' => self::getModelTable($configuration['foreign_model']),
+      'summary' => Str::snake($configuration['summary']),
+      'value' => $configuration['value'],
+      'key' => Str::snake(self::key($modelName, $configuration['key'])),
+      'foreignKey' => $foreignKey,
+      'foreignKeyExtractor' => $foreignKeyExtractor,
+      'foreignKeySelector' => $foreignKeySelector,
+      'ignoreEmptyForeignKeys' => (is_array($configuration['foreign_key'])) || ($foreignModelName === $modelName),
+      'where' => $configuration['where'],
+      'propagate' => $configuration['propagate'] ?? $propagate,
+      'context' => $configuration['context'],
     ];
   }
 
   /**
    * Rebuild the count caches from the database
    *
-   * @param array $foreignConfigs
+   * @param array $foreignConfigurations
    * @return array
    */
-  public function rebuild($foreignConfigs)
+  public function rebuild($foreignConfigurations)
   {
     // Prepare all update statements
     $valueColumns = collect([]);
-    $updates = collect($foreignConfigs)
-      ->mapWithKeys(function ($configs, $foreignModelName) use (
+    $updates = collect($foreignConfigurations)
+      ->mapWithKeys(function ($configurations, $foreignModelName) use (
         $valueColumns
       ) {
-        return collect($configs)
-          ->map(function ($config) use ($foreignModelName, $valueColumns) {
+        return collect($configurations)
+          ->map(function ($configuration) use ($foreignModelName, $valueColumns) {
             // Normalize config
-            $config = self::config($foreignModelName, $config);
+            $configuration = self::config($foreignModelName, $configuration);
 
             // Collect all value columns
-            $valueColumns->push($config['value']);
+            $valueColumns->push($configuration['value']);
 
-            return $config;
+            return $configuration;
           })
-          ->mapWithKeys(function ($config) use ($foreignModelName) {
-            $cacheQuery = static::prepareCacheQuery($foreignModelName, $config);
-            $config['foreign_key_selector']($cacheQuery, $this->model[$config['key']]);
+          ->mapWithKeys(function ($configuration) use ($foreignModelName) {
+            $cacheQuery = static::prepareCacheQuery($foreignModelName, $configuration);
+            $configuration['foreignKeySelector']($cacheQuery, $this->model[$configuration['key']]);
 
             return [
-              $config['summary'] => DB::raw(
+              $configuration['summary'] => DB::raw(
                 '(' . Cache::convertQueryToRawSQL($cacheQuery->take(1)) . ')'
               ),
             ];
@@ -188,14 +191,14 @@ class Cache
    */
   public function create()
   {
-    $this->apply(function ($config) {
-      $foreignKeyColumn = self::foreignKey($this->model, $config['foreign_key']);
+    $this->apply(function ($configuration) {
+      $foreignKeyColumn = self::foreignKey($this->model, $configuration['foreignKey']);
       $foreignKeys = collect(
-        $config['foreign_key_extractor']($this->model->{$foreignKeyColumn})
+        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
       );
-      $function = $config['function'];
-      $summaryColumn = $config['summary'];
-      $valueColumn = $config['value'];
+      $function = $configuration['function'];
+      $summaryColumn = $configuration['summary'];
+      $valueColumn = $configuration['value'];
       $value = $this->model->{$valueColumn};
 
       // Handle certain cases more efficiently
@@ -226,7 +229,7 @@ class Cache
 
       return $this->prepareCacheUpdate(
         $foreignKeys,
-        $config,
+        $configuration,
         'created',
         $rawUpdate,
         $propagateValue
@@ -239,14 +242,14 @@ class Cache
    */
   public function delete()
   {
-    $this->apply(function ($config) {
-      $foreignKey = self::foreignKey($this->model, $config['foreign_key']);
+    $this->apply(function ($configuration) {
+      $foreignKey = self::foreignKey($this->model, $configuration['foreignKey']);
       $foreignModelKeys = collect(
-        $config['foreign_key_extractor']($this->model->{$foreignKey})
+        $configuration['foreignKeyExtractor']($this->model->{$foreignKey})
       );
-      $function = $config['function'];
-      $summaryColumn = $config['summary'];
-      $valueColumn = $config['value'];
+      $function = $configuration['function'];
+      $summaryColumn = $configuration['summary'];
+      $valueColumn = $configuration['value'];
       $value = $this->model->{$valueColumn};
 
       // Handle certain cases more efficiently
@@ -267,7 +270,7 @@ class Cache
 
       return $this->prepareCacheUpdate(
         $foreignModelKeys,
-        $config,
+        $configuration,
         'deleted',
         $rawUpdate,
         $propagateValue
@@ -280,13 +283,13 @@ class Cache
    */
   public function update()
   {
-    $this->apply(function ($config, $isRelevant, $wasRelevant) {
-      $foreignKeyColumn = self::foreignKey($this->model, $config['foreign_key']);
+    $this->apply(function ($configuration, $isRelevant, $wasRelevant) {
+      $foreignKeyColumn = self::foreignKey($this->model, $configuration['foreignKey']);
       $foreignKeys = collect(
-        $config['foreign_key_extractor']($this->model->{$foreignKeyColumn})
+        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
       );
       $originalForeignKeys = collect(
-        $config['foreign_key_extractor'](
+        $configuration['foreignKeyExtractor'](
           $this->model->getOriginal($foreignKeyColumn)
         )
       );
@@ -299,16 +302,16 @@ class Cache
       $changedForeignKeys =
         $addedForeignModelKeys->count() > 0 ||
         $removedForeignModelKeys->count() > 0;
-      $summaryColumn = $config['summary'];
-      $valueColumn = $config['value'];
-      $value = $this->model->{$valueColumn};
+      $summaryColumn = $configuration['summary'];
+      $valueColumn = $configuration['value'];
+      $value = $this->model->{$valueColumn} ?? static::getDefaultValue($configuration['function']);
       $originalValue = $this->model->getOriginal($valueColumn);
       $restored =
         $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
       $dirty = $this->model->isDirty();
 
       // Handle certain cases more efficiently
-      switch ($config['function']) {
+      switch ($configuration['function']) {
         case 'count':
           // In case the foreign keys changed, we just transfer the values from one model to the other
           if ($changedForeignKeys) {
@@ -316,7 +319,7 @@ class Cache
               ->concat(
                 $this->prepareCacheUpdate(
                   $addedForeignModelKeys,
-                  $config,
+                  $configuration,
                   'updated',
                   DB::raw("$summaryColumn + $value"),
                   $value
@@ -325,7 +328,7 @@ class Cache
               ->concat(
                 $this->prepareCacheUpdate(
                   $removedForeignModelKeys,
-                  $config,
+                  $configuration,
                   'updated',
                   DB::raw("$summaryColumn + (-1 * $value)"),
                   -1 * $value
@@ -343,7 +346,7 @@ class Cache
             // Restore count indicator if item is restored
             return $this->prepareCacheUpdate(
               $foreignKeys,
-              $config,
+              $configuration,
               'updated',
               DB::raw("$summaryColumn + 1"),
               1
@@ -352,7 +355,7 @@ class Cache
             // Increment because it was not relevant before but now it is
             return $this->prepareCacheUpdate(
               $foreignKeys,
-              $config,
+              $configuration,
               'updated',
               DB::raw("$summaryColumn + 1"),
               1
@@ -361,7 +364,7 @@ class Cache
             // Decrement because it was relevant before but now it is not anymore
             return $this->prepareCacheUpdate(
               $foreignKeys,
-              $config,
+              $configuration,
               'updated',
               DB::raw("$summaryColumn - 1"),
               -1
@@ -377,7 +380,7 @@ class Cache
               ->concat(
                 $this->prepareCacheUpdate(
                   $foreignKeys,
-                  $config,
+                  $configuration,
                   'updated',
                   DB::raw("$summaryColumn + $value"),
                   $value
@@ -387,7 +390,7 @@ class Cache
               ->concat(
                 $this->prepareCacheUpdate(
                   $originalForeignKeys,
-                  $config,
+                  $configuration,
                   'updated',
                   DB::raw("$summaryColumn + (-1 * $value)"),
                   -1 * $value
@@ -400,7 +403,7 @@ class Cache
             if ($restored) {
               return $this->prepareCacheUpdate(
                 $foreignKeys,
-                $config,
+                $configuration,
                 'updated',
                 DB::raw("$summaryColumn + $value"),
                 $value
@@ -416,7 +419,7 @@ class Cache
 
             return $this->prepareCacheUpdate(
               $foreignKeys,
-              $config,
+              $configuration,
               'updated',
               DB::raw("$summaryColumn + $difference"),
               $difference
@@ -425,7 +428,7 @@ class Cache
             // Increment because it was not relevant before but now it is
             return $this->prepareCacheUpdate(
               $foreignKeys,
-              $config,
+              $configuration,
               'updated',
               DB::raw("$summaryColumn + $value"),
               $value
@@ -434,7 +437,7 @@ class Cache
             // Decrement because it was relevant before but now it is not anymore
             return $this->prepareCacheUpdate(
               $foreignKeys,
-              $config,
+              $configuration,
               'updated',
               DB::raw("$summaryColumn - $originalValue"),
               -1 * $originalValue
@@ -445,7 +448,7 @@ class Cache
       }
 
       // Run update with recalculation
-      return $this->prepareCacheUpdate($foreignKeys, $config, 'updated');
+      return $this->prepareCacheUpdate($foreignKeys, $configuration, 'updated');
     });
   }
 
@@ -458,16 +461,16 @@ class Cache
   public function apply(\Closure $function, ?bool $rebuild = false)
   {
     // Gather all updates from every config
-    $allUpdates = collect($this->configs)
-      ->map(function ($config) use ($function) {
-        $isRelevant = $this::checkWhereCondition($this->model, true, $config);
-        $wasRelevant = $this::checkWhereCondition($this->model, false, $config);
+    $allUpdates = collect($this->configurations)
+      ->map(function ($configuration) use ($function) {
+        $isRelevant = $this::checkWhereCondition($this->model, true, $configuration);
+        $wasRelevant = $this::checkWhereCondition($this->model, false, $configuration);
 
         if (!$isRelevant && !$wasRelevant) {
           return null;
         }
 
-        return $function($config, $isRelevant, $wasRelevant);
+        return $function($configuration, $isRelevant, $wasRelevant);
       })
       ->filter(function ($update) {
         return $update !== null;
@@ -480,7 +483,7 @@ class Cache
 
     // Group updates by model, key, foreign key and propagate and update each group independently
     $allUpdates
-      ->groupBy(['foreign_model', 'key', 'foreign_key', 'propagate'])
+      ->groupBy(['foreignModel', 'key', 'foreignKey', 'propagate'])
       ->each(function ($keys, $foreignModelName) {
         $keys->each(function ($foreignKeys, $key) use ($foreignModelName) {
           $foreignKeys->each(function ($propagates, $foreignKey) use (
@@ -554,7 +557,7 @@ class Cache
    * Prepares a cache update by collecting all information for the update.
    *
    * @param Collection $foreignKeys Foreign model key
-   * @param array $config
+   * @param array $configuration
    * @param string $event Possible events: created/deleted/updated
    * @param ?any $rawValue Raw value
    * @param ?any $propagateValue Value to propagate
@@ -562,7 +565,7 @@ class Cache
    */
   public function prepareCacheUpdate(
     $foreignKeys,
-    array $config,
+    array $configuration,
     $event,
     $rawValue = null,
     $propagateValue = null
@@ -572,49 +575,50 @@ class Cache
     });
 
     if ($validForeignKeys->count() === 0) {
-      if ($config['recursive']) {
+      if ($configuration['ignoreEmptyForeignKeys']) {
         return [];
       }
 
       throw new UnableToPropagateException(
         'Unable to propagate cache update to "' .
-          $config['function'] .
+          $configuration['function'] .
           '(' .
-          $config['value'] .
+          $configuration['value'] .
           ')" into "' .
-          $config['table'] .
+          $configuration['table'] .
           '"."' .
-          $config['summary'] .
+          $configuration['summary'] .
           '" because "' .
-          $config['foreign_key'] .
-          '" was not part of the context.'
+          $configuration['foreignKey'] .
+          '" is not an attribute on the model.'
       );
     }
 
     return collect($validForeignKeys)
-      ->map(function ($foreignKey) use ($event, $config, $propagateValue, $rawValue) {
-        $model = $config['foreign_model'];
-        $function = $config['function'];
-        $summaryColumn = $config['summary'];
-        $valueColumn = $config['value'];
-        $keyColumn = $config['key'];
+      ->map(function ($foreignKey) use ($event, $configuration, $propagateValue, $rawValue) {
+        $model = $configuration['foreignModel'];
+        $function = $configuration['function'];
+        $summaryColumn = $configuration['summary'];
+        $valueColumn = $configuration['value'];
+        $keyColumn = $configuration['key'];
         $defaultValue = static::getDefaultValue($function);
-        $foreignKeyColumn = $config['foreign_key'];
+        $foreignKeyColumn = $configuration['foreignKey'];
 
         // Create cache query
-        $cacheQuery = static::prepareCacheQuery($this->model, $config)->where($foreignKeyColumn , $foreignKey);
+        $cacheQuery = static::prepareCacheQuery($this->model, $configuration)->where($foreignKeyColumn , $foreignKey);
 
         return [
-          'foreign_model' => $model,
+          'event' => $event,
+          'foreignModel' => $model,
           'summaryColumn' => $summaryColumn,
           'key' => $keyColumn,
-          'foreign_key' => $foreignKey,
+          'foreignKey' => $foreignKey,
           'rawValue' =>
             $rawValue ??
             DB::raw('(' . Cache::convertQueryToRawSQL($cacheQuery) . ')'),
-          'propagate' => $config['propagate'],
+          'propagate' => $configuration['propagate'],
           'propagateValue' => $propagateValue,
-          'context' => $config['context'],
+          'context' => $configuration['context'],
         ];
       })
       ->toArray();
@@ -623,21 +627,21 @@ class Cache
   /**
    * Create cache query
    *
-   * @param mixed $config
+   * @param mixed $configuration
    *
    * @return \Illuminate\Database\Query\Builder
    */
-  protected static function prepareCacheQuery($model, $config)
+  protected static function prepareCacheQuery($model, $configuration)
   {
-    $foreignModel = $config['foreign_model'];
-    $function = $config['function'];
-    $summaryColumn = $config['summary'];
-    $valueColumn = $config['value'];
-    $keyColumn = $config['key'];
+    $foreignModel = $configuration['foreignModel'];
+    $function = $configuration['function'];
+    $summaryColumn = $configuration['summary'];
+    $valueColumn = $configuration['value'];
+    $keyColumn = $configuration['key'];
     $defaultValue = static::getDefaultValue($function);
 
     // Create cache query
-    $cacheQuery = DB::table(self::getModelTable($model))->select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))->where($config['where']);
+    $cacheQuery = DB::table(self::getModelTable($model))->select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))->where($configuration['where']);
     if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))) {
       $cacheQuery->whereNull('deleted_at');
     }
@@ -750,12 +754,12 @@ class Cache
    *
    * @param Model     $model
    * @param boolean   $current Use current or original values.
-   * @param any       $config
+   * @param any       $configuration
    * @param \Closure $function
    */
-  protected static function checkWhereCondition($model, $current, $config)
+  protected static function checkWhereCondition($model, $current, $configuration)
   {
-    foreach ($config['where'] as $attribute => $value) {
+    foreach ($configuration['where'] as $attribute => $value) {
       // Get attribute, operator and value
       $operator = '=';
       if (is_array($value)) {
@@ -773,13 +777,13 @@ class Cache
       if ($current && !array_key_exists($attribute, $model->getAttributes())) {
         throw new UnableToCacheException(
           'Unable to cache "' .
-            $config['function'] .
+            $configuration['function'] .
             '(' .
-            $config['value'] .
+            $configuration['value'] .
             ')" into "' .
-            $config['table'] .
+            $configuration['table'] .
             '"."' .
-            $config['summary'] .
+            $configuration['summary'] .
             '" because "' .
             $attribute .
             '" is part of the where condition but it is not set explicitly on the entity.'

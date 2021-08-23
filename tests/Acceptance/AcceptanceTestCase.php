@@ -54,6 +54,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('weight')->default(0);
             $table->timestamp('first_commented_at')->nullable();
             $table->timestamp('last_commented_at')->nullable();
+            $table->softDeletes();
             $table->timestamps();
         });
 
@@ -82,6 +83,21 @@ class AcceptanceTestCase extends TestCase
             $table->boolean('billable')->default(false);
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        Schema::create('tags', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('title')->nullable();
+            $table->integer('cached_taggables_count')->default(0)->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('taggables', function (Blueprint $table) {
+            $table->increments('id');
+            $table->morphs('taggable');
+            $table->integer('tag_id');
+            $table->timestamps();
         });
     }
 }

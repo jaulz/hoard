@@ -1,4 +1,5 @@
 <?php
+
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -6,10 +7,11 @@ use Jaulz\Eloquence\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
-{    use IsCacheableTrait;
+{
+    use IsCacheableTrait;
     use SoftDeletes;
 
-    public function caches()
+    public static function caches()
     {
         return [
             [
@@ -36,7 +38,7 @@ class Item extends Model
                 'foreign_key' => 'order_id',
                 'key' => 'id',
                 'where' => [
-                    'billable' => true 
+                    'billable' => true
                 ]
             ],
             [
@@ -48,7 +50,7 @@ class Item extends Model
                 'key' => 'id',
                 'where' => [
                     'billable' => true,
-                    ['total', '<', 45] 
+                    ['total', '<', 45]
                 ]
             ]
         ];

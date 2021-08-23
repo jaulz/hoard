@@ -10,7 +10,7 @@ class Comment extends Model
     use IsCacheableTrait;
     use SoftDeletes;
 
-    public function caches()
+    public static function caches()
     {
         return [
             [
