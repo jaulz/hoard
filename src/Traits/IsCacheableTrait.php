@@ -4,7 +4,7 @@ namespace Jaulz\Eloquence\Traits;
 
 use Jaulz\Eloquence\Support\Cache;
 use Jaulz\Eloquence\Support\CacheObserver;
-use Jaulz\Eloquence\Support\FindIsCacheableTraitClasses;
+use Jaulz\Eloquence\Support\FindCacheableClasses;
 use ReflectionClass;
 
 trait IsCacheableTrait
@@ -43,7 +43,7 @@ trait IsCacheableTrait
             $className = get_class($this);
             $reflector = new ReflectionClass($className);
             $directory = dirname($reflector->getFileName());
-            $classNames = (new FindIsCacheableTraitClasses($directory))->getAllIsCacheableTraitClasses();
+            $classNames = (new FindCacheableClasses($directory))->getAllIsCacheableTraitClasses();
 
             // Go through all other classes and check if they reference the current class
             static::$foreignCacheConfigs = collect([]);

@@ -4,7 +4,7 @@ use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\Finder\Finder;
 
-class FindIsCacheableTraitClasses
+class FindCacheableClasses
 {
   /**
    * @var null|string
