@@ -75,7 +75,7 @@ class RebuildCaches extends Command
 
         // Check differences between the model before and after
         $before = collect($model->getAttributes());
-        $model->cache();
+        $model->rebuildCache();
         $after = collect($model->refresh()->getAttributes());
         $difference = $before->diffAssoc($after)->toArray();
 
