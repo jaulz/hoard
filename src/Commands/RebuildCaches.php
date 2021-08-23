@@ -3,8 +3,7 @@
 namespace Jaulz\Eloquence\Commands;
 
 use Illuminate\Console\Command;
-use Jaulz\Eloquence\Traits\IsCacheableTrait\Cache;
-use Jaulz\Eloquence\Support\FindIsCacheableTraitClasses;
+use Jaulz\Eloquence\Support\FindCacheableClasses;
 
 class RebuildCaches extends Command
 {
@@ -38,7 +37,7 @@ class RebuildCaches extends Command
   public function handle()
   {
     $directory = $this->option('dir') ?: app_path();
-    $classNames = (new FindIsCacheableTraitClasses(
+    $classNames = (new FindCacheableClasses(
       $directory
     ))->getAllIsCacheableTraitClasses();
 
@@ -49,24 +48,23 @@ class RebuildCaches extends Command
       $count = $models->count();
 
       // Check if we need to skip this class
-      if (!$count || (!!$this->option('class') && $className !== $this->option('class'))) {
-        $this->comment(
-          "Rebuild $className caches skipped"
-        );
+      if (
+        !$count ||
+        (!!$this->option('class') && $className !== $this->option('class'))
+      ) {
+        $this->comment("Rebuild $className caches skipped");
         return;
       }
 
       // Run through each model and rebuild cache
-      $this->comment(
-        "Rebuild $className caches"
-      );
+      $this->comment("Rebuild $className caches");
       $bar = $this->output->createProgressBar($count);
-      $bar->setFormat('%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message%');
-      $bar->setMessage("");
+      $bar->setFormat(
+        '%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message%'
+      );
+      $bar->setMessage('');
       $bar->start();
-      $models->each(function ($model) use (
-        $bar,
-      ) {
+      $models->each(function ($model) use ($bar) {
         $keyName = $model->getKeyName();
         $key = $model->getKey();
 
@@ -83,7 +81,7 @@ class RebuildCaches extends Command
         $bar->advance();
       });
 
-      $bar->setMessage("completed");
+      $bar->setMessage('completed');
       $bar->finish();
       $this->newLine();
     });
