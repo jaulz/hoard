@@ -4,6 +4,7 @@ namespace Tests\Acceptance;
 
 use Illuminate\Support\Facades\DB;
 use Tests\Acceptance\Models\Comment;
+use Tests\Acceptance\Models\Image;
 use Tests\Acceptance\Models\Post;
 use Tests\Acceptance\Models\Tag;
 use Tests\Acceptance\Models\Taggable;
@@ -128,6 +129,18 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals($secondComment->created_at, Post::first()->last_commented_at);
     }
 
+    public function testMorphCounts()
+    {
+        $post = new Post;
+        $post->user_id = $this->data['user']->id;
+        $post->visible = false;
+        $post->save();
+
+        $image = new Image();
+        $image->source = 'https://laravel.com/img/logotype.min.svg';
+        $image->imageable()->associate($post);
+        $image->save();
+    }
 
     public function testPivotCounts()
     {
@@ -138,7 +151,7 @@ class CountCacheTest extends AcceptanceTestCase
 
         $post->tags()->attach($this->data['tag']->id);
 
-        $this->assertEquals(1, Tag::first()->cached_taggables_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
 
         $secondPost = new Post;
         $secondPost->user_id = $this->data['user']->id;
@@ -147,31 +160,31 @@ class CountCacheTest extends AcceptanceTestCase
 
         $secondPost->tags()->attach($this->data['tag']->id);
 
-        $this->assertEquals(2, Tag::first()->cached_taggables_count);
+        $this->assertEquals(2, Tag::first()->taggables_count);
 
         $post->tags()->detach($this->data['tag']->id);
 
-        $this->assertEquals(1, Tag::first()->cached_taggables_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
 
         $post->tags()->attach($this->data['tag']->id);
 
-        $this->assertEquals(2, Tag::first()->cached_taggables_count);
+        $this->assertEquals(2, Tag::first()->taggables_count);
 
         $post->delete();
 
-        $this->assertEquals(1, Tag::first()->cached_taggables_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
 
         $post->restore();
 
-        $this->assertEquals(2, Tag::first()->cached_taggables_count);
+        $this->assertEquals(2, Tag::first()->taggables_count);
 
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
         $post->tags()->detach();
 
-        $this->assertEquals(2, Tag::first()->cached_taggables_count);
+        $this->assertEquals(2, Tag::first()->taggables_count);
 
         Tag::first()->rebuildCache();
 
-        $this->assertEquals(1, Tag::first()->cached_taggables_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
     }
 }

@@ -42,6 +42,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('posts_count_conditional')->default(0)->nullable();
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
             $table->integer('post_comments_sum')->default(0)->nullable();
+            $table->integer('images_count')->default(0)->nullable();
             $table->timestamps();
         });
 
@@ -50,6 +51,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('user_id')->nullable();
             $table->string('slug')->nullable();
             $table->integer('comments_count')->default(0)->nullable();
+            $table->integer('images_count')->default(0)->nullable();
             $table->boolean('visible')->default(false);
             $table->integer('weight')->default(0);
             $table->timestamp('first_commented_at')->nullable();
@@ -88,7 +90,7 @@ class AcceptanceTestCase extends TestCase
         Schema::create('tags', function (Blueprint $table) {
             $table->increments('id');
             $table->string('title')->nullable();
-            $table->integer('cached_taggables_count')->default(0)->nullable();
+            $table->integer('taggables_count')->default(0)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -97,6 +99,13 @@ class AcceptanceTestCase extends TestCase
             $table->increments('id');
             $table->morphs('taggable');
             $table->integer('tag_id');
+            $table->timestamps();
+        });
+
+        Schema::create('images', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('source');
+            $table->morphs('imageable');
             $table->timestamps();
         });
     }

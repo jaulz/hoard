@@ -11,4 +11,9 @@ class User extends Model {
     {
         return $this->hasMany(Post::class);
     }
+    
+    public function images()
+    {
+        return $this->morphMany(Image::class, 'imageable');
+    }
 }

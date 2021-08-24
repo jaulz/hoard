@@ -5,6 +5,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -90,8 +91,12 @@ class Cache
       $configuration['foreign_model'] = $relation->getRelated();
 
       if ($relation instanceof BelongsTo) {
-        $configuration['foreign_key'] = $relation->getForeignKeyName();
-        $configuration['key'] = $relation->getOwnerKeyName();
+        if ($relation instanceof MorphTo) {
+          dd($relation);
+        } else if ($relation instanceof MorphToMany) {
+          $configuration['foreign_key'] = $relation->getForeignKeyName();
+          $configuration['key'] = $relation->getOwnerKeyName();
+        }
       } else if ($relation instanceof HasOneOrMany) {
 
       } else if ($relation instanceof MorphToMany) {
@@ -115,15 +120,6 @@ class Cache
             $query->whereIn($parentKeyName, $keys);
           },
         ];
-
-        /*'id',
-        function ($id) {
-          return Taggable::where('taggable_id', $id)->pluck('tag_id');
-        },
-        function ($query, $id) {
-          $postIds = Taggable::where('taggable_id', $id)->pluck('taggable_id');
-          $query->whereIn('id', $postIds);
-        },*/
       }
     }
 

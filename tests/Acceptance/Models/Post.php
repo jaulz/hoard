@@ -67,18 +67,7 @@ class Post extends Model
             [
                 'function' => 'COUNT',
                 'relation' => 'tags',
-                'summary' => 'cached_taggables_count',
-                'foreign_key' =>[
-                  'id',
-                  function ($id) {
-                    return Taggable::where('taggable_id', $id)->pluck('tag_id');
-                  },
-                  function ($query, $id) {
-                    $postIds = Taggable::where('taggable_id', $id)->pluck('taggable_id');
-                    $query->whereIn('id', $postIds);
-                  },
-                ],
-                'where' => [],
+                'summary' => 'taggables_count',
             ],
         ];
     }
@@ -91,5 +80,10 @@ class Post extends Model
     public function tags()
     {
         return $this->morphToMany(Tag::class, 'taggable')->using(Taggable::class);
+    }
+
+    public function images()
+    {
+        return $this->morphMany(Image::class, 'imageable');
     }
 }
