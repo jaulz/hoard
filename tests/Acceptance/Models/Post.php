@@ -85,7 +85,7 @@ class Post extends Model
                     $query->whereIn('id', $postIds);
                   },
                 ],
-                'through' => Taggable::class,
+                'relation' => 'tags',
                 'where' => [],
             ],
         ];

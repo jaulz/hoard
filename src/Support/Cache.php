@@ -2,11 +2,16 @@
 namespace Jaulz\Eloquence\Support;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphPivot;
+use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Jaulz\Eloquence\Exceptions\InvalidRelationException;
 use Jaulz\Eloquence\Exceptions\UnableToCacheException;
 use Jaulz\Eloquence\Exceptions\UnableToPropagateException;
+use ReflectionProperty;
 
 class Cache
 {
@@ -44,7 +49,7 @@ class Cache
   }
 
   /**
-   * Takes a registered sum cache, and setups up defaults.
+   * Take a user configuration and standardize it.
    *
    * @param Model $model
    * @param array $configuration
@@ -56,53 +61,39 @@ class Cache
     $configuration,
     ?bool $checkForeignModel = true
   ) {
-    $foreignModelName = $configuration['foreign_model'];
     $modelName = $model instanceof Model ? get_class($model) : $model;
-    $function = Str::lower($configuration['function']);
 
-    // Prepare defaults
+    // Merge defaults and actual configuration
     $defaults = [
+      'function' => 'count',
       'value' => 'id',
-      'foreign_key' => self::field($foreignModelName, 'id'),
       'key' => 'id',
       'where' => [],
-      'summary' => self::field(Str::plural($modelName), $function),
       'context' => null,
-      'through' => null,
+      'relation' => null,
     ];
-
-    // Merge defaults and actual config
     $configuration = array_merge($defaults, $configuration);
 
-    // Check if we need to propagate changes by checking if the foreign model is also cacheable
-    $propagate = false;
-    if (
-      $checkForeignModel
-    ) {
-      if (!method_exists(new $foreignModelName(), 'bootIsCacheableTrait')) {
-        throw new UnableToCacheException('Referenced model "' . $configuration['foreign_model'] . '" must use IsCacheableTrait trait.');
-      }
+    // In case we have a relation field we can easily fill the required fields
+    if ($configuration['relation']) {
+      $relationName = $configuration['relation'];
+      $relation = (new $model())->{$relationName}();
+      if (!($relation instanceof Relation)) {
+        throw new InvalidRelationException('The specified relation "' . $configuration['relation'] . '" does not inherit from "' . Relation::class . '".');
+      } 
 
-      $foreignModelInstance = new $foreignModelName();
-      $foreignConfiguration = $foreignModelInstance->getCacheConfigurations();
-
-      $propagate = collect($foreignConfiguration)->some(function ($foreignConfiguration) use (
-        $modelName,
-        $foreignModelName,
-        $configuration
-      ) {
-        $foreignConfiguration = static::config(
-          $foreignModelName,
-          $foreignConfiguration,
-          false
-        );
-        $propagate = $configuration['summary'] === $foreignConfiguration['value'];
-
-        return $propagate;
-      });
+      // dd($relation->getRelated());
     }
 
-    // Prepare options
+    // Adjust configuration
+    $configuration['function'] = Str::lower($configuration['function']);
+    $function = $configuration['function'];
+    $configuration['foreign_key'] = $configuration['foreign_key'] ?? self::field($configuration['foreign_model'], 'id');
+    $configuration['summary'] = $configuration['summary'] ?? self::field(Str::plural($modelName), $function);
+    $key = Str::snake(self::key($modelName, $configuration['key']));
+    $summary = Str::snake($configuration['summary']);
+    $foreignModelName = $configuration['foreign_model'];
+    $table = self::getModelTable($foreignModelName);
     $foreignKey = Str::snake(
       self::key(
         $modelName,
@@ -117,22 +108,56 @@ class Cache
     $foreignKeySelector = function ($query, $key) use ($foreignKey) {
       $query->where($foreignKey, $key);
     };
-    if (is_array($configuration['foreign_key'])) {
+    if (
+      isset($configuration['foreign_key']) &&
+      is_array($configuration['foreign_key'])
+    ) {
       $foreignKeyExtractor = $configuration['foreign_key'][1];
       $foreignKeySelector = $configuration['foreign_key'][2];
+    }
+
+    // Check if we need to propagate changes by checking if the foreign model is also cacheable
+    $propagate = false;
+    if ($checkForeignModel) {
+      if (!method_exists(new $foreignModelName(), 'bootIsCacheableTrait')) {
+        throw new UnableToCacheException(
+          'Referenced model "' .
+            $configuration['foreign_model'] .
+            '" must use IsCacheableTrait trait.'
+        );
+      }
+
+      $foreignModelInstance = new $foreignModelName();
+      $foreignConfiguration = $foreignModelInstance->getCacheConfigurations();
+
+      $propagate = collect($foreignConfiguration)->some(function (
+        $foreignConfiguration
+      ) use ($foreignModelName, $configuration) {
+        $foreignConfiguration = static::config(
+          $foreignModelName,
+          $foreignConfiguration,
+          false
+        );
+        $propagate =
+          $configuration['summary'] === $foreignConfiguration['value'];
+
+        return $propagate;
+      });
     }
 
     return [
       'function' => $function,
       'foreignModel' => $foreignModelName,
-      'table' => self::getModelTable($configuration['foreign_model']),
-      'summary' => Str::snake($configuration['summary']),
+      'table' => $table,
+      'summary' => $summary,
       'value' => $configuration['value'],
-      'key' => Str::snake(self::key($modelName, $configuration['key'])),
+      'key' => $key,
       'foreignKey' => $foreignKey,
       'foreignKeyExtractor' => $foreignKeyExtractor,
       'foreignKeySelector' => $foreignKeySelector,
-      'ignoreEmptyForeignKeys' => (is_array($configuration['foreign_key'])) || ($foreignModelName === $modelName),
+      'ignoreEmptyForeignKeys' =>
+        is_array($configuration['foreign_key']) ||
+        $foreignModelName === $modelName,
       'where' => $configuration['where'],
       'propagate' => $configuration['propagate'] ?? $propagate,
       'context' => $configuration['context'],
@@ -149,38 +174,43 @@ class Cache
   {
     // Prepare all update statements
     $valueColumns = collect([]);
-    $updates = collect($foreignConfigurations)
-      ->mapWithKeys(function ($configurations, $foreignModelName) use (
-        $valueColumns
-      ) {
-        return collect($configurations)
-          ->map(function ($configuration) use ($foreignModelName, $valueColumns) {
-            // Normalize config
-            $configuration = self::config($foreignModelName, $configuration);
 
-            // Collect all value columns
-            $valueColumns->push($configuration['value']);
+    DB::enableQueryLog();
+    $updates = collect($foreignConfigurations)->mapWithKeys(function (
+      $configurations,
+      $foreignModelName
+    ) use ($valueColumns) {
+      return collect($configurations)
+        ->map(function ($configuration) use ($foreignModelName, $valueColumns) {
+          // Normalize config
+          $configuration = self::config($foreignModelName, $configuration);
 
-            return $configuration;
-          })
-          ->mapWithKeys(function ($configuration) use ($foreignModelName) {
-            $cacheQuery = static::prepareCacheQuery($foreignModelName, $configuration);
-            $configuration['foreignKeySelector']($cacheQuery, $this->model[$configuration['key']]);
+          // Collect all value columns
+          $valueColumns->push($configuration['value']);
 
-            return [
-              $configuration['summary'] => DB::raw(
-                '(' . Cache::convertQueryToRawSQL($cacheQuery->take(1)) . ')'
-              ),
-            ];
-          });
-      })
-      ->toArray();
+          return $configuration;
+        })
+        ->mapWithKeys(function ($configuration) use ($foreignModelName) {
+          $cacheQuery = static::prepareCacheQuery(
+            $foreignModelName,
+            $configuration
+          );
+          $keyName = $configuration['key'];
+          $key = $this->model[$keyName];
+          $configuration['foreignKeySelector']($cacheQuery, $key);
+
+          // Append update
+          $sql = Cache::convertQueryToRawSQL($cacheQuery->take(1));
+          return [$configuration['summary'] => DB::raw('(' . $sql . ')')];
+        });
+    });
 
     // Run update
-    if (count($updates) > 0) {
+    if ($updates->count() > 0) {
+      $values = $updates->toArray();
       DB::table(self::getModelTable($this->model))
-      ->where($this->model->getKeyName(), $this->model->getKey())
-      ->update($updates);
+        ->where($this->model->getKeyName(), $this->model->getKey())
+        ->update($values);
     }
 
     return $this->model;
@@ -192,7 +222,10 @@ class Cache
   public function create()
   {
     $this->apply(function ($configuration) {
-      $foreignKeyColumn = self::foreignKey($this->model, $configuration['foreignKey']);
+      $foreignKeyColumn = self::foreignKey(
+        $this->model,
+        $configuration['foreignKey']
+      );
       $foreignKeys = collect(
         $configuration['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
       );
@@ -217,12 +250,16 @@ class Cache
           break;
 
         case 'max':
-          $rawUpdate = DB::raw("CASE WHEN $summaryColumn > '$value' then $summaryColumn ELSE '$value' END");
+          $rawUpdate = DB::raw(
+            "CASE WHEN $summaryColumn > '$value' then $summaryColumn ELSE '$value' END"
+          );
           $propagateValue = $value;
           break;
 
         case 'min':
-          $rawUpdate = DB::raw("CASE WHEN $summaryColumn < '$value' then $summaryColumn ELSE '$value' END");
+          $rawUpdate = DB::raw(
+            "CASE WHEN $summaryColumn < '$value' then $summaryColumn ELSE '$value' END"
+          );
           $propagateValue = $value;
           break;
       }
@@ -243,7 +280,10 @@ class Cache
   public function delete()
   {
     $this->apply(function ($configuration) {
-      $foreignKey = self::foreignKey($this->model, $configuration['foreignKey']);
+      $foreignKey = self::foreignKey(
+        $this->model,
+        $configuration['foreignKey']
+      );
       $foreignModelKeys = collect(
         $configuration['foreignKeyExtractor']($this->model->{$foreignKey})
       );
@@ -284,7 +324,10 @@ class Cache
   public function update()
   {
     $this->apply(function ($configuration, $isRelevant, $wasRelevant) {
-      $foreignKeyColumn = self::foreignKey($this->model, $configuration['foreignKey']);
+      $foreignKeyColumn = self::foreignKey(
+        $this->model,
+        $configuration['foreignKey']
+      );
       $foreignKeys = collect(
         $configuration['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
       );
@@ -304,7 +347,9 @@ class Cache
         $removedForeignModelKeys->count() > 0;
       $summaryColumn = $configuration['summary'];
       $valueColumn = $configuration['value'];
-      $value = $this->model->{$valueColumn} ?? static::getDefaultValue($configuration['function']);
+      $value =
+        $this->model->{$valueColumn} ??
+        static::getDefaultValue($configuration['function']);
       $originalValue = $this->model->getOriginal($valueColumn);
       $restored =
         $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
@@ -460,11 +505,19 @@ class Cache
    */
   public function apply(\Closure $function, ?bool $rebuild = false)
   {
-    // Gather all updates from every config
+    // Gather all updates from every configuration
     $allUpdates = collect($this->configurations)
       ->map(function ($configuration) use ($function) {
-        $isRelevant = $this::checkWhereCondition($this->model, true, $configuration);
-        $wasRelevant = $this::checkWhereCondition($this->model, false, $configuration);
+        $isRelevant = $this::checkWhereCondition(
+          $this->model,
+          true,
+          $configuration
+        );
+        $wasRelevant = $this::checkWhereCondition(
+          $this->model,
+          false,
+          $configuration
+        );
 
         if (!$isRelevant && !$wasRelevant) {
           return null;
@@ -499,7 +552,10 @@ class Cache
               $foreignModel->timestamps = false;
 
               // Update entity in one go
-              $query = DB::table(self::getModelTable($foreignModelName))->where($key, $foreignKey);
+              $query = DB::table(self::getModelTable($foreignModelName))->where(
+                $key,
+                $foreignKey
+              );
               $values = $updates->mapWithKeys(function ($update) {
                 return [
                   $update['summaryColumn'] => $update['rawValue'],
@@ -595,7 +651,12 @@ class Cache
     }
 
     return collect($validForeignKeys)
-      ->map(function ($foreignKey) use ($event, $configuration, $propagateValue, $rawValue) {
+      ->map(function ($foreignKey) use (
+        $event,
+        $configuration,
+        $propagateValue,
+        $rawValue
+      ) {
         $model = $configuration['foreignModel'];
         $function = $configuration['function'];
         $summaryColumn = $configuration['summary'];
@@ -605,7 +666,10 @@ class Cache
         $foreignKeyColumn = $configuration['foreignKey'];
 
         // Create cache query
-        $cacheQuery = static::prepareCacheQuery($this->model, $configuration)->where($foreignKeyColumn , $foreignKey);
+        $cacheQuery = static::prepareCacheQuery(
+          $this->model,
+          $configuration
+        )->where($foreignKeyColumn, $foreignKey);
 
         return [
           'event' => $event,
@@ -641,9 +705,15 @@ class Cache
     $defaultValue = static::getDefaultValue($function);
 
     // Create cache query
-    $cacheQuery = DB::table(self::getModelTable($model))->select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))->where($configuration['where']);
-    if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))) {
-      $cacheQuery->whereNull('deleted_at');
+    $cacheQuery = DB::table(self::getModelTable($model))
+      ->select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))
+      ->where($configuration['where']);
+
+    // Respect soft delete
+    if (
+      in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))
+    ) {
+      $cacheQuery->where('deleted_at', '=', null);
     }
 
     return $cacheQuery;
@@ -757,8 +827,30 @@ class Cache
    * @param any       $configuration
    * @param \Closure $function
    */
-  protected static function checkWhereCondition($model, $current, $configuration)
-  {
+  protected static function checkWhereCondition(
+    $model,
+    $current,
+    $configuration
+  ) {
+    $attributes = $model->getAttributes();
+    $originalAttributes = $model->getRawOriginal();
+
+    // In case we are dealing with a Pivot model we need to add the morph type
+    if ($model instanceof MorphPivot) {
+      $morphClassProperty = new ReflectionProperty(
+        MorphPivot::class,
+        'morphClass'
+      );
+      $morphClassProperty->setAccessible(true);
+      $morphClass = $morphClassProperty->getValue($model);
+
+      $morphType = $model->getMorphType();
+      $attributes[$morphType] = $attributes[$morphType] ?? $morphClass;
+      $originalAttributes[$morphType] =
+        $originalAttributes[$morphType] ?? $morphClass;
+    }
+
+    // Loop through conditions and see if the attributes match the conditions
     foreach ($configuration['where'] as $attribute => $value) {
       // Get attribute, operator and value
       $operator = '=';
@@ -774,7 +866,7 @@ class Cache
       }
 
       // Determine if model is relevant for count
-      if ($current && !array_key_exists($attribute, $model->getAttributes())) {
+      if ($current && !array_key_exists($attribute, $attributes)) {
         throw new UnableToCacheException(
           'Unable to cache "' .
             $configuration['function'] .
@@ -792,8 +884,8 @@ class Cache
 
       $relevant = false;
       $modelValue = $current
-        ? $model->getAttributes()[$attribute]
-        : $model->getRawOriginal($attribute);
+        ? $attributes[$attribute] ?? null
+        : $originalAttributes[$attribute] ?? null;
       switch ($operator) {
         case '=':
           $relevant = $modelValue === $value;
