@@ -10,7 +10,16 @@ class SumCacheTest extends AcceptanceTestCase
 
     public function init()
     {
-        $this->data = $this->setupOrderAndItem();
+        $order = new Order;
+        $order->save();
+
+        $item = new Item;
+        $item->total = 34;
+        $item->order_id = $order->id;
+        $item->billable = false;
+        $item->save();
+
+        $this->data =  compact('order', 'item');
     }
 
     public function testOrderSumCache()
@@ -128,19 +137,5 @@ class SumCacheTest extends AcceptanceTestCase
 
         $this->assertEquals(0, Order::first()->item_total_complex_conditional);
         $this->assertEquals(40,  Order::get()[1]->item_total_complex_conditional);
-    }
-
-    private function setupOrderAndItem()
-    {
-        $order = new Order;
-        $order->save();
-
-        $item = new Item;
-        $item->total = 34;
-        $item->order_id = $order->id;
-        $item->billable = false;
-        $item->save();
-
-        return compact('order', 'item');
     }
 }

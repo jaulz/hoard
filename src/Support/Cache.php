@@ -2,7 +2,10 @@
 namespace Jaulz\Eloquence\Support;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Arr;
@@ -71,6 +74,8 @@ class Cache
       'where' => [],
       'context' => null,
       'relation' => null,
+      'ignoreEmptyForeignKeys' => false,
+      'propagate' => false,
     ];
     $configuration = array_merge($defaults, $configuration);
 
@@ -82,44 +87,76 @@ class Cache
         throw new InvalidRelationException('The specified relation "' . $configuration['relation'] . '" does not inherit from "' . Relation::class . '".');
       } 
 
-      // dd($relation->getRelated());
+      $configuration['foreign_model'] = $relation->getRelated();
+
+      if ($relation instanceof BelongsTo) {
+        $configuration['foreign_key'] = $relation->getForeignKeyName();
+        $configuration['key'] = $relation->getOwnerKeyName();
+      } else if ($relation instanceof HasOneOrMany) {
+
+      } else if ($relation instanceof MorphToMany) {
+        $relatedPivotKeyName = $relation->getRelatedPivotKeyName();
+        $foreignPivotKeyName = $relation->getForeignPivotKeyName();
+        $parentKeyName = $relation->getParentKeyName();
+        $pivotClass = $relation->getPivotClass();
+        $morphClass = $relation->getMorphClass();
+        $morphType = $relation->getMorphType();
+
+        $configuration['ignoreEmptyForeignKeys'] = true;
+        $configuration['foreign_key'] = [
+          $relation->getParentKeyName(),
+          function ($key) use ($pivotClass, $morphClass, $morphType, $foreignPivotKeyName, $relatedPivotKeyName) {
+            return $pivotClass::where($foreignPivotKeyName, $key)->where($morphType, $morphClass)->pluck($relatedPivotKeyName);
+          },
+          function ($query, $foreignKey) use ($modelName, $parentKeyName, $relationName, $relatedPivotKeyName) {
+            $keys = $modelName::whereHas($relationName, function ($query) use ($foreignKey, $relatedPivotKeyName) {
+              return $query->where($relatedPivotKeyName, $foreignKey);
+            })->pluck($parentKeyName);
+            $query->whereIn($parentKeyName, $keys);
+          },
+        ];
+
+        /*'id',
+        function ($id) {
+          return Taggable::where('taggable_id', $id)->pluck('tag_id');
+        },
+        function ($query, $id) {
+          $postIds = Taggable::where('taggable_id', $id)->pluck('taggable_id');
+          $query->whereIn('id', $postIds);
+        },*/
+      }
     }
 
     // Adjust configuration
-    $configuration['function'] = Str::lower($configuration['function']);
-    $function = $configuration['function'];
-    $configuration['foreign_key'] = $configuration['foreign_key'] ?? self::field($configuration['foreign_model'], 'id');
-    $configuration['summary'] = $configuration['summary'] ?? self::field(Str::plural($modelName), $function);
-    $key = Str::snake(self::key($modelName, $configuration['key']));
-    $summary = Str::snake($configuration['summary']);
-    $foreignModelName = $configuration['foreign_model'];
-    $table = self::getModelTable($foreignModelName);
-    $foreignKey = Str::snake(
-      self::key(
+    $foreignModelName = $configuration['foreign_model'] instanceof Model ? get_class($configuration['foreign_model']) : $configuration['foreign_model'];
+    $ignoreEmptyForeignKeys = $configuration['ignoreEmptyForeignKeys'] || $foreignModelName === $modelName;
+    $function = Str::lower($configuration['function']);
+    $summary = Str::snake($configuration['summary'] ?? static::field(Str::plural($modelName), $function));
+    $key = Str::snake(static::key($modelName, $configuration['key']));
+    $table = static::getModelTable($foreignModelName);
+
+    $foreignKey = $configuration['foreign_key'] ?? static::field($foreignModelName, 'id');
+    $foreignKeyName = Str::snake(
+      static::key(
         $modelName,
-        is_array($configuration['foreign_key'])
-          ? $configuration['foreign_key'][0]
-          : $configuration['foreign_key']
+        is_array($foreignKey)
+          ? $foreignKey[0]
+          : $foreignKey
       )
     );
-    $foreignKeyExtractor = function ($foreignKey) {
-      return $foreignKey;
+    $foreignKeyExtractor = is_array($foreignKey)
+    ? $foreignKey[1] : function ($key) {
+      return $key;
     };
-    $foreignKeySelector = function ($query, $key) use ($foreignKey) {
-      $query->where($foreignKey, $key);
+    $foreignKeySelector = is_array($foreignKey)
+    ? $foreignKey[2] : function ($query, $foreignKey) use ($foreignKeyName) {
+      $query->where($foreignKeyName, $foreignKey);
     };
-    if (
-      isset($configuration['foreign_key']) &&
-      is_array($configuration['foreign_key'])
-    ) {
-      $foreignKeyExtractor = $configuration['foreign_key'][1];
-      $foreignKeySelector = $configuration['foreign_key'][2];
-    }
-
+    
     // Check if we need to propagate changes by checking if the foreign model is also cacheable
-    $propagate = false;
+    $propagate = $configuration['propagate'];
     if ($checkForeignModel) {
-      if (!method_exists(new $foreignModelName(), 'bootIsCacheableTrait')) {
+      if (!method_exists($foreignModelName, 'bootIsCacheableTrait')) {
         throw new UnableToCacheException(
           'Referenced model "' .
             $configuration['foreign_model'] .
@@ -127,19 +164,18 @@ class Cache
         );
       }
 
-      $foreignModelInstance = new $foreignModelName();
-      $foreignConfiguration = $foreignModelInstance->getCacheConfigurations();
+      $foreignConfiguration = $foreignModelName::getCacheConfigurations();
 
       $propagate = collect($foreignConfiguration)->some(function (
         $foreignConfiguration
-      ) use ($foreignModelName, $configuration) {
+      ) use ($foreignModelName, $summary) {
         $foreignConfiguration = static::config(
           $foreignModelName,
           $foreignConfiguration,
           false
         );
         $propagate =
-          $configuration['summary'] === $foreignConfiguration['value'];
+          $summary === $foreignConfiguration['value'];
 
         return $propagate;
       });
@@ -152,14 +188,12 @@ class Cache
       'summary' => $summary,
       'value' => $configuration['value'],
       'key' => $key,
-      'foreignKey' => $foreignKey,
+      'foreignKeyName' => $foreignKeyName,
       'foreignKeyExtractor' => $foreignKeyExtractor,
       'foreignKeySelector' => $foreignKeySelector,
-      'ignoreEmptyForeignKeys' =>
-        is_array($configuration['foreign_key']) ||
-        $foreignModelName === $modelName,
+      'ignoreEmptyForeignKeys' => $ignoreEmptyForeignKeys,
       'where' => $configuration['where'],
-      'propagate' => $configuration['propagate'] ?? $propagate,
+      'propagate' => $propagate,
       'context' => $configuration['context'],
     ];
   }
@@ -183,7 +217,7 @@ class Cache
       return collect($configurations)
         ->map(function ($configuration) use ($foreignModelName, $valueColumns) {
           // Normalize config
-          $configuration = self::config($foreignModelName, $configuration);
+          $configuration = static::config($foreignModelName, $configuration);
 
           // Collect all value columns
           $valueColumns->push($configuration['value']);
@@ -208,7 +242,7 @@ class Cache
     // Run update
     if ($updates->count() > 0) {
       $values = $updates->toArray();
-      DB::table(self::getModelTable($this->model))
+      DB::table(static::getModelTable($this->model))
         ->where($this->model->getKeyName(), $this->model->getKey())
         ->update($values);
     }
@@ -222,12 +256,12 @@ class Cache
   public function create()
   {
     $this->apply(function ($configuration) {
-      $foreignKeyColumn = self::foreignKey(
+      $foreignKeyName = static::foreignKey(
         $this->model,
-        $configuration['foreignKey']
+        $configuration['foreignKeyName']
       );
       $foreignKeys = collect(
-        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
+        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyName})
       );
       $function = $configuration['function'];
       $summaryColumn = $configuration['summary'];
@@ -280,12 +314,12 @@ class Cache
   public function delete()
   {
     $this->apply(function ($configuration) {
-      $foreignKey = self::foreignKey(
+      $foreignKeyName = static::foreignKey(
         $this->model,
-        $configuration['foreignKey']
+        $configuration['foreignKeyName']
       );
       $foreignModelKeys = collect(
-        $configuration['foreignKeyExtractor']($this->model->{$foreignKey})
+        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyName})
       );
       $function = $configuration['function'];
       $summaryColumn = $configuration['summary'];
@@ -324,16 +358,16 @@ class Cache
   public function update()
   {
     $this->apply(function ($configuration, $isRelevant, $wasRelevant) {
-      $foreignKeyColumn = self::foreignKey(
+      $foreignKeyName = static::foreignKey(
         $this->model,
-        $configuration['foreignKey']
+        $configuration['foreignKeyName']
       );
       $foreignKeys = collect(
-        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyColumn})
+        $configuration['foreignKeyExtractor']($this->model->{$foreignKeyName})
       );
       $originalForeignKeys = collect(
         $configuration['foreignKeyExtractor'](
-          $this->model->getOriginal($foreignKeyColumn)
+          $this->model->getOriginal($foreignKeyName)
         )
       );
       $removedForeignModelKeys = collect($originalForeignKeys)->diff(
@@ -552,7 +586,7 @@ class Cache
               $foreignModel->timestamps = false;
 
               // Update entity in one go
-              $query = DB::table(self::getModelTable($foreignModelName))->where(
+              $query = DB::table(static::getModelTable($foreignModelName))->where(
                 $key,
                 $foreignKey
               );
@@ -645,8 +679,8 @@ class Cache
           '"."' .
           $configuration['summary'] .
           '" because "' .
-          $configuration['foreignKey'] .
-          '" is not an attribute on the model.'
+          $configuration['foreignKeyName'] .
+          '" is not an attribute on "' . get_class($this->model) . '".'
       );
     }
 
@@ -663,13 +697,13 @@ class Cache
         $valueColumn = $configuration['value'];
         $keyColumn = $configuration['key'];
         $defaultValue = static::getDefaultValue($function);
-        $foreignKeyColumn = $configuration['foreignKey'];
+        $foreignKeyName = $configuration['foreignKeyName'];
 
         // Create cache query
         $cacheQuery = static::prepareCacheQuery(
           $this->model,
           $configuration
-        )->where($foreignKeyColumn, $foreignKey);
+        )->where($foreignKeyName, $foreignKey);
 
         return [
           'event' => $event,
@@ -705,7 +739,7 @@ class Cache
     $defaultValue = static::getDefaultValue($function);
 
     // Create cache query
-    $cacheQuery = DB::table(self::getModelTable($model))
+    $cacheQuery = DB::table(static::getModelTable($model))
       ->select(DB::raw("COALESCE($function($valueColumn), $defaultValue)"))
       ->where($configuration['where']);
 
@@ -800,7 +834,7 @@ class Cache
    */
   protected static function foreignKey($model, $field)
   {
-    return Str::snake(self::key($model, $field));
+    return Str::snake(static::key($model, $field));
   }
 
   /**

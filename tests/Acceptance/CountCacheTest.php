@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\Acceptance\Models\Comment;
 use Tests\Acceptance\Models\Post;
 use Tests\Acceptance\Models\Tag;
+use Tests\Acceptance\Models\Taggable;
 use Tests\Acceptance\Models\User;
 
 class CountCacheTest extends AcceptanceTestCase
@@ -139,24 +140,37 @@ class CountCacheTest extends AcceptanceTestCase
 
         $this->assertEquals(1, Tag::first()->cached_taggables_count);
 
+        $secondPost = new Post;
+        $secondPost->user_id = $this->data['user']->id;
+        $secondPost->visible = false;
+        $secondPost->save();
+
+        $secondPost->tags()->attach($this->data['tag']->id);
+
+        $this->assertEquals(2, Tag::first()->cached_taggables_count);
+
         $post->tags()->detach($this->data['tag']->id);
 
-        $this->assertEquals(0, Tag::first()->cached_taggables_count);
+        $this->assertEquals(1, Tag::first()->cached_taggables_count);
 
         $post->tags()->attach($this->data['tag']->id);
 
-        $this->assertEquals(1, Tag::first()->cached_taggables_count);
+        $this->assertEquals(2, Tag::first()->cached_taggables_count);
 
         $post->delete();
 
-        $this->assertEquals(0, Tag::first()->cached_taggables_count);
+        $this->assertEquals(1, Tag::first()->cached_taggables_count);
 
         $post->restore();
 
-        $this->assertEquals(1, Tag::first()->cached_taggables_count);
+        $this->assertEquals(2, Tag::first()->cached_taggables_count);
 
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
         $post->tags()->detach();
+
+        $this->assertEquals(2, Tag::first()->cached_taggables_count);
+
+        Tag::first()->rebuildCache();
 
         $this->assertEquals(1, Tag::first()->cached_taggables_count);
     }

@@ -16,23 +16,19 @@ class Post extends Model
         return [
             [
                 'function' => 'COUNT',
-                'foreign_model' => 'Tests\Acceptance\Models\User',
+                'relation' => 'user',
                 'summary' => 'posts_count',
-                'foreign_key' => 'user_id',
-                'key' => 'id',
             ],
 
             [
                 'function' => 'COUNT',
-                'foreign_model' => 'Tests\Acceptance\Models\User',
+                'relation' => 'user',
                 'summary' => 'posts_count_explicit',
-                'foreign_key' => 'user_id',
-                'key' => 'id',
             ],
 
             [
                 'function' => 'COUNT',
-                'foreign_model' => 'Tests\Acceptance\Models\User',
+                'relation' => 'user',
                 'summary' => 'posts_count_conditional',
                 'foreign_key' => 'user_id',
                 'key' => 'id',
@@ -43,10 +39,8 @@ class Post extends Model
 
             [
                 'function' => 'COUNT',
-                'foreign_model' => 'Tests\Acceptance\Models\User',
+                'relation' => 'user',
                 'summary' => 'posts_count_complex_conditional',
-                'foreign_key' => 'user_id',
-                'key' => 'id',
                 'where' => [
                     'visible' => true,
                     ['weight', '>', 5]
@@ -72,8 +66,7 @@ class Post extends Model
 
             [
                 'function' => 'COUNT',
-                'foreign_model' => Tag::class,
-                'key' => 'id',
+                'relation' => 'tags',
                 'summary' => 'cached_taggables_count',
                 'foreign_key' =>[
                   'id',
@@ -85,7 +78,6 @@ class Post extends Model
                     $query->whereIn('id', $postIds);
                   },
                 ],
-                'relation' => 'tags',
                 'where' => [],
             ],
         ];
@@ -93,7 +85,7 @@ class Post extends Model
 
     public function user()
     {
-        return $this->belongsTo(Post::class);
+        return $this->belongsTo(User::class);
     }
     
     public function tags()

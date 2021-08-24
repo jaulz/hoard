@@ -35,7 +35,7 @@ trait IsCacheableTrait
     static::observe(CacheObserver::class);
 
     // In case we are dealing with a pivot model, we are attaching a cache config to that model as well
-    foreach (self::caches() as $configuration) {
+    foreach (static::caches() as $configuration) {
       if (!isset($configuration['relation'])) {
         continue;
       }
@@ -44,7 +44,7 @@ trait IsCacheableTrait
       $relationName = $configuration['relation'];
       $relation = (new static())->{$relationName}();
       if (!is_a($relation, MorphToMany::class, true)) {
-        return;
+        continue;
       }
 
       // Append configuration with dynamic foreign key selector
@@ -53,9 +53,10 @@ trait IsCacheableTrait
       $pivotClass = $relation->getPivotClass();
       $morphClass = $relation->getMorphClass();
       $morphType = $relation->getMorphType();
+
       $pivotClass::appendCacheConfiguration([
         'function' => $configuration['function'],
-        'foreign_model' => $configuration['foreign_model'],
+        'foreign_model' => $relation->getModel(),
         'summary' => $configuration['summary'],
         'foreign_key' => [
           $relatedPivotKeyName,
@@ -67,7 +68,7 @@ trait IsCacheableTrait
             $relatedPivotKeyName,
             $foreignPivotKeyName
           ) {
-            $ids = self::whereHas($relationName, function ($query) use (
+            $ids = static::whereHas($relationName, function ($query) use (
               $relatedPivotKeyName,
               $foreignKey
             ) {
@@ -90,7 +91,13 @@ trait IsCacheableTrait
    */
   public static function appendCacheConfiguration($configuration)
   {
-    array_push(static::$cacheConfigurations, $configuration);
+    // Avoid duplicates by creating an unique configuration key
+    $configurationKey = $configuration['function'] . '_' . get_class($configuration['foreign_model']) . '_' . $configuration['summary'];
+
+    // Append configuration
+    static::$cacheConfigurations = array_merge(static::$cacheConfigurations, [
+      $configurationKey => $configuration
+    ]);
   }
 
   /**
@@ -98,9 +105,9 @@ trait IsCacheableTrait
    *
    * @return array
    */
-  public function getCacheConfigurations()
+  public static function getCacheConfigurations()
   {
-    return array_merge(static::$cacheConfigurations, static::caches());
+    return array_merge(array_values(static::$cacheConfigurations), static::caches());
   }
 
   /**
@@ -122,35 +129,49 @@ trait IsCacheableTrait
   {
     if (!static::$foreignCacheConfigurations) {
       // Get all other model classes
-      $className = get_class($this);
-      $reflector = new ReflectionClass($className);
+      $modelName = get_class($this);
+      $reflector = new ReflectionClass($modelName);
       $directory = dirname($reflector->getFileName());
-      $classNames = (new FindCacheableClasses(
+      $foreignModelNames = (new FindCacheableClasses(
         $directory
       ))->getAllIsCacheableTraitClasses();
 
       // Go through all other classes and check if they reference the current class
       static::$foreignCacheConfigurations = collect([]);
-      collect($classNames)->each(function ($foreignClassName) use ($className) {
+      collect($foreignModelNames)->each(function ($foreignModelName) use ($modelName) {
         // Go through options and see where the model is referenced
-        $foreignConfigs = collect([]);
-        $foreignModel = new $foreignClassName();
-        collect($foreignModel->getCacheConfigurations())
-          ->filter(function ($configuration) use ($className) {
-            return $configuration['foreign_model'] === $className;
+        $foreignConfigurations = collect([]);
+        collect($foreignModelName::getCacheConfigurations())
+          ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
+            $foreignForeignModelName = $foreignConfiguration['foreign_model'] ?? null;
+
+            // Resolve model name via relation if necessary
+            if (isset($foreignConfiguration['relation'])) {
+              $relationName = $foreignConfiguration['relation'];
+
+              if (!method_exists($foreignModelName, $relationName)) {
+                return false;
+              }
+
+              $foreignModel = new $foreignModelName();
+              $relation = $foreignModel->{$relationName}();
+              $foreignForeignModelName = get_class($relation->getRelated());
+            }
+
+            return $foreignForeignModelName === $modelName;
           })
-          ->each(function ($configuration) use ($foreignConfigs) {
-            $foreignConfigs->push($configuration);
+          ->each(function ($foreignConfiguration) use ($foreignConfigurations) {
+            $foreignConfigurations->push($foreignConfiguration);
           });
 
         // If there are no configurations that affect this model
-        if ($foreignConfigs->count() === 0) {
+        if ($foreignConfigurations->count() === 0) {
           return true;
         }
 
         static::$foreignCacheConfigurations->put(
-          $foreignClassName,
-          $foreignConfigs->toArray()
+          $foreignModelName,
+          $foreignConfigurations->toArray()
         );
       });
     }
