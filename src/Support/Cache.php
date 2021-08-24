@@ -208,8 +208,6 @@ class Cache
   {
     // Prepare all update statements
     $valueColumns = collect([]);
-
-    DB::enableQueryLog();
     $updates = collect($foreignConfigurations)->mapWithKeys(function (
       $configurations,
       $foreignModelName
