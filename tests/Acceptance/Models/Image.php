@@ -17,14 +17,22 @@ class Image extends Model
                 'relation' => 'imageable',
                 'summary' => 'images_count',
             ],
+
+            [
+                'function' => 'COUNT',
+                'relation' => 'tags',
+                'summary' => 'taggables_count',
+            ],
         ];
     }
 
-    /**
-     * Get the parent imageable model (user or post).
-     */
     public function imageable()
     {
         return $this->morphTo();
+    }
+    
+    public function tags()
+    {
+        return $this->morphToMany(Tag::class, 'taggable')->using(Taggable::class);
     }
 }

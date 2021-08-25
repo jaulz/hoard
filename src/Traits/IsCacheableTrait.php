@@ -3,8 +3,6 @@
 namespace Jaulz\Eloquence\Traits;
 
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Illuminate\Database\Eloquent\Relations\Pivot;
-use Jaulz\Eloquence\Exceptions\InvalidPivotModelException;
 use Jaulz\Eloquence\Support\Cache;
 use Jaulz\Eloquence\Support\CacheObserver;
 use Jaulz\Eloquence\Support\FindCacheableClasses;
@@ -58,6 +56,7 @@ trait IsCacheableTrait
         'function' => $configuration['function'],
         'foreign_model' => $relation->getModel(),
         'summary' => $configuration['summary'],
+        'value' => $configuration['value'] ?? null,
         'foreign_key' => [
           $relatedPivotKeyName,
           function ($key) {
@@ -91,13 +90,7 @@ trait IsCacheableTrait
    */
   public static function appendCacheConfiguration($configuration)
   {
-    // Avoid duplicates by creating an unique configuration key
-    $configurationKey = $configuration['function'] . '_' . get_class($configuration['foreign_model']) . '_' . $configuration['summary'];
-
-    // Append configuration
-    static::$cacheConfigurations = array_merge(static::$cacheConfigurations, [
-      $configurationKey => $configuration
-    ]);
+    array_push(static::$cacheConfigurations, $configuration);
   }
 
   /**
@@ -107,7 +100,7 @@ trait IsCacheableTrait
    */
   public static function getCacheConfigurations()
   {
-    return array_merge(array_values(static::$cacheConfigurations), static::caches());
+    return array_merge(static::$cacheConfigurations, static::caches());
   }
 
   /**

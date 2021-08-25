@@ -69,6 +69,20 @@ class Post extends Model
                 'relation' => 'tags',
                 'summary' => 'taggables_count',
             ],
+
+            [
+                'function' => 'MAX',
+                'relation' => 'tags',
+                'summary' => 'last_created_at',
+                'value' => 'created_at',
+            ],
+
+            [
+                'function' => 'MIN',
+                'relation' => 'tags',
+                'summary' => 'first_created_at',
+                'value' => 'created_at',
+            ],
         ];
     }
 
