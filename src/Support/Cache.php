@@ -92,13 +92,18 @@ class Cache
 
       if ($relation instanceof BelongsTo) {
         if ($relation instanceof MorphTo) {
-          dd($relation);
+          $morphType = $relation->getMorphType();
+
+          $configuration['foreign_model'] = $model[$morphType];
+          $configuration['foreign_key'] = $relation->getForeignKeyName();
+          // dd($configuration);
         } else if ($relation instanceof MorphToMany) {
+          $configuration['foreign_model'] = $relation->getRelated();
           $configuration['foreign_key'] = $relation->getForeignKeyName();
           $configuration['key'] = $relation->getOwnerKeyName();
         }
       } else if ($relation instanceof HasOneOrMany) {
-
+        $configuration['foreign_model'] = $relation->getRelated();
       } else if ($relation instanceof MorphToMany) {
         $relatedPivotKeyName = $relation->getRelatedPivotKeyName();
         $foreignPivotKeyName = $relation->getForeignPivotKeyName();
@@ -107,6 +112,7 @@ class Cache
         $morphClass = $relation->getMorphClass();
         $morphType = $relation->getMorphType();
 
+        $configuration['foreign_model'] = $relation->getRelated();
         $configuration['ignoreEmptyForeignKeys'] = true;
         $configuration['foreign_key'] = [
           $relation->getParentKeyName(),

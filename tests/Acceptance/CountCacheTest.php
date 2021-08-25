@@ -140,6 +140,8 @@ class CountCacheTest extends AcceptanceTestCase
         $image->source = 'https://laravel.com/img/logotype.min.svg';
         $image->imageable()->associate($post);
         $image->save();
+
+        $this->assertEquals(1, Post::first()->images_count);
     }
 
     public function testPivotCounts()

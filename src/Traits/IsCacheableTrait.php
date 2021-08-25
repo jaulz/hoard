@@ -176,7 +176,7 @@ trait IsCacheableTrait
       });
     }
 
-    // Rebuild cache of instance
+    // Rebuild cache
     $cache = new Cache($this);
     $cache->rebuild(static::$foreignCacheConfigurations->toArray());
 
