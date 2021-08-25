@@ -169,7 +169,9 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
 
+        DB::enableQueryLog();
         $post->tags()->detach($this->data['tag']->id);
+        dd(DB::getQueryLog());
 
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
