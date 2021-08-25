@@ -40,18 +40,12 @@ class Cache
   private $configurations;
 
   /**
-   * @var array
-   */
-  private $foreignConfigurations;
-
-  /**
    * @param Model $model
    */
   public function __construct(Model $model, $propagatedBy = [])
   {
     $this->model = $model->pivotParent ?? $model;
     $this->pivotModel = $model->pivotParent ? $model : null;
-    $this->foreignConfigurations = get_class($this->model)::getForeignCacheConfigurations();
     $this->propagatedBy = $propagatedBy;
     $this->configurations = collect(get_class($this->model)::getCacheConfigurations())
       ->map(function ($configuration) {
@@ -142,8 +136,6 @@ class Cache
             $query->whereIn($parentKeyName, $keys);
           },
         ];
-      } else {
-        dd($relation);
       }
     }
 
@@ -219,43 +211,36 @@ class Cache
   }
 
   /**
-   * Rebuild the count caches from the database
+   * Get full updates for cache rebuild.
    *
-   * @param array $foreignConfigurations
+   * @param Model $model
+   * @param ?Model $pivotModel
    * @return array
    */
-  public function rebuild()
+  public static function getFullUpdates(Model $model, ?Model $pivotModel)
   {
-    // Prepare all update statements
-    $valueColumns = collect([]);
     $updates = collect([]);
 
-    collect($this->foreignConfigurations)->each(function (
+    collect(get_class($model)::getForeignCacheConfigurations())->each(function (
       $configurations,
       $foreignModelName
-    ) use ($valueColumns, $updates) {
+    ) use ($updates, $model, $pivotModel) {
       collect($configurations)
-        ->map(function ($configuration) use ($foreignModelName, $valueColumns) {
-          // Normalize config
-          $configuration = static::prepareConfiguration($foreignModelName, $configuration);
-
-          // Collect all value columns
-          $valueColumns->push($configuration['valueName']);
-
-          return $configuration;
+        ->map(function ($configuration) use ($foreignModelName) {
+          return static::prepareConfiguration($foreignModelName, $configuration);
         })
-        ->each(function ($configuration) use ($foreignModelName, $updates) {
+        ->each(function ($configuration) use ($foreignModelName, $updates, $model, $pivotModel) {
           $summaryName = $configuration['summaryName'];
           $keyName = $configuration['keyName'];
           $function = $configuration['function'];
-          $key = $this->model[$keyName];
+          $key = $model[$keyName];
 
           // Get query that retrieves the summary value
           $cacheQuery = static::prepareCacheQuery(
             $foreignModelName,
             $configuration
           );
-          $configuration['selectForeignKeys']($cacheQuery, $key, $this->model, $this->pivotModel);
+          $configuration['selectForeignKeys']($cacheQuery, $key, $model, $pivotModel);
           $sql = '(' . Cache::convertQueryToRawSQL($cacheQuery->take(1)) . ')';
 
           // In case we have duplicate updates for the same column we need to merge the updates
@@ -285,11 +270,22 @@ class Cache
         });
     });
 
-    // Save
-    if ($updates->count() > 0) {
+    return $updates->map(fn ($update) => DB::raw($update))->toArray();
+  }
+
+  /**
+   * Rebuild the count caches from the database
+   *
+   * @param array $foreignConfigurations
+   * @return array
+   */
+  public function rebuild()
+  {
+    $updates = static::getFullUpdates($this->model, $this->pivotModel);
+    if (count($updates) > 0) {
       DB::table(static::getModelTable($this->model))
         ->where($this->model->getKeyName(), $this->model->getKey())
-        ->update($updates->map(fn ($update) => DB::raw($update))->toArray());
+        ->update($updates);
     }
 
     return $this->model;
@@ -363,9 +359,10 @@ class Cache
         $this->model,
         $configuration['foreignKeyName']
       );
-      $foreignModelKeys = collect(
+      $foreignKeys = collect(
         $configuration['extractForeignKeys']($this->model->{$foreignKeyName}, $this->model, $this->pivotModel)
       );
+      $foreignModelName = $configuration['foreignModelName'];
       $function = $configuration['function'];
       $summaryName = $configuration['summaryName'];
       $valueName = $configuration['valueName'];
@@ -389,12 +386,24 @@ class Cache
         default:
           if ($this->pivotModel) {
             // Complete rebuild necessary because other models might affect the column as well
+            
+            dump('FASFASFFAS', $foreignKeys->map(function ($foreignKey) use ($foreignModelName, $summaryName) {
+              $foreignModel = new $foreignModelName();
+              $foreignModel->{$foreignModel->getKeyName()} = $foreignModel->getKey();
+              return static::getFullUpdates($foreignModel, null)[$summaryName];
+            }));
+            return $foreignKeys->map(function ($foreignKey) use ($foreignModelName, $summaryName, $configuration) {
+              $foreignModel = new $foreignModelName();
+              $foreignModel->{$foreignModel->getKeyName()} = $foreignModel->getKey();
+
+              return $this->prepareCacheUpdate(collect($foreignKey), $configuration, 'deleted', static::getFullUpdates($foreignModel, null)[$summaryName]);
+            });
           }
           break;
       }
 
       return $this->prepareCacheUpdate(
-        $foreignModelKeys,
+        $foreignKeys,
         $configuration,
         'deleted',
         $rawUpdate,
@@ -750,6 +759,8 @@ class Cache
 
         // Create cache query
         if (!$rawValue) {
+          // $updates = $this->getFullUpdates();
+
           $query = static::prepareCacheQuery(
             $this->model,
             $configuration
