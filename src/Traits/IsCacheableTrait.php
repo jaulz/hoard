@@ -2,6 +2,7 @@
 
 namespace Jaulz\Eloquence\Traits;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jaulz\Eloquence\Support\Cache;
 use Jaulz\Eloquence\Support\CacheObserver;
@@ -45,14 +46,15 @@ trait IsCacheableTrait
         continue;
       }
 
-      // Append configuration with dynamic foreign key selector
-      $relatedPivotKeyName = $relation->getRelatedPivotKeyName();
-      $foreignPivotKeyName = $relation->getForeignPivotKeyName();
+      // Append configuration
       $pivotClass = $relation->getPivotClass();
+      /*$relatedPivotKeyName = $relation->getRelatedPivotKeyName();
+      $foreignPivotKeyName = $relation->getForeignPivotKeyName();
       $morphClass = $relation->getMorphClass();
-      $morphType = $relation->getMorphType();
+      $morphType = $relation->getMorphType();*/
 
-      $pivotClass::appendCacheConfiguration([
+      $pivotClass::appendCacheConfiguration($configuration);
+      /*$pivotClass::appendCacheConfiguration([
         'function' => $configuration['function'],
         'foreign_model' => $relation->getModel(),
         'summary' => $configuration['summary'],
@@ -80,7 +82,13 @@ trait IsCacheableTrait
         'where' => [
           $morphType => $morphClass,
         ],
-      ]);
+        'attributes' => function (Model $model) {
+          return $model->pivotParent->getAttributes();
+        },
+        'original_attributes' => function (Model $model) {
+          return $model->pivotParent->getRawOriginal();
+        },
+      ]);*/
     }
   }
 
@@ -114,15 +122,15 @@ trait IsCacheableTrait
   }
 
   /**
-   * Rebuild cache for the model.
+   * Gather all cache configurations
    *
    * @return array
    */
-  public function rebuildCache()
+  public static function getForeignCacheConfigurations()
   {
     if (!static::$foreignCacheConfigurations) {
       // Get all other model classes
-      $modelName = get_class($this);
+      $modelName = get_class();
       $reflector = new ReflectionClass($modelName);
       $directory = dirname($reflector->getFileName());
       $foreignModelNames = (new FindCacheableClasses(
@@ -169,9 +177,19 @@ trait IsCacheableTrait
       });
     }
 
+    return static::$foreignCacheConfigurations->toArray();
+  }
+
+  /**
+   * Rebuild cache for the model.
+   *
+   * @return array
+   */
+  public function rebuildCache()
+  {
     // Rebuild cache
     $cache = new Cache($this);
-    $cache->rebuild(static::$foreignCacheConfigurations->toArray());
+    $cache->rebuild();
 
     return $this;
   }

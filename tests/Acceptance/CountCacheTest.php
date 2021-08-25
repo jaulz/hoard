@@ -2,6 +2,7 @@
 
 namespace Tests\Acceptance;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\Acceptance\Models\Comment;
 use Tests\Acceptance\Models\Image;
@@ -153,32 +154,44 @@ class CountCacheTest extends AcceptanceTestCase
         $post->tags()->attach($this->data['tag']->id);
 
         $this->assertEquals(1, Tag::first()->taggables_count);
-        $this->assertEquals(2, Tag::first()->first_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->last_created_at);
 
+        Carbon::setTestNow(Carbon::now()->addSecond());
         $secondPost = new Post;
         $secondPost->user_id = $this->data['user']->id;
         $secondPost->visible = false;
         $secondPost->save();
 
         $secondPost->tags()->attach($this->data['tag']->id);
-
+        
         $this->assertEquals(2, Tag::first()->taggables_count);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
 
         $post->tags()->detach($this->data['tag']->id);
 
         $this->assertEquals(1, Tag::first()->taggables_count);
-
+        /*$this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
+        
         $post->tags()->attach($this->data['tag']->id);
 
         $this->assertEquals(2, Tag::first()->taggables_count);
+        /*$this->assertEquals($post->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
 
         $post->delete();
 
         $this->assertEquals(1, Tag::first()->taggables_count);
+        /*$this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
 
         $post->restore();
 
         $this->assertEquals(2, Tag::first()->taggables_count);
+        /*$this->assertEquals($post->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
 
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
         $post->tags()->detach();
