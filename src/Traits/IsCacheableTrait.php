@@ -3,6 +3,7 @@
 namespace Jaulz\Eloquence\Traits;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jaulz\Eloquence\Support\Cache;
 use Jaulz\Eloquence\Support\CacheObserver;
@@ -156,13 +157,21 @@ trait IsCacheableTrait
 
               $foreignModel = new $foreignModelName();
               $relation = $foreignModel->{$relationName}();
-              $foreignForeignModelName = get_class($relation->getRelated());
+              if ($modelName === 'Tests\Acceptance\Models\Post' && $foreignModelName === 'Tests\Acceptance\Models\Image' && $relationName === 'imageable') {
+                dump($modelName, $foreignModelName, $foreignConfiguration['relationName'], $foreignForeignModelName);
+              }
+              // In a morph to scenario any other model could be the target
+              if ($relation instanceof MorphTo) {
+                $foreignForeignModelName = $modelName;
+              } else {
+                $foreignForeignModelName = get_class($relation->getRelated());
+              }
             }
 
             return $foreignForeignModelName === $modelName;
           })
-          ->each(function ($foreignConfiguration) use ($foreignConfigurations) {
-            $foreignConfigurations->push($foreignConfiguration);
+          ->each(function ($foreignConfiguration) use ($foreignModelName, $foreignConfigurations) {
+            $foreignConfigurations->push(Cache::prepareConfiguration($foreignModelName, $foreignConfiguration));
           });
 
         // If there are no configurations that affect this model
@@ -172,7 +181,7 @@ trait IsCacheableTrait
 
         static::$foreignCacheConfigurations->put(
           $foreignModelName,
-          $foreignConfigurations->toArray()
+          $foreignConfigurations->filter()->toArray()
         );
       });
     }

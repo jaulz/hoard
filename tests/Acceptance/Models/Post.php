@@ -47,7 +47,7 @@ class Post extends Model
                 ]
             ],
 
-            [
+            /*[
                 'function' => 'SUM',
                 'foreignModelName' => 'Tests\Acceptance\Models\User',
                 'summaryName' => 'post_comments_sum',
@@ -62,7 +62,7 @@ class Post extends Model
                   },
                 ],
                 'key' => 'id',
-            ],
+            ],*/
 
             [
                 'function' => 'COUNT',
