@@ -62,7 +62,7 @@ class Cache
     $this->pivotModelName = $model->pivotModel ? get_class($this->pivotModel) : null;
     $this->propagatedBy = $propagatedBy;
     $this->configurations = collect(get_class($this->model)::getCacheConfigurations())
-      ->map(fn ($configuration) => static::prepareConfiguration($model, $configuration))
+      ->map(fn ($configuration) => static::prepareConfiguration($this->model, $configuration))
       ->filter()
       ->filter(function ($configuration) {
         return !empty($this->propagatedBy)
@@ -110,10 +110,6 @@ class Cache
     $relationType = null;
     if ($configuration['relationName']) {
       $relationName = $configuration['relationName'];
-
-      if (!method_exists(new $model, $relationName)) {
-        return null;
-      }
 
       $relation = (new $model())->{$relationName}();
       if (!($relation instanceof Relation)) {
@@ -364,7 +360,7 @@ class Cache
    */
   public function create()
   {
-    dump('create', $this->modelName);
+    // dump('create', $this->modelName);
     $this->apply('create', function ($eventName, $configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
       $function = $configuration['function'];
       $summaryName = $configuration['summaryName'];
@@ -400,13 +396,7 @@ class Cache
           $propagateValue = $value;
           break;
       }
-dump($this->prepareCacheUpdate(
-  $foreignKeys,
-  $configuration,
-  $eventName,
-  $rawUpdate,
-  $propagateValue
-));
+
       return $this->prepareCacheUpdate(
         $foreignKeys,
         $configuration,

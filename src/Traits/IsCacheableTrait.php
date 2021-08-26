@@ -116,9 +116,7 @@ trait IsCacheableTrait
 
               $foreignModel = new $foreignModelName();
               $relation = $foreignModel->{$relationName}();
-              if ($modelName === 'Tests\Acceptance\Models\Post' && $foreignModelName === 'Tests\Acceptance\Models\Image' && $relationName === 'imageable') {
-                dump($modelName, $foreignModelName, $foreignConfiguration['relationName'], $foreignForeignModelName);
-              }
+              
               // In a morph to scenario any other model could be the target
               if ($relation instanceof MorphTo) {
                 $foreignForeignModelName = $modelName;

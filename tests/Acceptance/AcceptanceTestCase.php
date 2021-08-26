@@ -94,6 +94,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('taggables_count')->default(0)->nullable();
             $table->timestamp('first_created_at')->nullable();
             $table->timestamp('last_created_at')->nullable();
+            $table->integer('images_count')->default(0)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
