@@ -4,6 +4,7 @@ namespace Jaulz\Eloquence\Traits;
 
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Collection;
 use Jaulz\Eloquence\Support\Cache;
 use Jaulz\Eloquence\Support\CacheObserver;
 use Jaulz\Eloquence\Support\FindCacheableClasses;
@@ -14,7 +15,7 @@ trait IsCacheableTrait
   /**
    * Keep track of foreign cache configurations in a static property so we don't need to find them again.
    *
-   * @var object
+   * @var \Illuminate\Support\Collection
    */
   private static $foreignCacheConfigurations;
 
@@ -23,7 +24,7 @@ trait IsCacheableTrait
    *
    * @var array
    */
-  private static $cacheConfigurations = [];
+  private static array $cacheConfigurations = [];
 
   /**
    * Boot the trait and its event bindings when a model is created.
@@ -68,7 +69,23 @@ trait IsCacheableTrait
    */
   public static function getCacheConfigurations()
   {
-    return array_merge(static::$cacheConfigurations, static::caches());
+    return collect(static::$cacheConfigurations)->merge(static::caches())->reduce(function ($cumulatedConfigurations, $configuration) {
+      if (!isset($configuration['foreignModelName'])) {
+        return $cumulatedConfigurations->push($configuration);
+      }
+
+      if (!is_array($configuration['foreignModelName'])) {
+        return $cumulatedConfigurations->push($configuration);
+      }
+
+       collect($configuration['foreignModelName'])->each(function ($foreignModelName) use ($configuration, $cumulatedConfigurations) {
+        $cumulatedConfigurations->push(array_merge($configuration, [
+          'foreignModelName' => $foreignModelName,
+        ]));
+       });
+
+      return $cumulatedConfigurations;
+    }, collect());
   }
 
   /**
@@ -102,7 +119,7 @@ trait IsCacheableTrait
       collect($foreignModelNames)->each(function ($foreignModelName) use ($modelName) {
         // Go through options and see where the model is referenced
         $foreignConfigurations = collect([]);
-        collect($foreignModelName::getCacheConfigurations())
+        $foreignModelName::getCacheConfigurations()
           ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
             $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? null;
 
@@ -116,10 +133,10 @@ trait IsCacheableTrait
 
               $foreignModel = new $foreignModelName();
               $relation = $foreignModel->{$relationName}();
-              
+
               // In a morph to scenario any other model could be the target
               if ($relation instanceof MorphTo) {
-                $foreignForeignModelName = $modelName;
+                $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? $modelName;
               } else {
                 $foreignForeignModelName = get_class($relation->getRelated());
               }

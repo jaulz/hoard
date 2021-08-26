@@ -14,6 +14,7 @@ class Image extends Model
         return [
             [
                 'function' => 'COUNT',
+                'foreignModelName' => [Post::class],
                 'relationName' => 'imageable',
                 'summaryName' => 'images_count',
             ],
