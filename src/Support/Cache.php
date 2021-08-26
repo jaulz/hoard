@@ -1020,7 +1020,7 @@ class Cache
           'Unable to cache "' .
             $configuration['function'] .
             '(' .
-            $configuration['valueNName'] .
+            $configuration['valueName'] .
             ')" into "' .
             $configuration['table'] .
             '"."' .
