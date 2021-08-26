@@ -14,28 +14,28 @@ class Image extends Model
         return [
             [
                 'function' => 'COUNT',
-                'relation' => 'imageable',
-                'summary' => 'images_count',
+                'relationName' => 'imageable',
+                'summaryName' => 'images_count',
             ],
 
             [
                 'function' => 'COUNT',
-                'relation' => 'tags',
-                'summary' => 'taggables_count',
+                'relationName' => 'tags',
+                'summaryName' => 'taggables_count',
             ],
 
             [
                 'function' => 'MAX',
-                'relation' => 'tags',
-                'summary' => 'last_created_at',
-                'value' => 'created_at',
+                'relationName' => 'tags',
+                'summaryName' => 'last_created_at',
+                'valueName' => 'created_at',
             ],
 
             [
                 'function' => 'MIN',
-                'relation' => 'tags',
-                'summary' => 'first_created_at',
-                'value' => 'created_at',
+                'relationName' => 'tags',
+                'summaryName' => 'first_created_at',
+                'valueName' => 'created_at',
             ],
         ];
     }

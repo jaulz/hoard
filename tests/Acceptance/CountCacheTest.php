@@ -138,19 +138,31 @@ class CountCacheTest extends AcceptanceTestCase
         $image->save();
 
         $this->assertEquals(1, Post::first()->images_count);
+        $this->assertEquals(0, User::first()->images_count);
+
+        $secondImage = new Image();
+        $secondImage->source = 'https://laravel.com/img/logotype.min.svg';
+        $secondImage->imageable()->associate($this->data['user']);
+        $secondImage->save();
+
+        $this->assertEquals(1, Post::first()->images_count);
+        $this->assertEquals(1, User::first()->images_count);
 
         $image->delete();
 
         $this->assertEquals(0, Post::first()->images_count);
+        $this->assertEquals(1, User::first()->images_count);
+
+        $secondImage->delete();
+
+        $this->assertEquals(0, Post::first()->images_count);
+        $this->assertEquals(0, User::first()->images_count);
     }
 
     public function testMorphToMany()
     {
-        $post = new Post;
-        $post->user_id = $this->data['user']->id;
-        $post->visible = false;
-        $post->save();
-
+        $post = $this->data['post'];
+        
         $post->tags()->attach($this->data['tag']->id);
 
         $this->assertEquals(1, Tag::first()->taggables_count);
@@ -166,34 +178,32 @@ class CountCacheTest extends AcceptanceTestCase
         $secondPost->tags()->attach($this->data['tag']->id);
         
         $this->assertEquals(2, Tag::first()->taggables_count);
-        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
-        DB::enableQueryLog();
         $post->tags()->detach($this->data['tag']->id);
-        dd(DB::getQueryLog());
 
         $this->assertEquals(1, Tag::first()->taggables_count);
-        $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
 
         $post->tags()->attach($this->data['tag']->id);
 
         $this->assertEquals(2, Tag::first()->taggables_count);
-        /*$this->assertEquals($post->created_at, Tag::first()->first_created_at);
-        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
         $post->delete();
 
         $this->assertEquals(1, Tag::first()->taggables_count);
-        /*$this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
-        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
+        $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
 
         $post->restore();
 
         $this->assertEquals(2, Tag::first()->taggables_count);
-        /*$this->assertEquals($post->created_at, Tag::first()->first_created_at);
-        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);*/
+        $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
         $post->tags()->detach();

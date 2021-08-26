@@ -108,7 +108,7 @@ class Item extends Eloquent {
         return [
             [
                 'function'    => 'sum',
-                'summary'     => 'total',
+                'summaryName'     => 'total',
                 'model'       => 'Order',
                 'field'       => 'item_total'
                 'foreignKey'  => 'order_id',

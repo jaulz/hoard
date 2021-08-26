@@ -2,6 +2,7 @@
 namespace Tests\Acceptance;
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase;
 
@@ -109,6 +110,16 @@ class AcceptanceTestCase extends TestCase
             $table->string('source');
             $table->morphs('imageable');
             $table->timestamps();
+        });
+    }
+    
+    protected function debug() {
+        DB::listen(function ($query) {
+            dump([
+                $query->sql,
+                $query->bindings,
+                $query->time
+            ]);
         });
     }
 }

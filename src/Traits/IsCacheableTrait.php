@@ -35,12 +35,12 @@ trait IsCacheableTrait
 
     // In case we are dealing with a pivot model, we are attaching a cache config to that model as well
     foreach (static::caches() as $configuration) {
-      if (!isset($configuration['relation'])) {
+      if (!isset($configuration['relationName'])) {
         continue;
       }
 
       // Get relation details
-      $relationName = $configuration['relation'];
+      $relationName = $configuration['relationName'];
       $relation = (new static())->{$relationName}();
       if (!is_a($relation, MorphToMany::class, true)) {
         continue;
@@ -56,10 +56,10 @@ trait IsCacheableTrait
       $pivotClass::appendCacheConfiguration($configuration);
       /*$pivotClass::appendCacheConfiguration([
         'function' => $configuration['function'],
-        'foreign_model' => $relation->getModel(),
-        'summary' => $configuration['summary'],
-        'value' => $configuration['value'] ?? null,
-        'foreign_key' => [
+        'foreignModelName' => $relation->getModel(),
+        'summaryName' => $configuration['summaryName'],
+        'valueName' => $configuration['valueName'] ?? null,
+        'foreignKeyName' => [
           $relatedPivotKeyName,
           function ($key) {
             return $key;
@@ -144,11 +144,11 @@ trait IsCacheableTrait
         $foreignConfigurations = collect([]);
         collect($foreignModelName::getCacheConfigurations())
           ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
-            $foreignForeignModelName = $foreignConfiguration['foreign_model'] ?? null;
+            $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? null;
 
             // Resolve model name via relation if necessary
-            if (isset($foreignConfiguration['relation'])) {
-              $relationName = $foreignConfiguration['relation'];
+            if (isset($foreignConfiguration['relationName'])) {
+              $relationName = $foreignConfiguration['relationName'];
 
               if (!method_exists($foreignModelName, $relationName)) {
                 return false;

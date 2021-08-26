@@ -16,21 +16,21 @@ class Post extends Model
         return [
             [
                 'function' => 'COUNT',
-                'relation' => 'user',
-                'summary' => 'posts_count',
+                'relationName' => 'user',
+                'summaryName' => 'posts_count',
             ],
 
             [
                 'function' => 'COUNT',
-                'relation' => 'user',
-                'summary' => 'posts_count_explicit',
+                'relationName' => 'user',
+                'summaryName' => 'posts_count_explicit',
             ],
 
             [
                 'function' => 'COUNT',
-                'relation' => 'user',
-                'summary' => 'posts_count_conditional',
-                'foreign_key' => 'user_id',
+                'relationName' => 'user',
+                'summaryName' => 'posts_count_conditional',
+                'foreignKeyName' => 'user_id',
                 'key' => 'id',
                 'where' => [
                     'visible' => true,
@@ -39,8 +39,8 @@ class Post extends Model
 
             [
                 'function' => 'COUNT',
-                'relation' => 'user',
-                'summary' => 'posts_count_complex_conditional',
+                'relationName' => 'user',
+                'summaryName' => 'posts_count_complex_conditional',
                 'where' => [
                     'visible' => true,
                     ['weight', '>', 5]
@@ -49,10 +49,10 @@ class Post extends Model
 
             [
                 'function' => 'SUM',
-                'foreign_model' => 'Tests\Acceptance\Models\User',
-                'summary' => 'post_comments_sum',
-                'value' => 'comments_count',
-                'foreign_key' =>[
+                'foreignModelName' => 'Tests\Acceptance\Models\User',
+                'summaryName' => 'post_comments_sum',
+                'valueName' => 'comments_count',
+                'foreignKeyName' =>[
                   'user_id',
                   function ($userId) {
                     return $userId;
@@ -66,22 +66,22 @@ class Post extends Model
 
             [
                 'function' => 'COUNT',
-                'relation' => 'tags',
-                'summary' => 'taggables_count',
+                'relationName' => 'tags',
+                'summaryName' => 'taggables_count',
             ],
 
             [
                 'function' => 'MAX',
-                'relation' => 'tags',
-                'summary' => 'last_created_at',
-                'value' => 'created_at',
+                'relationName' => 'tags',
+                'summaryName' => 'last_created_at',
+                'valueName' => 'created_at',
             ],
 
             [
                 'function' => 'MIN',
-                'relation' => 'tags',
-                'summary' => 'first_created_at',
-                'value' => 'created_at',
+                'relationName' => 'tags',
+                'summaryName' => 'first_created_at',
+                'valueName' => 'created_at',
             ],
         ];
     }

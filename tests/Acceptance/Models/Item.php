@@ -16,26 +16,26 @@ class Item extends Model
         return [
             [
                 'function' => 'sum',
-                'foreign_model' => 'Tests\Acceptance\Models\Order',
-                'value' => 'total',
-                'summary' => 'item_total',
+                'foreignModelName' => 'Tests\Acceptance\Models\Order',
+                'valueName' => 'total',
+                'summaryName' => 'item_total',
             ],
 
             [
                 'function' => 'SUM',
-                'foreign_model' => 'Tests\Acceptance\Models\Order',
-                'summary' => 'item_total_explicit',
-                'value' => 'total',
-                'foreign_key' => 'order_id',
+                'foreignModelName' => 'Tests\Acceptance\Models\Order',
+                'summaryName' => 'item_total_explicit',
+                'valueName' => 'total',
+                'foreignKeyName' => 'order_id',
                 'key' => 'id',
             ],
 
             [
                 'function' => 'sUm',
-                'foreign_model' => 'Tests\Acceptance\Models\Order',
-                'summary' => 'item_total_conditional',
-                'value' => 'total',
-                'foreign_key' => 'order_id',
+                'foreignModelName' => 'Tests\Acceptance\Models\Order',
+                'summaryName' => 'item_total_conditional',
+                'valueName' => 'total',
+                'foreignKeyName' => 'order_id',
                 'key' => 'id',
                 'where' => [
                     'billable' => true
@@ -43,10 +43,10 @@ class Item extends Model
             ],
             [
                 'function' => 'SUM',
-                'foreign_model' => 'Tests\Acceptance\Models\Order',
-                'summary' => 'item_total_complex_conditional',
-                'value' => 'total',
-                'foreign_key' => 'order_id',
+                'foreignModelName' => 'Tests\Acceptance\Models\Order',
+                'summaryName' => 'item_total_complex_conditional',
+                'valueName' => 'total',
+                'foreignKeyName' => 'order_id',
                 'key' => 'id',
                 'where' => [
                     'billable' => true,
