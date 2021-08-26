@@ -148,9 +148,9 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals(1, Post::first()->images_count);
         $this->assertEquals(1, User::first()->images_count);
 
-        $this->data['post']->images_count = 2;
+        $this->data['post']->images_count = 3;
         $this->data['post']->save();
-        dump('TEEEEEEEEEEEEEEEEST');
+
         Post::first()->rebuildCache();
         
         $this->assertEquals(1, Post::first()->images_count);

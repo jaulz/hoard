@@ -79,13 +79,15 @@ class Cache
    *
    * @param Model|string $model
    * @param array $configuration
-   * @param bool $checkForeignModel
+   * @param ?bool $checkForeignModel
+   * @param ?string $foreignModelName
    * @return array
    */
   public static function prepareConfiguration(
     $model,
     $configuration,
-    ?bool $checkForeignModel = true
+    ?bool $checkForeignModel = true,
+    ?string $foreignModelName = null
   ) {
     $model = $model instanceof Model ? $model : new $model();
     $modelName = get_class($model);
@@ -125,8 +127,9 @@ class Cache
           $relationType = 'MorphTo';
           $morphType = $relation->getMorphType();
 
-          $configuration['foreignModelName'] = $model[$morphType];
+          $configuration['foreignModelName'] = $model[$morphType] ?? $foreignModelName;
           $configuration['foreignKeyName'] = $relation->getForeignKeyName();
+          $configuration['where'][$morphType] = $configuration['foreignModelName'];
         } else if ($relation instanceof MorphToMany) {
           $relationType = 'MorphToMany';
           $configuration['foreignModelName'] = $relation->getRelated();
@@ -190,11 +193,6 @@ class Cache
     $function = Str::lower($configuration['function']);
     $summaryName = Str::snake($configuration['summaryName'] ?? static::generateFieldName(Str::plural($modelName), $function));
     $keyName = Str::snake(static::getKeyName($modelName, $configuration['key']));
-
-    if (!$foreignModelName) {
-      dump('Fix this.');
-      return null;
-    }
 
     $table = static::getModelTable($foreignModelName);
 
@@ -288,7 +286,6 @@ class Cache
       $foreignConfigurations,
       $foreignModelName
     ) use ($updates, $model, $pivotModel) {
-      dump($foreignConfigurations);
       collect($foreignConfigurations)
         ->each(function ($foreignConfiguration) use ($foreignModelName, $updates, $model, $pivotModel) {
           $summaryName = $foreignConfiguration['summaryName'];
@@ -303,7 +300,7 @@ class Cache
           );
           $foreignConfiguration['selectForeignKeys']($cacheQuery, $key, $model, $pivotModel);
           $sql = '(' . Cache::convertQueryToRawSQL($cacheQuery) . ')';
-          dump('Get intermediate value for recalculation', $cacheQuery->toSql(), $cacheQuery->get());
+          // dump('Get intermediate value for recalculation', $cacheQuery->toSql(), $cacheQuery->getBindings(), $cacheQuery->get());
 
           // In case we have duplicate updates for the same column we need to merge the updates
           $existingSql = $updates->get($summaryName);
@@ -367,7 +364,7 @@ class Cache
    */
   public function create()
   {
-    // dump('create', $this->modelName);
+    dump('create', $this->modelName);
     $this->apply('create', function ($eventName, $configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
       $function = $configuration['function'];
       $summaryName = $configuration['summaryName'];
@@ -403,7 +400,13 @@ class Cache
           $propagateValue = $value;
           break;
       }
-
+dump($this->prepareCacheUpdate(
+  $foreignKeys,
+  $configuration,
+  $eventName,
+  $rawUpdate,
+  $propagateValue
+));
       return $this->prepareCacheUpdate(
         $foreignKeys,
         $configuration,

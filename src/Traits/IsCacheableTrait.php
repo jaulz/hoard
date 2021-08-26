@@ -2,7 +2,6 @@
 
 namespace Jaulz\Eloquence\Traits;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jaulz\Eloquence\Support\Cache;
@@ -49,47 +48,7 @@ trait IsCacheableTrait
 
       // Append configuration
       $pivotClass = $relation->getPivotClass();
-      /*$relatedPivotKeyName = $relation->getRelatedPivotKeyName();
-      $foreignPivotKeyName = $relation->getForeignPivotKeyName();
-      $morphClass = $relation->getMorphClass();
-      $morphType = $relation->getMorphType();*/
-
       $pivotClass::appendCacheConfiguration($configuration);
-      /*$pivotClass::appendCacheConfiguration([
-        'function' => $configuration['function'],
-        'foreignModelName' => $relation->getModel(),
-        'summaryName' => $configuration['summaryName'],
-        'valueName' => $configuration['valueName'] ?? null,
-        'foreignKeyName' => [
-          $relatedPivotKeyName,
-          function ($key) {
-            return $key;
-          },
-          function ($query, $foreignKey) use (
-            $relationName,
-            $relatedPivotKeyName,
-            $foreignPivotKeyName
-          ) {
-            $ids = static::whereHas($relationName, function ($query) use (
-              $relatedPivotKeyName,
-              $foreignKey
-            ) {
-              return $query->where($relatedPivotKeyName, $foreignKey);
-            })->pluck('id');
-
-            $query->whereIn($foreignPivotKeyName, $ids);
-          },
-        ],
-        'where' => [
-          $morphType => $morphClass,
-        ],
-        'attributes' => function (Model $model) {
-          return $model->pivotParent->getAttributes();
-        },
-        'original_attributes' => function (Model $model) {
-          return $model->pivotParent->getRawOriginal();
-        },
-      ]);*/
     }
   }
 
@@ -171,7 +130,7 @@ trait IsCacheableTrait
             return $foreignForeignModelName === $modelName;
           })
           ->each(function ($foreignConfiguration) use ($foreignModelName, $foreignConfigurations) {
-            $foreignConfigurations->push(Cache::prepareConfiguration($foreignModelName, $foreignConfiguration));
+            $foreignConfigurations->push(Cache::prepareConfiguration($foreignModelName, $foreignConfiguration, true, get_class()));
           });
 
         // If there are no configurations that affect this model
