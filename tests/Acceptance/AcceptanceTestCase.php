@@ -122,4 +122,19 @@ class AcceptanceTestCase extends TestCase
             ]);
         });
     }
+
+    public function startQueryLog()
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+    }
+
+    public function stopQueryLog()
+    {
+        $queryLog = DB::getQueryLog();
+        DB::flushQueryLog();
+        DB::disableQueryLog();
+
+        return $queryLog;
+    }
 }

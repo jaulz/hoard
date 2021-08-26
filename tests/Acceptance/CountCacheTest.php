@@ -162,9 +162,12 @@ class CountCacheTest extends AcceptanceTestCase
     public function testMorphToMany()
     {
         $post = $this->data['post'];
-        
-        $post->tags()->attach($this->data['tag']->id);
 
+        $this->startQueryLog();
+        $post->tags()->attach($this->data['tag']->id);
+        $queryLog = $this->stopQueryLog();
+
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
         $this->assertEquals($post->created_at, Tag::first()->last_created_at);
@@ -175,43 +178,65 @@ class CountCacheTest extends AcceptanceTestCase
         $secondPost->visible = false;
         $secondPost->save();
 
+        $this->startQueryLog();
         $secondPost->tags()->attach($this->data['tag']->id);
-        
+        $queryLog = $this->stopQueryLog();
+
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
+        $this->startQueryLog();
         $post->tags()->detach($this->data['tag']->id);
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
 
+        $this->startQueryLog();
         $post->tags()->attach($this->data['tag']->id);
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
+        $this->startQueryLog();
         $post->delete();
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(4, count($queryLog));
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
 
+        $this->startQueryLog();
         $post->restore();
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(4, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
+        $this->startQueryLog();
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
         $post->tags()->detach();
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(1, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
 
-        Tag::first()->rebuildCache();
+        $tag = Tag::first();
+        $this->startQueryLog();
+        $tag->rebuildCache();
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(1, count($queryLog));
         $this->assertEquals(1, Tag::first()->taggables_count);
 
         $image = new Image();
@@ -219,12 +244,19 @@ class CountCacheTest extends AcceptanceTestCase
         $image->imageable()->associate($this->data['post']);
         $image->save();
 
+        $this->startQueryLog();
         $image->tags()->attach($this->data['tag']->id);
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
 
+        $tag = Tag::first();
+        $this->startQueryLog();
         Tag::first()->rebuildCache();
+        $queryLog = $this->stopQueryLog();
 
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
     }
 }

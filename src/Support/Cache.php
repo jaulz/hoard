@@ -100,12 +100,12 @@ class Cache
       'relationName' => null,
       'ignoreEmptyForeignKeys' => false,
       'propagate' => false,
-      'events' => ['created', 'deleted', 'updated'],
     ];
     $configuration = array_merge($defaults, $configuration);
 
     // In case we have a relation field we can easily fill the required fields
     $pivotModelName = null;
+    $relationType = null;
     if ($configuration['relationName']) {
       $relationName = $configuration['relationName'];
       $relation = (new $model())->{$relationName}();
@@ -117,18 +117,22 @@ class Cache
       // Handle relations differently
       if ($relation instanceof BelongsTo) {
         if ($relation instanceof MorphTo) {
+          $relationType = 'MorphTo';
           $morphType = $relation->getMorphType();
 
           $configuration['foreignModelName'] = $model[$morphType];
           $configuration['foreignKeyName'] = $relation->getForeignKeyName();
         } else if ($relation instanceof MorphToMany) {
+          $relationType = 'MorphToMany';
           $configuration['foreignModelName'] = $relation->getRelated();
           $configuration['foreignKeyName'] = $relation->getForeignKeyName();
           $configuration['key'] = $relation->getOwnerKeyName();
         }
       } else if ($relation instanceof HasOneOrMany) {
+        $relationType = 'HasOneOrMany';
         $configuration['foreignModelName'] = $relation->getRelated();
       } else if ($relation instanceof MorphToMany) {
+        $relationType = 'MorphToMany';
         $relatedPivotKeyName = $relation->getRelatedPivotKeyName();
         $foreignPivotKeyName = $relation->getForeignPivotKeyName();
         $parentKeyName = $relation->getParentKeyName();
@@ -138,21 +142,32 @@ class Cache
 
         $configuration['foreignModelName'] = $relation->getRelated();
         $configuration['ignoreEmptyForeignKeys'] = true;
-        $configuration['events'] = ['deleted'];
         $configuration['foreignKeyName'] = [
           $relation->getParentKeyName(),
-          function ($key, $model, $pivotModel) use ($pivotModelName, $morphClass, $morphType, $foreignPivotKeyName, $relatedPivotKeyName) {
+          function ($key, $model, $pivotModel, $eventName, $foreignKeyCache) use ($pivotModelName, $morphClass, $morphType, $foreignPivotKeyName, $relatedPivotKeyName) {
             if ($pivotModel) {
               return $pivotModel[$relatedPivotKeyName];
             }
 
-            return [];
+            // Create and update events can be neglected in a MorphToMany situation
+            if ($eventName === 'create' || $eventName === 'update') {
+              return null;
+            }
 
+            // Cache foreign keys to avoid expensive queries
+            $cacheKey = implode('-', [$pivotModelName, $foreignPivotKeyName, $key, $morphType, $morphClass]);
+            if ($foreignKeyCache->has($cacheKey)) {
+              return $foreignKeyCache->get($cacheKey);
+            }
+
+            // Get all foreign keys by querying the pivot table
             $keys = $pivotModelName::where($foreignPivotKeyName, $key)->where($morphType, $morphClass)->pluck($relatedPivotKeyName);
-            dump('exctract expens', $pivotModelName, $foreignPivotKeyName, $key, $morphType, $morphClass, $keys);
+            $foreignKeyCache->put($cacheKey, $keys);
+
             return $keys;
           },
-          function ($query, $foreignKey) use ($modelName, $parentKeyName, $morphType, $morphClass, $relationName, $foreignPivotKeyName, $relatedPivotKeyName, $pivotModelName) {
+          function ($query, $foreignKey) use ($parentKeyName, $morphType, $morphClass, $foreignPivotKeyName, $relatedPivotKeyName, $pivotModelName) {
+            // Get all models that are mentioned in the pivot table
             $query->whereIn($parentKeyName, function ($whereQuery) use ($pivotModelName, $morphType, $morphClass, $foreignPivotKeyName, $relatedPivotKeyName, $foreignKey) {
               $whereQuery->select($foreignPivotKeyName)
                 ->from(static::getModelTable($pivotModelName))
@@ -233,7 +248,7 @@ class Cache
       'propagate' => $propagate,
       'getContext' => $configuration['context'],
       'pivotModelName' => $pivotModelName,
-      'events' => $configuration['events'],
+      'relationType' => $relationType,
     ];
   }
 
@@ -343,8 +358,8 @@ class Cache
    */
   public function create()
   {
-    dump('create', $this->modelName);
-    $this->apply(function ($configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
+    // dump('create', $this->modelName);
+    $this->apply('create', function ($eventName, $configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
       $function = $configuration['function'];
       $summaryName = $configuration['summaryName'];
       $valueName = $configuration['valueName'];
@@ -383,7 +398,7 @@ class Cache
       return $this->prepareCacheUpdate(
         $foreignKeys,
         $configuration,
-        'created',
+        $eventName,
         $rawUpdate,
         $propagateValue
       );
@@ -395,8 +410,8 @@ class Cache
    */
   public function delete()
   {
-    dump('delete');
-    $this->apply(function ($configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
+    // dump('delete', $this->modelName);
+    $this->apply('delete', function ($eventName, $configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
       $function = $configuration['function'];
       $summaryName = $configuration['summaryName'];
       $valueName = $configuration['valueName'];
@@ -421,7 +436,7 @@ class Cache
       return $this->prepareCacheUpdate(
         $foreignKeys,
         $configuration,
-        'deleted',
+        $eventName,
         $rawUpdate,
         $propagateValue
       );
@@ -433,15 +448,22 @@ class Cache
    */
   public function update()
   {
-    $this->apply(function ($configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
-      $eventName = 'updated';
-      $originalForeignKeys = collect(
-        $configuration['extractForeignKeys'](
+    $restored =
+      $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
+    $eventName = $restored ? 'restore' : 'update';
+    // dump($eventName, $this->modelName);
+
+    $this->apply($eventName, function ($eventName, $configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) {
+      $extractForeignKeys = $configuration['extractForeignKeys'];
+      $originalForeignKeys =  $this->model->getOriginal($foreignKeyName) !== $this->model->{$foreignKeyName} ?
+        $extractForeignKeys(
           $this->model->getOriginal($foreignKeyName),
           $this->model,
-          $this->pivotModel
+          $this->pivotModel,
+          $eventName
         )
-      );
+        : $foreignKeys
+      ;
       $removedForeignModelKeys = collect($originalForeignKeys)->diff(
         $foreignKeys
       );
@@ -457,8 +479,6 @@ class Cache
         $this->model->{$valueName} ??
         static::getDefaultValue($configuration['function']);
       $originalValue = $this->model->getOriginal($valueName);
-      $restored =
-        $this->model->deleted_at !== $this->model->getOriginal('deleted_at');
       $dirty = $this->model->isDirty();
 
       // Handle certain cases more efficiently
@@ -490,7 +510,7 @@ class Cache
 
           if ($isRelevant && $wasRelevant) {
             // Nothing to do
-            if (!$restored) {
+            if ($eventName !== 'restore') {
               return null;
             }
 
@@ -551,7 +571,7 @@ class Cache
           }
 
           if ($isRelevant && $wasRelevant) {
-            if ($restored) {
+            if ($eventName === 'restore') {
               return $this->prepareCacheUpdate(
                 $foreignKeys,
                 $configuration,
@@ -599,32 +619,38 @@ class Cache
       }
 
       // Run update with recalculation
-      return $this->prepareCacheUpdate($foreignKeys, $configuration, 
-      $eventName);
+      return $this->prepareCacheUpdate(
+        $foreignKeys,
+        $configuration,
+        $eventName
+      );
     });
   }
 
   /**
    * Applies the provided function to the count cache setup/configuration.
    *
-   * @param \Closure $function
+   * @param string $eventName
+   * @param \Closure $callback
    */
-  public function apply(\Closure $function)
+  public function apply(string $eventName, \Closure $callback)
   {
     // Gather all updates from every configuration
+    $foreignKeyCache = collect();
     $allUpdates = collect($this->configurations)
-      ->map(function ($configuration) use ($function) {
+      ->map(function ($configuration) use ($eventName, $callback, $foreignKeyCache) {
+        $where = $configuration['where'];
         $isRelevant = $this::checkWhereCondition(
           $this->model,
           $this->model->getAttributes(),
-          $configuration['where'],
+          $where,
           true,
           $configuration
         );
         $wasRelevant = $this::checkWhereCondition(
           $this->model,
           $this->model->getRawOriginal(),
-          $configuration['where'],
+          $where,
           false,
           $configuration
         );
@@ -639,20 +665,21 @@ class Cache
           $this->model,
           $configuration['foreignKeyName']
         );
+        $extractForeignKeys = $configuration['extractForeignKeys'];
         $foreignKeys = collect(
-          $configuration['extractForeignKeys']($this->model->{$foreignKeyName}, $this->model, $this->pivotModel)
+          $extractForeignKeys($this->model->{$foreignKeyName}, $this->model, $this->pivotModel, $eventName, $foreignKeyCache)
         );
         // dump('Get intermediate value for recalculation', $cacheQuery->toSql(), $cacheQuery->get());
 
-        $update = $function($configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant);
+        // Get updates for configuration
+        $updates = $callback($eventName, $configuration, $foreignKeys, $foreignKeyName, $isRelevant, $wasRelevant) ?? [];
 
-        return collect(Arr::isAssoc($update) ? [$update] : $update)
-        ->filter(function ($update) {
-          return $update !== null;
-        });
+        return collect(Arr::isAssoc($updates) ? [$updates] : $updates)
+          ->filter(function ($update) {
+            return $update !== null;
+          });
       })->filter()
       ->reduce(function ($cumulatedUpdates, $updates) {
-        dump('a', $updates);
         return $cumulatedUpdates->concat(
           $updates
         );
@@ -736,7 +763,7 @@ class Cache
    *
    * @param Collection $foreignKeys Foreign model key
    * @param array $configuration
-   * @param string $event Possible events: created/deleted/updated
+   * @param string $event Possible events: create/delete/update
    * @param ?any $rawValue Raw value
    * @param ?any $propagateValue Value to propagate
    * @return array
@@ -788,9 +815,10 @@ class Cache
           $foreignModel = new $foreignModelName();
           $foreignModel->{$foreignModel->getKeyName()} = $foreignKey;
           $rawValue = static::getFullUpdate($foreignModel, $this->pivotModel)[$summaryName];
-          if ($summaryName === 'first_created_at') {
+
+          if ($summaryName === 'TEST') {
             dump(
-              'BLABLA',
+              'Get intermediate value',
               $foreignModelName,
               $rawValue,
               $foreignModelName::query()->select($rawValue)->first()->toArray()
