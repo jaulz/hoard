@@ -55,7 +55,7 @@ class RebuildCachesCommand extends Command
       $bar->setMessage('');
       $bar->start();
       $fixed = 0;
-      $models->each(function ($model) use ($bar) {
+      $models->each(function ($model) use ($bar, $fixed) {
         $keyName = $model->getKeyName();
         $key = $model->getKey();
 
