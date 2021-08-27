@@ -111,6 +111,8 @@ class Cache
       'where' => [],
       'relationName' => null,
       'ignoreEmptyForeignKeys' => false,
+      'foreignKeyStrategy' => '',
+      'foreignKeyOptions' => [],
       'propagate' => false,
     ];
     $configuration = array_merge($defaults, $configuration);
@@ -164,75 +166,15 @@ class Cache
 
         $configuration['foreignModelName'] = $relation->getRelated();
         $configuration['ignoreEmptyForeignKeys'] = true;
-        $configuration['foreignKeyName'] = [
-          $relation->getParentKeyName(),
-          function (
-            $key,
-            $model,
-            $pivotModel,
-            $eventName,
-            $foreignKeyCache
-          ) use (
-            $pivotModelName,
-            $morphClass,
-            $morphType,
-            $foreignPivotKeyName,
-            $relatedPivotKeyName
-          ) {
-            if ($pivotModel) {
-              return $pivotModel[$relatedPivotKeyName];
-            }
-
-            // Create and update events can be neglected in a MorphToMany situation
-            if ($eventName === 'create' || $eventName === 'update') {
-              return null;
-            }
-
-            // Cache foreign keys to avoid expensive queries
-            $cacheKey = implode('-', [
-              $pivotModelName,
-              $foreignPivotKeyName,
-              $key,
-              $morphType,
-              $morphClass,
-            ]);
-            if ($foreignKeyCache->has($cacheKey)) {
-              return $foreignKeyCache->get($cacheKey);
-            }
-
-            // Get all foreign keys by querying the pivot table
-            $keys = $pivotModelName
-              ::where($foreignPivotKeyName, $key)
-              ->where($morphType, $morphClass)
-              ->pluck($relatedPivotKeyName);
-            $foreignKeyCache->put($cacheKey, $keys);
-
-            return $keys;
-          },
-          function ($query, $foreignKey) use (
-            $parentKeyName,
-            $morphType,
-            $morphClass,
-            $foreignPivotKeyName,
-            $relatedPivotKeyName,
-            $pivotModelName
-          ) {
-            // Get all models that are mentioned in the pivot table
-            $query->whereIn($parentKeyName, function ($whereQuery) use (
-              $pivotModelName,
-              $morphType,
-              $morphClass,
-              $foreignPivotKeyName,
-              $relatedPivotKeyName,
-              $foreignKey
-            ) {
-              $whereQuery
-                ->select($foreignPivotKeyName)
-                ->from(static::getModelTable($pivotModelName))
-                ->where($relatedPivotKeyName, $foreignKey)
-                ->where($morphType, $morphClass);
-            });
-          },
+        $configuration['foreignKeyName'] = $relation->getParentKeyName();
+        $configuration['foreignKeyStrategy'] = 'MorphToMany';
+        $configuration['foreignKeyOptions'] = [
+          'pivotModelName' => $pivotModelName,
+          'morphClass' =>  $morphClass,
+          'morphType' =>  $morphType,
+          'foreignPivotKeyName' =>  $foreignPivotKeyName,
+          'relatedPivotKeyName' =>  $relatedPivotKeyName,
+          'parentKeyName' =>  $parentKeyName,
         ];
       }
     }
@@ -256,25 +198,17 @@ class Cache
 
     $table = static::getModelTable($foreignModelName);
 
-    $foreignKey =
-      $configuration['foreignKeyName'] ??
-      static::generateFieldName($foreignModelName, 'id');
     $foreignKeyName = Str::snake(
       static::getKeyName(
         $modelName,
-        is_array($foreignKey) ? $foreignKey[0] : $foreignKey
+        $configuration['foreignKeyName'] ??
+      static::generateFieldName($foreignModelName, 'id')
       )
     );
-    $extractForeignKeys = is_array($foreignKey)
-      ? $foreignKey[1]
-      : function ($key) {
-        return $key;
-      };
-    $selectForeignKeys = is_array($foreignKey)
-      ? $foreignKey[2]
-      : function ($query, $foreignKey) use ($foreignKeyName) {
-        $query->where($foreignKeyName, $foreignKey);
-      };
+    $foreignKeyStrategy = $configuration['foreignKeyStrategy'];
+    $foreignKeyOptions = array_merge([
+      'foreignKeyName' =>  $foreignKeyName
+    ], $configuration['foreignKeyOptions']);
 
     // Check if we need to propagate changes by checking if the foreign model is also cacheable and references the summary field
     $propagate = $configuration['propagate'];
@@ -312,8 +246,8 @@ class Cache
       'valueName' => $configuration['valueName'],
       'keyName' => $keyName,
       'foreignKeyName' => $foreignKeyName,
-      'extractForeignKeys' => $extractForeignKeys,
-      'selectForeignKeys' => $selectForeignKeys,
+      'foreignKeyStrategy' => $foreignKeyStrategy,
+      'foreignKeyOptions' => $foreignKeyOptions,
       'ignoreEmptyForeignKeys' => $ignoreEmptyForeignKeys,
       'where' => $configuration['where'],
       'propagate' => $propagate,
@@ -330,6 +264,134 @@ class Cache
   public static function getDatabaseDriver()
   {
     return DB::getPdo()->getAttribute(PDO::ATTR_DRIVER_NAME);
+  }
+
+  /**
+   * Get foreign key selector
+   *
+   * @param string $strategy
+   * @return string
+   */
+  public static function getForeignKeySelector(string $strategy, array $options)
+  {
+    switch ($strategy) {
+      case 'Path': {
+        return function ($query, $key) {
+          $query->where('path', '~', '*.' . $key . '.*');
+        };
+
+        break;
+      }
+
+      case 'MorphToMany': {
+        return function ($query, $foreignKey) use ($options
+        ) {
+          $parentKeyName = $options['parentKeyName'];
+          $morphType = $options['morphType'];
+          $morphClass = $options['morphClass'];
+          $foreignPivotKeyName = $options['foreignPivotKeyName'];
+          $relatedPivotKeyName = $options['relatedPivotKeyName'];
+          $pivotModelName = $options['pivotModelName'];
+
+          // Get all models that are mentioned in the pivot table
+          $query->whereIn($parentKeyName, function ($whereQuery) use (
+            $pivotModelName,
+            $morphType,
+            $morphClass,
+            $foreignPivotKeyName,
+            $relatedPivotKeyName,
+            $foreignKey
+          ) {
+            $whereQuery
+              ->select($foreignPivotKeyName)
+              ->from(static::getModelTable($pivotModelName))
+              ->where($relatedPivotKeyName, $foreignKey)
+              ->where($morphType, $morphClass);
+          });
+        };
+
+        break;
+      }
+    }
+
+    return function ($query, $foreignKey) use ($options) {
+      $foreignKeyName = $options['foreignKeyName'];
+
+      $query->where($foreignKeyName, $foreignKey);
+    };
+  }
+
+  /**
+   * Get foreign key extractor
+   *
+   * @param string $strategy
+   * @return string
+   */
+  public static function getForeignKeyExtractor(string $strategy, array $options)
+  {
+    switch ($strategy) {
+      case 'Path': {
+        return function ($key) {
+          return explode('.', $key);
+        };
+
+        break;
+      }
+
+      case 'MorphToMany': {
+        return function (
+          $key,
+          $model,
+          $pivotModel,
+          $eventName,
+          $foreignKeyCache
+        ) use (
+          $options
+        ) {
+          $morphType = $options['morphType'];
+          $morphClass = $options['morphClass'];
+          $foreignPivotKeyName = $options['foreignPivotKeyName'];
+          $relatedPivotKeyName = $options['relatedPivotKeyName'];
+          $pivotModelName = $options['pivotModelName'];
+
+          if ($pivotModel) {
+            return $pivotModel[$relatedPivotKeyName];
+          }
+
+          // Create and update events can be neglected in a MorphToMany situation
+          if ($eventName === 'create' || $eventName === 'update') {
+            return null;
+          }
+
+          // Cache foreign keys to avoid expensive queries
+          $cacheKey = implode('-', [
+            $pivotModelName,
+            $foreignPivotKeyName,
+            $key,
+            $morphType,
+            $morphClass,
+          ]);
+          if ($foreignKeyCache->has($cacheKey)) {
+            return $foreignKeyCache->get($cacheKey);
+          }
+
+          // Get all foreign keys by querying the pivot table
+          $keys = $pivotModelName
+            ::where($foreignPivotKeyName, $key)
+            ->where($morphType, $morphClass)
+            ->pluck($relatedPivotKeyName);
+          $foreignKeyCache->put($cacheKey, $keys);
+
+          return $keys;
+        };
+
+        break;
+      }
+    }
+
+    return function ($key) {
+      return $key;
+    };
   }
 
   /**
@@ -360,7 +422,8 @@ class Cache
           $foreignModelName,
           $foreignConfiguration
         );
-        $foreignConfiguration['selectForeignKeys'](
+        $selectForeignKeys = static::getForeignKeySelector($foreignConfiguration['foreignKeyStrategy'], $foreignConfiguration['foreignKeyOptions']);
+        $selectForeignKeys(
           $cacheQuery,
           $key,
           $model,
@@ -576,7 +639,7 @@ class Cache
       $isRelevant,
       $wasRelevant
     ) {
-      $extractForeignKeys = $configuration['extractForeignKeys'];
+      $extractForeignKeys = static::getForeignKeyExtractor($configuration['foreignKeyStrategy'], $configuration['foreignKeyOptions']);
       $originalForeignKeys = collect(
         $this->model->getOriginal($foreignKeyName) !==
         $this->model->{$foreignKeyName}
@@ -793,7 +856,7 @@ class Cache
           $this->model,
           $configuration['foreignKeyName']
         );
-        $extractForeignKeys = $configuration['extractForeignKeys'];
+        $extractForeignKeys = static::getForeignKeyExtractor($configuration['foreignKeyStrategy'], $configuration['foreignKeyOptions']);
         $foreignKeys = collect(
           $extractForeignKeys(
             $this->model->{$foreignKeyName},

@@ -88,7 +88,7 @@ class ConfigCacheCommand extends Command
     
         // Iterate through all cacheable classes and gather their configurations
         $configurations = [];
-        collect($classNames)->each(function ($className) use ($configurations) {
+        collect($classNames)->each(function ($className) use (&$configurations) {
             $configurations[$className] = $className::getForeignHoardConfigurations();
         });
 
