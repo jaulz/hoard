@@ -69,7 +69,6 @@ class RebuildCachesCommand extends Command
         $model->rebuildCache();
         $after = collect($model->refresh()->getAttributes());
         $difference = $before->diffAssoc($after)->toArray();
-        dump($fixed, $difference);
 
         // Increase number of fixed caches
         if (count($difference) > 0) {
