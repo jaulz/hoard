@@ -432,7 +432,7 @@ class Cache
           $pivotModel
         );
         $sql = '(' . Cache::convertQueryToRawSQL($cacheQuery) . ')';
-        // dump('Get intermediate value for recalculation', $cacheQuery->toSql(), $cacheQuery->getBindings(), $cacheQuery->get());
+        // dump('Get intermediate value for recalculation', $summaryName, $cacheQuery->toSql(), $cacheQuery->getBindings(), $cacheQuery->get());
 
         // In case we have duplicate updates for the same column we need to merge the updates
         $existingSql = $updates->get($summaryName);
