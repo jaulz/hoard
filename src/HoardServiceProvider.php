@@ -5,6 +5,7 @@ namespace Jaulz\Hoard;
 use Illuminate\Support\ServiceProvider;
 use Jaulz\Hoard\Commands\CacheCommand;
 use Jaulz\Hoard\Commands\ClearCommand;
+use Jaulz\Hoard\Commands\RecalculateCommand;
 
 class HoardServiceProvider extends ServiceProvider
 {
@@ -17,7 +18,7 @@ class HoardServiceProvider extends ServiceProvider
         $this->commands([
             ClearCommand::class,
             CacheCommand::class,
-            RecalculateCachesCommand::class,
+            RecalculateCommand::class,
         ]);
     }
 }
