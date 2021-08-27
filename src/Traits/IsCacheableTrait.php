@@ -105,7 +105,7 @@ trait IsCacheableTrait
    */
   public static function getForeignHoardConfigurations()
   {
-    if (!static::$foreignHoardConfigurations) {
+    if (is_null(static::$foreignHoardConfigurations)) {
       // Get all other model classes
       $modelName = get_class();
       $reflector = new ReflectionClass($modelName);
