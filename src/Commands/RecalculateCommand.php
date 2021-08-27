@@ -12,7 +12,7 @@ class RecalculateCommand extends Command
    *
    * @var string
    */
-  protected $signature = 'hoard:recalculate {--class= : Optional classes to update}';
+  protected $signature = 'hoard:recalculate {--filter= : Optional filter that will be applied to the class name}';
 
   /**
    * The console command description.
@@ -41,7 +41,7 @@ class RecalculateCommand extends Command
       // Check if we need to skip this class
       if (
         !$count ||
-        (!!$this->option('class') && $className !== $this->option('class'))
+        (!!$this->option('filter') && str_contains($className, $this->option('filter')))
       ) {
         return;
       }
