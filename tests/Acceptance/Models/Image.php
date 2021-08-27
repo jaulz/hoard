@@ -2,14 +2,14 @@
 
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\Model;
 
 class Image extends Model
 {
     use IsCacheableTrait;
 
-    public static function caches()
+    public static function hoard()
     {
         return [
             [

@@ -1,6 +1,6 @@
 <?php
 
-namespace Jaulz\Eloquence\Support;
+namespace Jaulz\Hoard\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,9 +13,9 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Jaulz\Eloquence\Exceptions\InvalidRelationException;
-use Jaulz\Eloquence\Exceptions\UnableToCacheException;
-use Jaulz\Eloquence\Exceptions\UnableToPropagateException;
+use Jaulz\Hoard\Exceptions\InvalidRelationException;
+use Jaulz\Hoard\Exceptions\UnableToCacheException;
+use Jaulz\Hoard\Exceptions\UnableToPropagateException;
 use PDO;
 use ReflectionProperty;
 
@@ -64,7 +64,7 @@ class Cache
       : null;
     $this->propagatedBy = $propagatedBy;
     $this->configurations = collect(
-      get_class($this->model)::getCacheConfigurations()
+      get_class($this->model)::getHoardConfigurations()
     )
       ->map(
         fn($configuration) => static::prepareConfiguration(
@@ -287,7 +287,7 @@ class Cache
         );
       }
 
-      $foreignConfiguration = $foreignModelName::getCacheConfigurations();
+      $foreignConfiguration = $foreignModelName::getHoardConfigurations();
 
       $propagate = collect($foreignConfiguration)->some(function (
         $foreignConfiguration
@@ -342,7 +342,7 @@ class Cache
   {
     $updates = collect([]);
 
-    collect(get_class($model)::getForeignCacheConfigurations())->each(function (
+    collect(get_class($model)::getForeignHoardConfigurations())->each(function (
       $foreignConfigurations,
       $foreignModelName
     ) use ($updates, $model, $pivotModel) {

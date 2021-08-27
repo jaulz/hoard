@@ -5,7 +5,7 @@ namespace Tests\Acceptance\Models;
 use Illuminate\Database\Eloquent\Model;
 
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
-use Jaulz\Eloquence\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsCacheableTrait;
 
 class Taggable extends MorphPivot
 {

@@ -1,5 +1,5 @@
 <?php
-namespace Jaulz\Eloquence\Exceptions;
+namespace Jaulz\Hoard\Exceptions;
 
 class UnableToCacheException extends \Exception
 {

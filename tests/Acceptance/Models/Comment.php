@@ -1,7 +1,7 @@
 <?php
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Eloquence\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -10,7 +10,7 @@ class Comment extends Model
     use IsCacheableTrait;
     use SoftDeletes;
 
-    public static function caches()
+    public static function hoard()
     {
         return [
             [

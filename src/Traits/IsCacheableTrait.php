@@ -1,30 +1,29 @@
 <?php
 
-namespace Jaulz\Eloquence\Traits;
+namespace Jaulz\Hoard\Traits;
 
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Illuminate\Support\Collection;
-use Jaulz\Eloquence\Support\Cache;
-use Jaulz\Eloquence\Support\CacheObserver;
-use Jaulz\Eloquence\Support\FindCacheableClasses;
+use Jaulz\Hoard\Support\Cache;
+use Jaulz\Hoard\Support\CacheObserver;
+use Jaulz\Hoard\Support\FindCacheableClasses;
 use ReflectionClass;
 
 trait IsCacheableTrait
 {
   /**
-   * Keep track of foreign cache configurations in a static property so we don't need to find them again.
+   * Keep track of foreign hoard configurations in a static property so we don't need to find them again.
    *
-   * @var \Illuminate\Support\Collection
+   * @var ?array
    */
-  private static $foreignCacheConfigurations;
+  private static $foreignHoardConfigurations = null;
 
   /**
    * Store dynamic configurations that were created at runtime.
    *
    * @var array
    */
-  private static array $cacheConfigurations = [];
+  private static array $hoardConfigurations = [];
 
   /**
    * Boot the trait and its event bindings when a model is created.
@@ -35,7 +34,7 @@ trait IsCacheableTrait
     static::observe(CacheObserver::class);
 
     // In case we are dealing with a pivot model, we are attaching a cache config to that model as well
-    foreach (static::caches() as $configuration) {
+    foreach (static::hoard() as $configuration) {
       if (!isset($configuration['relationName'])) {
         continue;
       }
@@ -49,28 +48,28 @@ trait IsCacheableTrait
 
       // Append configuration
       $pivotClass = $relation->getPivotClass();
-      $pivotClass::appendCacheConfiguration($configuration);
+      $pivotClass::appendHoardConfiguration($configuration);
     }
   }
 
   /**
-   * Append a cache configuration at runtime.
+   * Append a hoard configuration at runtime.
    *
    */
-  public static function appendCacheConfiguration($configuration)
+  public static function appendHoardConfiguration($configuration)
   {
-    array_push(static::$cacheConfigurations, $configuration);
+    array_push(static::$hoardConfigurations, $configuration);
   }
 
   /**
-   * Return the cache configuration for the model.
+   * Return the hoard configuration for the model.
    *
    * @return array
    */
-  public static function getCacheConfigurations()
+  public static function getHoardConfigurations()
   {
     // Merge with static configurations (which were set from another model) and also expand foreignModelName key (which can be an array)
-    return collect(static::$cacheConfigurations)->merge(static::caches())->reduce(function ($cumulatedConfigurations, $configuration) {
+    return collect(static::$hoardConfigurations)->merge(static::hoard())->reduce(function ($cumulatedConfigurations, $configuration) {
       if (!isset($configuration['foreignModelName'])) {
         return $cumulatedConfigurations->push($configuration);
       }
@@ -79,11 +78,11 @@ trait IsCacheableTrait
         return $cumulatedConfigurations->push($configuration);
       }
 
-       collect($configuration['foreignModelName'])->each(function ($foreignModelName) use ($configuration, $cumulatedConfigurations) {
+      collect($configuration['foreignModelName'])->each(function ($foreignModelName) use ($configuration, $cumulatedConfigurations) {
         $cumulatedConfigurations->push(array_merge($configuration, [
           'foreignModelName' => $foreignModelName,
         ]));
-       });
+      });
 
       return $cumulatedConfigurations;
     }, collect());
@@ -94,7 +93,7 @@ trait IsCacheableTrait
    *
    * @return array
    */
-  protected static function caches()
+  protected static function hoard()
   {
     return [];
   }
@@ -104,9 +103,9 @@ trait IsCacheableTrait
    *
    * @return array
    */
-  public static function getForeignCacheConfigurations()
+  public static function getForeignHoardConfigurations()
   {
-    if (!static::$foreignCacheConfigurations) {
+    if (!static::$foreignHoardConfigurations) {
       // Get all other model classes
       $modelName = get_class();
       $reflector = new ReflectionClass($modelName);
@@ -116,16 +115,16 @@ trait IsCacheableTrait
       ))->getAllIsCacheableTraitClasses();
 
       // Go through all other classes and check if they reference the current class
-      static::$foreignCacheConfigurations = collect([]);
+      static::$foreignHoardConfigurations = [];
       collect($foreignModelNames)->each(function ($foreignModelName) use ($modelName) {
         // Go through options and see where the model is referenced
         $foreignConfigurations = collect([]);
-        $foreignModelName::getCacheConfigurations()
+        $foreignModelName::getHoardConfigurations()
           ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
             $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? null;
 
             // Resolve model name via relation if necessary
-            if (isset($foreignConfiguration['relationName'])) {
+            if (!$foreignForeignModelName && isset($foreignConfiguration['relationName'])) {
               $relationName = $foreignConfiguration['relationName'];
 
               if (!method_exists($foreignModelName, $relationName)) {
@@ -137,7 +136,7 @@ trait IsCacheableTrait
 
               // In a morph to scenario any other model could be the target
               if ($relation instanceof MorphTo) {
-                $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? $modelName;
+                $foreignForeignModelName = $modelName;
               } else {
                 $foreignForeignModelName = get_class($relation->getRelated());
               }
@@ -154,14 +153,12 @@ trait IsCacheableTrait
           return true;
         }
 
-        static::$foreignCacheConfigurations->put(
-          $foreignModelName,
-          $foreignConfigurations->filter()->toArray()
-        );
+        // Eventually add the configuration to our static collection
+        static::$foreignHoardConfigurations[$foreignModelName] = $foreignConfigurations->filter()->toArray();
       });
     }
 
-    return static::$foreignCacheConfigurations->toArray();
+    return static::$foreignHoardConfigurations;
   }
 
   /**

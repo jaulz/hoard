@@ -1,10 +1,10 @@
-# Eloquence
+# Hoard
 
-![Version](https://img.shields.io/packagist/v/jaulz/eloquence.svg)
-![Downloads](https://img.shields.io/packagist/dt/jaulz/eloquence.svg)
-![Status](https://img.shields.io/travis/jaulz/eloquence/master.svg)
+![Version](https://img.shields.io/packagist/v/jaulz/hoard.svg)
+![Downloads](https://img.shields.io/packagist/dt/jaulz/hoard.svg)
+![Status](https://img.shields.io/travis/jaulz/hoard/master.svg)
 
-Eloquence is a package to extend Laravel's base Eloquent models and functionality.
+Hoard is a package to extend Laravel's base Eloquent models and functionality.
 
 It provides a number of utilities and classes to work with Eloquent in new and useful ways, 
 such as camel cased attributes (for JSON apis), count caching, uuids and more.
@@ -13,13 +13,13 @@ such as camel cased attributes (for JSON apis), count caching, uuids and more.
 
 Install the package via composer:
 
-    composer require jaulz/eloquence:~5.0
+    composer require jaulz/hoard:~5.0
 
 ## Usage
 
-First, add the eloquence service provider to your config/app.php file:
+First, add the hoard service provider to your config/app.php file:
 
-    'Jaulz\Eloquence\EloquenceServiceProvider',
+    'Jaulz\Hoard\HoardServiceProvider',
 
 It's important to note that this will automatically re-bind the Model class
 that Eloquent uses for many-to-many relationships. This is necessary because
@@ -30,18 +30,18 @@ You should now be good to go with your models.
 
 ### Note!
 
-Eloquence DOES NOT CHANGE how you write your schema migrations. You should still be using snake_case 
+Hoard DOES NOT CHANGE how you write your schema migrations. You should still be using snake_case 
 when setting up your fields and tables in your database schema migrations. This is a good thing - 
 snake_case of field names is the defacto standard within the Laravel community :)
 
 
 ## UUIDs
 
-Eloquence comes bundled with UUID capabilities that you can use in your models.
+Hoard comes bundled with UUID capabilities that you can use in your models.
 
 Simply include the Uuid trait:
 
-    use Jaulz\Eloquence\Traits\Uuid;
+    use Jaulz\Hoard\Traits\Uuid;
 
 And then disable auto incrementing ids:
 
@@ -67,7 +67,7 @@ to use the Uuid trait, as it's practically useless in this scenario.
 
 ## Traits
 
-Eloquence comes with a system for setting up Traits, which are really just small libraries that you can use with your Eloquent models.
+Hoard comes with a system for setting up Traits, which are really just small libraries that you can use with your Eloquent models.
 The first of these is the count cache.
 
 ### Cache
@@ -253,8 +253,8 @@ In case you face an memory exception it might be related to Telescope and you sh
 * UUIDModel trait added
 * CamelCaseModel trait added
 * Model class updated to use CamelCaseModel trait - deprecated, backwards-compatibility support only
-* Eloquence now its own namespace (breaking change)
-* EloquenceServiceProvider added use this if you want to overload the base model automatically (required for pivot model camel casing).
+* Hoard now its own namespace (breaking change)
+* HoardServiceProvider added use this if you want to overload the base model automatically (required for pivot model camel casing).
 
 #### 1.0.2
 

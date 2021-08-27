@@ -1,6 +1,6 @@
 <?php
 
-namespace Jaulz\Eloquence\Support;
+namespace Jaulz\Hoard\Support;
 
 use Illuminate\Support\Facades\DB;
 

@@ -2,7 +2,7 @@
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsCacheableTrait;
 
 class User extends Model {
     use IsCacheableTrait;

@@ -3,7 +3,7 @@
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Eloquence\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsCacheableTrait;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
@@ -11,7 +11,7 @@ class Item extends Model
     use IsCacheableTrait;
     use SoftDeletes;
 
-    public static function caches()
+    public static function hoard()
     {
         return [
             [
