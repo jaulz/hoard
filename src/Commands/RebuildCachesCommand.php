@@ -43,7 +43,6 @@ class RebuildCachesCommand extends Command
         !$count ||
         (!!$this->option('class') && $className !== $this->option('class'))
       ) {
-        $this->comment('Recalculation of "' . $className . '" caches skipped');
         return;
       }
 
@@ -55,18 +54,28 @@ class RebuildCachesCommand extends Command
       );
       $bar->setMessage('');
       $bar->start();
+      $fixed
       $models->each(function ($model) use ($bar) {
         $keyName = $model->getKeyName();
         $key = $model->getKey();
 
         // Set information message to bar
-        $bar->setMessage("$keyName=$key");
+        $message = $keyName . '=' . $key;
+        if ($fixed > 0) {
+          $message .= ' (' . $fixed . ' fixed)';
+        }
+        $bar->setMessage($message);
 
         // Check differences between the model before and after
         $before = collect($model->getAttributes());
         $model->rebuildCache();
         $after = collect($model->refresh()->getAttributes());
         $difference = $before->diffAssoc($after)->toArray();
+
+        // Increase number of fixed caches
+        if (count($difference) > 0) {
+          $fixed++;
+        }
 
         // Progress bar
         $bar->advance();
