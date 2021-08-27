@@ -81,7 +81,7 @@ class RecalculateCommand extends Command
 
       // Finalize class
       if ($fixed > 0) {
-        $bar->setMessage('(fixed ' . $fixed . ' model)', 'warning');
+        $bar->setMessage('(fixed ' . $fixed . ' models)', 'warning');
       }
       $bar->setMessage('completed');
       $bar->finish();
