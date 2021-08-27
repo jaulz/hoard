@@ -107,7 +107,7 @@ class Cache
     $defaults = [
       'function' => 'count',
       'valueName' => 'id',
-      'key' => 'id',
+      'keyName' => 'id',
       'where' => [],
       'relationName' => null,
       'ignoreEmptyForeignKeys' => false,
@@ -148,7 +148,7 @@ class Cache
           $relationType = 'MorphToMany';
           $configuration['foreignModelName'] = $relation->getRelated();
           $configuration['foreignKeyName'] = $relation->getForeignKeyName();
-          $configuration['key'] = $relation->getOwnerKeyName();
+          $configuration['keyName'] = $relation->getOwnerKeyName();
         }
       } elseif ($relation instanceof HasOneOrMany) {
         $relationType = 'HasOneOrMany';
@@ -251,7 +251,7 @@ class Cache
         static::generateFieldName(Str::plural($modelName), $function)
     );
     $keyName = Str::snake(
-      static::getKeyName($modelName, $configuration['key'])
+      static::getKeyName($modelName, $configuration['keyName'])
     );
 
     $table = static::getModelTable($foreignModelName);
@@ -276,7 +276,7 @@ class Cache
         $query->where($foreignKeyName, $foreignKey);
       };
 
-    // Check if we need to propagate changes by checking if the foreign model is also cacheable
+    // Check if we need to propagate changes by checking if the foreign model is also cacheable and references the summary field
     $propagate = $configuration['propagate'];
     if ($checkForeignModel) {
       if (!method_exists($foreignModelName, 'bootIsCacheableTrait')) {
@@ -287,15 +287,16 @@ class Cache
         );
       }
 
-      $foreignConfiguration = $foreignModelName::getHoardConfigurations();
-
-      $propagate = collect($foreignConfiguration)->some(function (
+      // If the summary field is used in a foreign configuration we need to propagate the changes
+      $foreignConfigurations = $foreignModelName::getHoardConfigurations();
+      $propagate = collect($foreignConfigurations)->some(function (
         $foreignConfiguration
-      ) use ($foreignModelName, $summaryName) {
+      ) use ($foreignModelName, $summaryName, $modelName) {
         $foreignConfiguration = static::prepareConfiguration(
           $foreignModelName,
           $foreignConfiguration,
-          false
+          false,
+          $modelName
         );
         $propagate = $summaryName === $foreignConfiguration['valueName'];
 
