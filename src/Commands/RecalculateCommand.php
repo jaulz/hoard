@@ -5,7 +5,7 @@ namespace Jaulz\Hoard\Commands;
 use Illuminate\Console\Command;
 use Jaulz\Hoard\Support\FindCacheableClasses;
 
-class RecalculateCachesCommand extends Command
+class RecalculateCommand extends Command
 {
   /**
    * The name and signature of the console command.
