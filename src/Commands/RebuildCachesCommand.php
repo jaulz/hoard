@@ -50,9 +50,10 @@ class RebuildCachesCommand extends Command
       $this->comment('Recalculate "' . $className . '" caches');
       $bar = $this->output->createProgressBar($count);
       $bar->setFormat(
-        '%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message%'
+        '%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message% <fg=white;bg=red>%warning%</>'
       );
       $bar->setMessage('');
+      $bar->setMessage('', 'warning');
       $bar->start();
       $fixed = 0;
       $models->each(function ($model) use ($bar, &$fixed) {
@@ -61,9 +62,6 @@ class RebuildCachesCommand extends Command
 
         // Set information message to bar
         $message = $keyName . '=' . $key;
-        if ($fixed > 0) {
-          $message .= ' (' . $fixed . ' fixed)';
-        }
         $bar->setMessage($message);
 
         // Check differences between the model before and after
@@ -71,6 +69,7 @@ class RebuildCachesCommand extends Command
         $model->rebuildCache();
         $after = collect($model->refresh()->getAttributes());
         $difference = $before->diffAssoc($after)->toArray();
+        dump($fixed, $difference);
 
         // Increase number of fixed caches
         if (count($difference) > 0) {
@@ -81,6 +80,10 @@ class RebuildCachesCommand extends Command
         $bar->advance();
       });
 
+      // Finalize class
+      if ($fixed > 0) {
+        $bar->setMessage('(fixed ' . $fixed . ' model)', 'warning');
+      }
       $bar->setMessage('completed');
       $bar->finish();
       $this->newLine();
