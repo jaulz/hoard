@@ -143,13 +143,13 @@ class Cache
 
           $configuration['foreignModelName'] =
             $model[$morphType] ?? $foreignModelName;
-          $configuration['foreignKeyName'] = $relation->getForeignKeyName();
+          $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getForeignKeyName();
           $configuration['where'][$morphType] =
             $configuration['foreignModelName'];
         } elseif ($relation instanceof MorphToMany) {
           $relationType = 'MorphToMany';
           $configuration['foreignModelName'] = $relation->getRelated();
-          $configuration['foreignKeyName'] = $relation->getForeignKeyName();
+          $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getForeignKeyName();
           $configuration['keyName'] = $relation->getOwnerKeyName();
         }
       } elseif ($relation instanceof HasOneOrMany) {
@@ -166,7 +166,7 @@ class Cache
 
         $configuration['foreignModelName'] = $relation->getRelated();
         $configuration['ignoreEmptyForeignKeys'] = true;
-        $configuration['foreignKeyName'] = $relation->getParentKeyName();
+        $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getParentKeyName();
         $configuration['foreignKeyStrategy'] = 'MorphToMany';
         $configuration['foreignKeyOptions'] = [
           'pivotModelName' => $pivotModelName,
@@ -415,6 +415,8 @@ class Cache
         $summaryName = $foreignConfiguration['summaryName'];
         $keyName = $foreignConfiguration['keyName'];
         $function = $foreignConfiguration['function'];
+        $valueName = $foreignConfiguration['valueName'];
+        $date = in_array($valueName, $model->getDates());
         $key = $model[$keyName];
 
         // Get query that retrieves the summary value
@@ -450,7 +452,7 @@ class Cache
                 static::getDatabaseDriver() === 'sqlite' ? 'MAX' : 'GREATEST';
 
               // We need to cast null values to a temporary low value because MAX(999999999999, NULL) leads to NULL in SQLite
-              $temporaryValue = '"0"';
+              $temporaryValue = $date ? "'1900-01-01 00:00:00+00'" : "'0'";
               $sql =
                 'NULLIF(' .
                 $function .
@@ -473,7 +475,7 @@ class Cache
                 static::getDatabaseDriver() === 'sqlite' ? 'MIN' : 'LEAST';
 
               // We need to cast null values to a temporary high value because MIN(0, NULL) leads to NULL in SQLite
-              $temporaryValue = '"999999999999999999"';
+              $temporaryValue = $date ? "'2100-01-01 00:00:00+00'" : "'ZZZZZZZZZZZZZZZZZ'";
               $sql =
                 'NULLIF(' .
                 $function .
