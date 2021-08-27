@@ -5,9 +5,7 @@ namespace Jaulz\Hoard\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernelContract;
 use Illuminate\Filesystem\Filesystem;
-use Jaulz\Hoard\Support\FindCacheableClasses;
 use LogicException;
-use Throwable;
 
 class ClearCommand extends Command
 {
@@ -16,7 +14,7 @@ class ClearCommand extends Command
      *
      * @var string
      */
-    protected $name = 'hoard:cache';
+    protected $name = 'hoard:clear';
 
     /**
      * The console command description.
