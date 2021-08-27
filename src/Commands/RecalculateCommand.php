@@ -41,7 +41,7 @@ class RecalculateCommand extends Command
       // Check if we need to skip this class
       if (
         !$count ||
-        (!!$this->option('filter') && str_contains($className, $this->option('filter')))
+        (!!$this->option('filter') && !str_contains($className, $this->option('filter')))
       ) {
         return;
       }
