@@ -69,6 +69,7 @@ trait IsCacheableTrait
    */
   public static function getCacheConfigurations()
   {
+    // Merge with static configurations (which were set from another model) and also expand foreignModelName key (which can be an array)
     return collect(static::$cacheConfigurations)->merge(static::caches())->reduce(function ($cumulatedConfigurations, $configuration) {
       if (!isset($configuration['foreignModelName'])) {
         return $cumulatedConfigurations->push($configuration);

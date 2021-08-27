@@ -16,11 +16,6 @@ class Comment extends Model
             [
                 'function' => 'count',
                 'foreignModelName' => 'Tests\Acceptance\Models\Post',
-                'context' => function ($model) {
-                    return [
-                        'user_id' => $model->user_id
-                    ];
-                }
             ],
 
             [
