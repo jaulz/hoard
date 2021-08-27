@@ -9,7 +9,7 @@ use Jaulz\Hoard\Support\FindCacheableClasses;
 use LogicException;
 use Throwable;
 
-class ConfigCacheCommand extends Command
+class CacheCommand extends Command
 {
     /**
      * The console command name.
@@ -54,29 +54,29 @@ class ConfigCacheCommand extends Command
      */
     public function handle()
     {
-        $this->call('config:clear');
+        $this->call('hoard:clear');
 
         $config = $this->getFreshConfiguration();
 
-        $configPath = app()->bootstrapPath('cache/hoard.php');
+        $path = app()->bootstrapPath('cache/hoard.php');
 
         $this->files->put(
-            $configPath, '<?php return '.var_export($config, true).';'.PHP_EOL
+            $path, '<?php return '.var_export($config, true).';'.PHP_EOL
         );
 
         try {
-            require $configPath;
-        } catch (Throwable $e) {
-            $this->files->delete($configPath);
+            require $path;
+        } catch (Throwable $exception) {
+            $this->files->delete($path);
 
-            throw new LogicException('Your configuration files are not serializable.', 0, $e);
+            throw new LogicException('Your configuration files are not serializable.', 0, $exception);
         }
 
         $this->info('Configuration cached successfully!');
     }
 
     /**
-     * Boot a fresh copy of the application configuration.
+     * Boot a fresh copy of the hoard configuration.
      *
      * @return array
      */
@@ -89,7 +89,7 @@ class ConfigCacheCommand extends Command
         // Iterate through all cacheable classes and gather their configurations
         $configurations = [];
         collect($classNames)->each(function ($className) use (&$configurations) {
-            $configurations[$className] = $className::getForeignHoardConfigurations();
+            $configurations[$className] = $className::getForeignHoardConfigurations(true);
         });
 
         return $configurations;

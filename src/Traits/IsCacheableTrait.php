@@ -101,10 +101,22 @@ trait IsCacheableTrait
   /**
    * Gather all cache configurations
    *
+   * @param ?bool $force
    * @return array
    */
-  public static function getForeignHoardConfigurations()
+  public static function getForeignHoardConfigurations(?bool $force = false)
   {
+    // Check if we have a cached configuration file that we can use
+    if (!$force) {
+      $path = app()->bootstrapPath('cache/hoard.php');
+      if (file_exists($path)) {
+        $cache = require_once($path);
+
+        return $cache[get_class()];
+      }
+    }
+
+    // Otherwise we build the configuration tree from scratch if it hasn't been build yet
     if (is_null(static::$foreignHoardConfigurations)) {
       // Get all other model classes
       $modelName = get_class();

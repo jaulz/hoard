@@ -3,8 +3,8 @@
 namespace Jaulz\Hoard;
 
 use Illuminate\Support\ServiceProvider;
-use Jaulz\Hoard\Commands\ConfigCacheCommand;
-use Jaulz\Hoard\Commands\RebuildCachesCommand;
+use Jaulz\Hoard\Commands\CacheCommand;
+use Jaulz\Hoard\Commands\ClearCommand;
 
 class HoardServiceProvider extends ServiceProvider
 {
@@ -15,8 +15,9 @@ class HoardServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->commands([
-            ConfigCacheCommand::class,
-            RebuildCachesCommand::class,
+            ClearCommand::class,
+            CacheCommand::class,
+            RecalculateCachesCommand::class,
         ]);
     }
 }

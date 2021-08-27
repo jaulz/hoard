@@ -5,21 +5,21 @@ namespace Jaulz\Hoard\Commands;
 use Illuminate\Console\Command;
 use Jaulz\Hoard\Support\FindCacheableClasses;
 
-class RebuildCachesCommand extends Command
+class RecalculateCachesCommand extends Command
 {
   /**
    * The name and signature of the console command.
    *
    * @var string
    */
-  protected $signature = 'hoard:rebuild {--class= : Optional classes to update}';
+  protected $signature = 'hoard:recalculate {--class= : Optional classes to update}';
 
   /**
    * The console command description.
    *
    * @var string
    */
-  protected $description = 'Rebuild the caches for one or more Eloquent models';
+  protected $description = 'Recalculate the caches for one or more Eloquent models';
 
   /**
    * Execute the console command.
