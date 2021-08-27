@@ -110,7 +110,7 @@ trait IsCacheableTrait
     if (!$force) {
       $path = app()->bootstrapPath('cache/hoard.php');
       if (file_exists($path)) {
-        $cache = require_once($path);
+        $cache = require($path);
 
         return $cache[get_class()];
       }
