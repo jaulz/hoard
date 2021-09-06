@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Arr;
@@ -56,7 +57,30 @@ class Cache
    */
   public function __construct(Model $model, $propagatedBy = [])
   {
-    $this->model = $model->pivotParent ?? $model;
+    // In case this is a Pivot model we need to find the actual real model first
+    $finalModel = $model;
+    if ($model instanceof Pivot) {
+      $finalModel = $model->pivotParent;
+      
+      /*
+      $morphClass = $model->{$model->getMorphType()};
+      $pivotParent = $model->pivotParent;
+
+      if (!$morphClass) {
+        throw new UnableToCacheException(
+          'Unable to instantiate cache for pivot model "' . get_class($model) . '" because the morph class cannot be determined.'
+        );
+      }
+
+      if ($pivotParent instanceof $morphClass) {
+        $finalModel = $pivotParent;
+      } else {
+        $finalModel = $morphClass::where($model->getKeyName(), $model->{$model->getRelatedKey()})->first();
+      }
+      */
+    }
+
+    $this->model = $finalModel;
     $this->modelName = get_class($this->model);
     $this->pivotModel = $model->pivotParent ? $model : null;
     $this->pivotModelName = $model->pivotModel

@@ -8,6 +8,17 @@ use Jaulz\Hoard\Traits\IsCacheableTrait;
 class Tag extends Model
 {
     use IsCacheableTrait;
+
+    public static function hoard()
+    {
+        return [
+            [
+                'function' => 'COUNT',
+                'relationName' => 'posts',
+                'summaryName' => 'tags_count',
+            ],
+        ];
+    }
     
     public function posts()
     {

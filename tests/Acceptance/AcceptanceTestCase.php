@@ -52,6 +52,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('user_id')->nullable();
             $table->string('slug')->nullable();
             $table->integer('comments_count')->default(0)->nullable();
+            $table->integer('tags_count')->default(0)->nullable();
             $table->integer('images_count')->default(0)->nullable();
             $table->boolean('visible')->default(false);
             $table->integer('weight')->default(0);

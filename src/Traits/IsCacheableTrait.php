@@ -49,6 +49,8 @@ trait IsCacheableTrait
       // Append configuration
       $pivotClass = $relation->getPivotClass();
       $pivotClass::appendHoardConfiguration($configuration);
+      $parentClass = get_class($relation->getParent());
+      $parentClass::appendHoardConfiguration($configuration);
     }
   }
 

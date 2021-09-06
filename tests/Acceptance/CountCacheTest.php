@@ -114,10 +114,22 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals(null, Post::first()->first_commented_at);
         $this->assertEquals(null, Post::first()->last_commented_at);
 
+        Post::first()->rebuildCache();
+
+        $this->assertEquals(0, Post::first()->comments_count);
+        $this->assertEquals(null, Post::first()->first_commented_at);
+        $this->assertEquals(null, Post::first()->last_commented_at);
+
         $secondComment = new Comment;
         $secondComment->user_id = $this->data['user']->id;
         $secondComment->post_id = $this->data['post']->id;
         $secondComment->save();
+
+        $this->assertEquals(1, Post::first()->comments_count);
+        $this->assertEquals($secondComment->created_at, Post::first()->first_commented_at);
+        $this->assertEquals($secondComment->created_at, Post::first()->last_commented_at);
+
+        Post::first()->rebuildCache();
 
         $this->assertEquals(1, Post::first()->comments_count);
         $this->assertEquals($secondComment->created_at, Post::first()->first_commented_at);
@@ -275,5 +287,21 @@ class CountCacheTest extends AcceptanceTestCase
 
         $this->assertEquals(2, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
+    }
+
+    public function testMorphByMany()
+    {
+        $tag = $this->data['tag'];
+        $post = $this->data['post'];
+
+        $this->startQueryLog();
+        $tag->posts()->attach($this->data['post']->id);
+        $queryLog = $this->stopQueryLog();
+
+        $this->assertEquals(2, count($queryLog));
+        $this->assertEquals(1, User::first()->posts_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->last_created_at);
     }
 }
