@@ -42,15 +42,15 @@ trait IsCacheableTrait
       // Get relation details
       $relationName = $configuration['relationName'];
       $relation = (new static())->{$relationName}();
-      if (!is_a($relation, MorphToMany::class, true)) {
-        continue;
+      if ($relation instanceof MorphToMany /*!is_a($relation, MorphToMany::class, true)*/) {
+        $pivotClass = $relation->getPivotClass();
+        $pivotClass::appendHoardConfiguration($configuration);
+        $relatedClass = get_class($relation->getRelated());
+        /*$relatedClass::appendHoardConfiguration(array_merge([], $configuration, [
+          'relationName' => null,
+          'foreignModelName' => 
+        ], ));*/
       }
-
-      // Append configuration
-      $pivotClass = $relation->getPivotClass();
-      $pivotClass::appendHoardConfiguration($configuration);
-      $parentClass = get_class($relation->getParent());
-      $parentClass::appendHoardConfiguration($configuration);
     }
   }
 
@@ -136,7 +136,9 @@ trait IsCacheableTrait
         $foreignModelName::getHoardConfigurations()
           ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
             $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? null;
-
+if (str_ends_with(get_class(), 'Image')) {
+  dump($foreignModelName);
+}
             // Resolve model name via relation if necessary
             if (!$foreignForeignModelName && isset($foreignConfiguration['relationName'])) {
               $relationName = $foreignConfiguration['relationName'];

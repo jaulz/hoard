@@ -151,6 +151,14 @@ class CountCacheTest extends AcceptanceTestCase
 
         $this->assertEquals(1, Post::first()->images_count);
         $this->assertEquals(0, User::first()->images_count);
+        
+        $image = new Image();
+        $image->source = 'https://laravel.com/img/logotype.min.svg';
+        $image->imageable()->associate($this->data['tag']);
+        $image->save();
+
+        $this->assertEquals(1, Post::first()->images_count);
+        $this->assertEquals(0, User::first()->images_count);
 
         $secondImage = new Image();
         $secondImage->source = 'https://laravel.com/img/logotype.min.svg';

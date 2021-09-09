@@ -107,6 +107,9 @@ class Cache
           ? $configuration['pivotModelName'] === get_class($this->pivotModel)
           : true;
       });
+      if (str_ends_with($this->modelName, 'Image')) {
+        dump(get_class($model), $this->modelName, $this->pivotModelName, $this->configurations, get_class($this->model)::getHoardConfigurations());
+      }
   }
 
   /**
@@ -1073,24 +1076,25 @@ class Cache
   /**
    * Create cache query
    *
+   * @param string $modelName
    * @param mixed $configuration
    *
    * @return \Illuminate\Database\Query\Builder
    */
-  protected static function prepareCacheQuery($model, $configuration)
+  protected static function prepareCacheQuery($modelName, $configuration)
   {
     $function = $configuration['function'];
     $valueName = $configuration['valueName'];
     $defaultValue = static::getDefaultValue($function);
 
     // Create cache query
-    $cacheQuery = DB::table(static::getModelTable($model))
+    $cacheQuery = DB::table(static::getModelTable($modelName))
       ->select(DB::raw("COALESCE($function($valueName), $defaultValue)"))
       ->where($configuration['where']);
 
     // Respect soft delete
     if (
-      in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses($model))
+      in_array(\Illuminate\Database\Eloquent\SoftDeletes::class, class_uses_recursive($modelName))
     ) {
       $cacheQuery->where('deleted_at', '=', null);
     }
