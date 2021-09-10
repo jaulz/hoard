@@ -57,36 +57,40 @@ class Cache
    */
   public function __construct(Model $model, $propagatedBy = [])
   {
-    // In case this is a Pivot model we need to find the actual real model first
     $finalModel = $model;
-    if ($model instanceof Pivot) {
-      $finalModel = $model->pivotParent;
-      
-      /*
-      $morphClass = $model->{$model->getMorphType()};
+    $pivotModel = null;
+
+    // In case we are dealing with a pivot model we need to find the actual model that raises the events
+    if ($model instanceof MorphPivot) {
+      $pivotModel = $model;
       $pivotParent = $model->pivotParent;
+      $morphClass = static::getMorphClass($model);
 
-      if (!$morphClass) {
-        throw new UnableToCacheException(
-          'Unable to instantiate cache for pivot model "' . get_class($model) . '" because the morph class cannot be determined.'
-        );
-      }
-
-      if ($pivotParent instanceof $morphClass) {
+      // If the parent class name is the same as as the morph class, then we can assume that it's the same
+        if (get_class($pivotParent) === $morphClass) {
+          $finalModel = $pivotParent;
+        } else {
+          // If they are not the same, we need to create an on the fly model
+          // This is usually the case in an morphBYmany scenario
+          $finalModel = new $morphClass();
+          $finalModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};
+        }
+    } else  if ($model instanceof Pivot) {
+      $pivotModel = $model;
+      $pivotParent = $model->pivotParent;
         $finalModel = $pivotParent;
-      } else {
-        $finalModel = $morphClass::where($model->getKeyName(), $model->{$model->getRelatedKey()})->first();
-      }
-      */
     }
 
+    // Fill class with properties
     $this->model = $finalModel;
     $this->modelName = get_class($this->model);
-    $this->pivotModel = $model->pivotParent ? $model : null;
-    $this->pivotModelName = $model->pivotModel
-      ? get_class($this->pivotModel)
+    $this->pivotModel = $pivotModel;
+    $this->pivotModelName = $pivotModel
+      ? get_class($pivotModel)
       : null;
     $this->propagatedBy = $propagatedBy;
+
+    // Get all the configurations that are relevant for this model
     $this->configurations = collect(
       get_class($this->model)::getHoardConfigurations()
     )
@@ -107,9 +111,6 @@ class Cache
           ? $configuration['pivotModelName'] === get_class($this->pivotModel)
           : true;
       });
-      if (str_ends_with($this->modelName, 'Image')) {
-        dump(get_class($model), $this->modelName, $this->pivotModelName, $this->configurations, get_class($this->model)::getHoardConfigurations());
-      }
   }
 
   /**
@@ -147,7 +148,7 @@ class Cache
     // In case we have a relation field we can easily fill the required fields
     $pivotModelName = null;
     $relationType = null;
-    if ($configuration['relationName']) {
+    if (isset($configuration['relationName'])) {
       $relationName = $configuration['relationName'];
 
       $relation = (new $model())->{$relationName}();
@@ -160,16 +161,22 @@ class Cache
             '".'
         );
       }
-      $configuration['foreignModelName'] = $relation->getRelated();
 
       // Handle relations differently
       if ($relation instanceof BelongsTo) {
+        // $configuration['foreignModelName'] = $configuration['foreignModelName'] ?? $relation->getRelated();
+
         if ($relation instanceof MorphTo) {
           $relationType = 'MorphTo';
           $morphType = $relation->getMorphType();
 
-          $configuration['foreignModelName'] =
-            $model[$morphType] ?? $foreignModelName;
+          // If both the relation name and the foreign model name are provided, then we limit the update to that specific foreign model name only
+          $foreignModelName = $foreignModelName ?? $model[$morphType];
+          if (isset($configuration['foreignModelName']) && $configuration['foreignModelName'] !== $foreignModelName) {
+            return null;
+          }
+
+          $configuration['foreignModelName'] = $foreignModelName;
           $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getForeignKeyName();
           $configuration['where'][$morphType] =
             $configuration['foreignModelName'];
@@ -178,6 +185,8 @@ class Cache
           $configuration['foreignModelName'] = $relation->getRelated();
           $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getForeignKeyName();
           $configuration['keyName'] = $relation->getOwnerKeyName();
+        } else {
+          $configuration['foreignModelName'] = $relation->getRelated();
         }
       } elseif ($relation instanceof HasOneOrMany) {
         $relationType = 'HasOneOrMany';
@@ -259,6 +268,12 @@ class Cache
           false,
           $modelName
         );
+
+          if (!$foreignConfiguration) {
+            return false;
+          }
+
+          // If the summary field is used as another source of another configuration we are sure that we need to propagate the changes
         $propagate = $summaryName === $foreignConfiguration['valueName'];
 
         return $propagate;
@@ -568,6 +583,7 @@ class Cache
       // Handle certain cases more efficiently
       $rawUpdate = null;
       $propagateValue = null;
+      if (!is_null($value)) {
       switch ($function) {
         case 'count':
           $rawUpdate = DB::raw("$summaryName + 1");
@@ -581,10 +597,10 @@ class Cache
           break;
 
         case 'max':
-          $rawUpdate = DB::raw(
-            "CASE WHEN $summaryName > '$value' THEN $summaryName ELSE '$value' END"
-          );
-          $propagateValue = $value;
+            $rawUpdate = DB::raw(
+              "CASE WHEN $summaryName > '$value' THEN $summaryName ELSE '$value' END"
+            );
+            $propagateValue = $value;
           break;
 
         case 'min':
@@ -594,6 +610,7 @@ class Cache
           $propagateValue = $value;
           break;
       }
+    }  
 
       return $this->prepareCacheUpdate(
         $foreignKeys,
@@ -1218,14 +1235,7 @@ class Cache
   ) {
     // In case we are dealing with a Pivot model we need to add the morph type to the attributes
     if ($model instanceof MorphPivot) {
-      // Ugly workaround to get access to the morphClass property
-      $morphClassProperty = new ReflectionProperty(
-        MorphPivot::class,
-        'morphClass'
-      );
-      $morphClassProperty->setAccessible(true);
-      $morphClass = $morphClassProperty->getValue($model);
-
+      $morphClass = static::getMorphClass($model);
       $morphType = $model->getMorphType();
       $attributes[$morphType] = $attributes[$morphType] ?? $morphClass;
     }
@@ -1291,5 +1301,23 @@ class Cache
     }
 
     return true;
+  }
+
+  /**
+   * Get protected "morphClass" attribute of model.
+   *
+   * @param Model     $model
+   */
+  protected static function getMorphClass(
+    $model,
+  ) {
+    // Ugly workaround to get access to the morphClass property
+    $morphClassProperty = new ReflectionProperty(
+      MorphPivot::class,
+      'morphClass'
+    );
+    $morphClassProperty->setAccessible(true);
+
+    return $morphClassProperty->getValue($model);
   }
 }

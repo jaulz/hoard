@@ -152,18 +152,19 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals(1, Post::first()->images_count);
         $this->assertEquals(0, User::first()->images_count);
         
-        $image = new Image();
-        $image->source = 'https://laravel.com/img/logotype.min.svg';
-        $image->imageable()->associate($this->data['tag']);
-        $image->save();
+        // Test if we can assign an image to a Tag that doesn't update "images_count" in "tags" table
+        $secondImage = new Image();
+        $secondImage->source = 'https://laravel.com/img/logotype.min.svg';
+        $secondImage->imageable()->associate($this->data['tag']);
+        $secondImage->save();
 
         $this->assertEquals(1, Post::first()->images_count);
         $this->assertEquals(0, User::first()->images_count);
 
-        $secondImage = new Image();
-        $secondImage->source = 'https://laravel.com/img/logotype.min.svg';
-        $secondImage->imageable()->associate($this->data['user']);
-        $secondImage->save();
+        $thirdImage = new Image();
+        $thirdImage->source = 'https://laravel.com/img/logotype.min.svg';
+        $thirdImage->imageable()->associate($this->data['user']);
+        $thirdImage->save();
 
         $this->assertEquals(1, Post::first()->images_count);
         $this->assertEquals(1, User::first()->images_count);
@@ -184,7 +185,7 @@ class CountCacheTest extends AcceptanceTestCase
         $secondImage->delete();
 
         $this->assertEquals(0, Post::first()->images_count);
-        $this->assertEquals(0, User::first()->images_count);
+        $this->assertEquals(1, User::first()->images_count);
 
         $thirdImage = new Image();
         $thirdImage->source = 'https://laravel.com/img/logotype.min.svg';
