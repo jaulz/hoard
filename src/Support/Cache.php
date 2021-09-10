@@ -1063,7 +1063,7 @@ class Cache
           $foreignModel->{$foreignModel->getKeyName()} = $foreignKey;
           $rawValue = static::getFullUpdate($foreignModel, $this->pivotModel)[$summaryName];
 
-          if ($summaryName === 'TEST') {
+          /*if ($summaryName === 'TEST') {
             dump(
               'Get intermediate value',
               $foreignModelName,
@@ -1075,7 +1075,7 @@ class Cache
                 ->toArray()
             );
           }
-        }
+        }*/
 
         return [
           'event' => $event,
