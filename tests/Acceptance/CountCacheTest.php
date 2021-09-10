@@ -310,7 +310,33 @@ class CountCacheTest extends AcceptanceTestCase
         $this->assertEquals(2, count($queryLog));
         $this->assertEquals(1, User::first()->posts_count);
         $this->assertEquals(1, Tag::first()->taggables_count);
-        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
-        $this->assertEquals($post->created_at, Tag::first()->last_created_at);
+        $this->assertEquals(Tag::first()->first_created_at, $post->created_at);
+        $this->assertEquals(Tag::first()->last_created_at, $post->created_at);
+
+        Carbon::setTestNow(Carbon::now()->addSecond());
+        $secondPost = new Post;
+        $secondPost->user_id = $this->data['user']->id;
+        $secondPost->visible = false;
+        $secondPost->save();
+
+        $this->startQueryLog();
+        $tag->posts()->attach($secondPost->id);
+        $queryLog = $this->stopQueryLog();
+
+        $this->assertEquals(2, count($queryLog));
+        $this->assertEquals(2, User::first()->posts_count);
+        $this->assertEquals(2, Tag::first()->taggables_count);
+        $this->assertEquals(Tag::first()->first_created_at, $post->created_at);
+        $this->assertEquals(Tag::first()->last_created_at, $secondPost->created_at);
+
+        $this->startQueryLog();
+        $tag->posts()->detach($this->data['post']->id);
+        $queryLog = $this->stopQueryLog();
+
+        $this->assertEquals(2, count($queryLog));
+        $this->assertEquals(2, User::first()->posts_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
+        $this->assertEquals(Tag::first()->first_created_at, $secondPost->created_at);
+        $this->assertEquals(Tag::first()->last_created_at, $secondPost->created_at);
     }
 }
