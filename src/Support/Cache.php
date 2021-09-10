@@ -1074,8 +1074,8 @@ class Cache
                 ->first()
                 ->toArray()
             );
-          }
-        }*/
+          }*/
+        }
 
         return [
           'event' => $event,
