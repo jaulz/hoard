@@ -4,22 +4,23 @@ namespace Jaulz\Hoard\Commands;
 
 use Illuminate\Console\Command;
 use Jaulz\Hoard\Support\FindCacheableClasses;
+use Jaulz\Hoard\Support\FindHoardableClasses;
 
-class RecalculateCommand extends Command
+class RefreshCommand extends Command
 {
   /**
    * The name and signature of the console command.
    *
    * @var string
    */
-  protected $signature = 'hoard:recalculate {--filter= : Optional filter that will be applied to the class name}';
+  protected $signature = 'hoard:refresh {--filter= : Optional filter that will be applied to the class name}';
 
   /**
    * The console command description.
    *
    * @var string
    */
-  protected $description = 'Recalculate the caches for one or more Eloquent models';
+  protected $description = 'Rebuild the cache for one or more Eloquent models';
 
   /**
    * Execute the console command.
@@ -28,11 +29,11 @@ class RecalculateCommand extends Command
    */
   public function handle()
   {
-    $classNames = (new FindCacheableClasses(
+    $classNames = (new FindHoardableClasses(
       app_path()
-    ))->getAllIsCacheableTraitClasses();
+    ))->getClassNames();
 
-    // Iterate through all cacheable classes and rebuild cache
+    // Iterate through all hoardable classes and rebuild cache
     collect($classNames)->each(function ($className) {
       // Load all models lazily
       $models = $className::lazy();
@@ -66,7 +67,7 @@ class RecalculateCommand extends Command
 
         // Check differences between the model before and after
         $before = collect($model->getAttributes());
-        $model->rebuildCache();
+        $model->refreshHoard();
         $after = collect($model->refresh()->getAttributes());
         $difference = $before->diffAssoc($after)->toArray();
 

@@ -4,7 +4,7 @@ use hanneskod\classtools\Iterator\ClassIterator;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\Finder\Finder;
 
-class FindCacheableClasses
+class FindHoardableClasses
 {
   /**
    * @var null|string
@@ -16,32 +16,32 @@ class FindCacheableClasses
     $this->directory = realpath($directory);
   }
 
-  public function getAllIsCacheableTraitClasses()
+  public function getClassNames()
   {
     $finder = new Finder();
     $iterator = new ClassIterator($finder->in($this->directory));
     $iterator->enableAutoloading();
 
-    $classes = [];
+    $classNames = [];
 
     foreach ($iterator->type(Model::class) as $className => $class) {
-      if ($class->isInstantiable() && $this->usesCaching($class)) {
-        $classes[] = $className;
+      if ($class->isInstantiable() && $this->usesHoard($class)) {
+        $classNames[] = $className;
       }
     }
 
-    return $classes;
+    return $classNames;
   }
 
   /**
-   * Decide if the class uses any of the caching Traits.
+   * Decide if the class uses the IsHoardableTrait.
    *
    * @param \ReflectionClass $class
    *
    * @return bool
    */
-  private function usesCaching(\ReflectionClass $class)
+  private function usesHoard(\ReflectionClass $class)
   {
-    return $class->hasMethod('bootIsCacheableTrait');
+    return $class->hasMethod('bootIsHoardableTrait');
   }
 }

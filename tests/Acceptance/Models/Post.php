@@ -2,13 +2,13 @@
 
 namespace Tests\Acceptance\Models;
 
-use Jaulz\Hoard\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsHoardableTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Post extends Model
 {
-    use IsCacheableTrait;
+    use IsHoardableTrait;
     use SoftDeletes;
 
     public static function hoard()

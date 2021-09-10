@@ -3,11 +3,11 @@
 namespace Tests\Acceptance\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Jaulz\Hoard\Traits\IsCacheableTrait;
+use Jaulz\Hoard\Traits\IsHoardableTrait;
 
 class Tag extends Model
 {
-    use IsCacheableTrait;
+    use IsHoardableTrait;
 
     public static function hoard()
     {

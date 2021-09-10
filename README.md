@@ -79,7 +79,7 @@ has created on the user's record.
 
 To get this working, you need to do two steps:
 
-1. Use the IsCacheableTrait trait on the model and 
+1. Use the IsHoardableTrait trait on the model and 
 2. Configure the cache settings
 
 #### Configure the cache
@@ -102,7 +102,7 @@ on the Order model.
 
 ```php
 class Item extends Eloquent {
-    use IsCacheableTrait;
+    use IsHoardableTrait;
     
     public function caches() {
         return [

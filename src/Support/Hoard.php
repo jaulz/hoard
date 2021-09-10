@@ -12,15 +12,16 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Jaulz\Hoard\Exceptions\InvalidRelationException;
-use Jaulz\Hoard\Exceptions\UnableToCacheException;
+use Jaulz\Hoard\Exceptions\UnableToHoardException;
 use Jaulz\Hoard\Exceptions\UnableToPropagateException;
 use PDO;
 use ReflectionProperty;
 
-class Cache
+class Hoard
 {
   /**
    * @var Model
@@ -53,42 +54,23 @@ class Cache
   private $configurations;
 
   /**
+   * @var Collection
+   */
+  private $ignoredUpdates;
+
+  /**
    * @param Model $model
    */
-  public function __construct(Model $model, $propagatedBy = [])
+  public function __construct(Model $model, array $propagatedBy = [], Pivot $pivotModel = null, Collection $ignoredUpdates = null)
   {
-    $finalModel = $model;
-    $pivotModel = null;
-
-    // In case we are dealing with a pivot model we need to find the actual model that raises the events
-    if ($model instanceof MorphPivot) {
-      $pivotModel = $model;
-      $pivotParent = $model->pivotParent;
-      $morphClass = static::getMorphClass($model);
-
-      // If the parent class name is the same as as the morph class, then we can assume that it's the same
-      if (get_class($pivotParent) === $morphClass) {
-        $finalModel = $pivotParent;
-      } else {
-        // If they are not the same, we need to create an on the fly model
-        // This is usually the case in an morphBYmany scenario
-        $finalModel = new $morphClass();
-        $finalModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};
-      }
-    } else  if ($model instanceof Pivot) {
-      $pivotModel = $model;
-      $pivotParent = $model->pivotParent;
-      $finalModel = $pivotParent;
-    }
-
-    // Fill class with properties
-    $this->model = $finalModel;
+    $this->model = $model;
     $this->modelName = get_class($this->model);
     $this->pivotModel = $pivotModel;
-    $this->pivotModelName = $pivotModel
-      ? get_class($pivotModel)
+    $this->pivotModelName = $this->pivotModel
+      ? get_class($this->pivotModel)
       : null;
     $this->propagatedBy = $propagatedBy;
+    $this->ignoredUpdates = $ignoredUpdates ?? collect();
 
     // Get all the configurations that are relevant for this model
     $this->configurations = collect(
@@ -249,11 +231,11 @@ class Cache
     // Check if we need to propagate changes by checking if the foreign model is also cacheable and references the summary field
     $propagate = $configuration['propagate'];
     if ($checkForeignModel) {
-      if (!method_exists($foreignModelName, 'bootIsCacheableTrait')) {
-        throw new UnableToCacheException(
+      if (!method_exists($foreignModelName, 'bootIsHoardableTrait')) {
+        throw new UnableToHoardException(
           'Referenced model "' .
             $configuration['foreignModelName'] .
-            '" must use IsCacheableTrait trait.'
+            '" must use IsHoardableTrait trait.'
         );
       }
 
@@ -387,7 +369,7 @@ class Cache
             $model,
             $pivotModel,
             $eventName,
-            $foreignKeyCache
+            $foreignKeyHoard
           ) use (
             $options
           ) {
@@ -406,7 +388,7 @@ class Cache
               return null;
             }
 
-            // Cache foreign keys to avoid expensive queries
+            // Hoard foreign keys to avoid expensive queries
             $cacheKey = implode('-', [
               $pivotModelName,
               $foreignPivotKeyName,
@@ -414,8 +396,8 @@ class Cache
               $morphType,
               $morphClass,
             ]);
-            if ($foreignKeyCache->has($cacheKey)) {
-              return $foreignKeyCache->get($cacheKey);
+            if ($foreignKeyHoard->has($cacheKey)) {
+              return $foreignKeyHoard->get($cacheKey);
             }
 
             // Get all foreign keys by querying the pivot table
@@ -423,7 +405,7 @@ class Cache
               ::where($foreignPivotKeyName, $key)
               ->where($morphType, $morphClass)
               ->pluck($relatedPivotKeyName);
-            $foreignKeyCache->put($cacheKey, $keys);
+            $foreignKeyHoard->put($cacheKey, $keys);
 
             return $keys;
           };
@@ -463,7 +445,7 @@ class Cache
         $key = $model[$keyName];
 
         // Get query that retrieves the summary value
-        $cacheQuery = static::prepareCacheQuery(
+        $cacheQuery = static::prepareHoardQuery(
           $foreignModelName,
           $foreignConfiguration
         );
@@ -474,7 +456,7 @@ class Cache
           $model,
           $pivotModel
         );
-        $sql = '(' . Cache::convertQueryToRawSQL($cacheQuery) . ')';
+        $sql = '(' . Hoard::convertQueryToRawSQL($cacheQuery) . ')';
         // dump('Get intermediate value for recalculation', $summaryName, $cacheQuery->toSql(), $cacheQuery->getBindings(), $cacheQuery->get());
 
         // In case we have duplicate updates for the same column we need to merge the updates
@@ -545,12 +527,12 @@ class Cache
   }
 
   /**
-   * Rebuild the count caches from the database
+   * Rebuild the caches from the database
    *
    * @param array $foreignConfigurations
    * @return array
    */
-  public function rebuild()
+  public function run()
   {
     $updates = static::getFullUpdate($this->model, $this->pivotModel);
     if (count($updates) > 0) {
@@ -568,7 +550,7 @@ class Cache
   public function create()
   {
     // dump('create', $this->modelName);
-    $this->apply('create', function (
+    return $this->apply('create', function (
       $eventName,
       $configuration,
       $foreignKeys,
@@ -600,7 +582,7 @@ class Cache
           if (!is_null($value)) {
             $rawUpdate = DB::raw(
               "CASE WHEN $summaryName > '$value' THEN $summaryName ELSE '$value' END"
-            ); 
+            );
             $propagateValue = $value;
           }
           break;
@@ -615,7 +597,7 @@ class Cache
           break;
       }
 
-      return $this->prepareCacheUpdate(
+      return $this->prepareHoardUpdate(
         $foreignKeys,
         $configuration,
         $eventName,
@@ -631,7 +613,7 @@ class Cache
   public function delete()
   {
     // dump('delete', $this->modelName);
-    $this->apply('delete', function (
+    return $this->apply('delete', function (
       $eventName,
       $configuration,
       $foreignKeys,
@@ -660,7 +642,7 @@ class Cache
           break;
       }
 
-      return $this->prepareCacheUpdate(
+      return $this->prepareHoardUpdate(
         $foreignKeys,
         $configuration,
         $eventName,
@@ -680,7 +662,7 @@ class Cache
     $eventName = $restored ? 'restore' : 'update';
     // dump($eventName, $this->modelName);
 
-    $this->apply($eventName, function (
+    return $this->apply($eventName, function (
       $eventName,
       $configuration,
       $foreignKeys,
@@ -724,7 +706,7 @@ class Cache
           if ($changedForeignKeys) {
             return collect([])
               ->concat(
-                $this->prepareCacheUpdate(
+                $this->prepareHoardUpdate(
                   $addedForeignModelKeys,
                   $configuration,
                   $eventName,
@@ -733,7 +715,7 @@ class Cache
                 )
               )
               ->concat(
-                $this->prepareCacheUpdate(
+                $this->prepareHoardUpdate(
                   $removedForeignModelKeys,
                   $configuration,
                   $eventName,
@@ -751,7 +733,7 @@ class Cache
             }
 
             // Restore count indicator if item is restored
-            return $this->prepareCacheUpdate(
+            return $this->prepareHoardUpdate(
               $foreignKeys,
               $configuration,
               $eventName,
@@ -760,7 +742,7 @@ class Cache
             );
           } elseif ($isRelevant && !$wasRelevant) {
             // Increment because it was not relevant before but now it is
-            return $this->prepareCacheUpdate(
+            return $this->prepareHoardUpdate(
               $foreignKeys,
               $configuration,
               $eventName,
@@ -769,7 +751,7 @@ class Cache
             );
           } elseif (!$isRelevant && $wasRelevant) {
             // Decrement because it was relevant before but now it is not anymore
-            return $this->prepareCacheUpdate(
+            return $this->prepareHoardUpdate(
               $foreignKeys,
               $configuration,
               $eventName,
@@ -785,7 +767,7 @@ class Cache
           if ($changedForeignKeys) {
             return collect([])
               ->concat(
-                $this->prepareCacheUpdate(
+                $this->prepareHoardUpdate(
                   $foreignKeys,
                   $configuration,
                   $eventName,
@@ -795,7 +777,7 @@ class Cache
               )
 
               ->concat(
-                $this->prepareCacheUpdate(
+                $this->prepareHoardUpdate(
                   $originalForeignKeys,
                   $configuration,
                   $eventName,
@@ -808,7 +790,7 @@ class Cache
 
           if ($isRelevant && $wasRelevant) {
             if ($eventName === 'restore') {
-              return $this->prepareCacheUpdate(
+              return $this->prepareHoardUpdate(
                 $foreignKeys,
                 $configuration,
                 $eventName,
@@ -824,7 +806,7 @@ class Cache
               return [];
             }
 
-            return $this->prepareCacheUpdate(
+            return $this->prepareHoardUpdate(
               $foreignKeys,
               $configuration,
               $eventName,
@@ -833,7 +815,7 @@ class Cache
             );
           } elseif ($isRelevant && !$wasRelevant) {
             // Increment because it was not relevant before but now it is
-            return $this->prepareCacheUpdate(
+            return $this->prepareHoardUpdate(
               $foreignKeys,
               $configuration,
               $eventName,
@@ -842,7 +824,7 @@ class Cache
             );
           } elseif (!$isRelevant && $wasRelevant) {
             // Decrement because it was relevant before but now it is not anymore
-            return $this->prepareCacheUpdate(
+            return $this->prepareHoardUpdate(
               $foreignKeys,
               $configuration,
               $eventName,
@@ -855,7 +837,7 @@ class Cache
       }
 
       // Run update with recalculation
-      return $this->prepareCacheUpdate(
+      return $this->prepareHoardUpdate(
         $foreignKeys,
         $configuration,
         $eventName
@@ -872,12 +854,12 @@ class Cache
   public function apply(string $eventName, \Closure $callback)
   {
     // Gather all updates from every configuration
-    $foreignKeyCache = collect();
+    $foreignKeyHoard = collect();
     $allUpdates = collect($this->configurations)
       ->map(function ($configuration) use (
         $eventName,
         $callback,
-        $foreignKeyCache
+        $foreignKeyHoard
       ) {
         $where = $configuration['where'];
         $isRelevant = $this::checkWhereCondition(
@@ -912,7 +894,7 @@ class Cache
             $this->model,
             $this->pivotModel,
             $eventName,
-            $foreignKeyCache
+            $foreignKeyHoard
           )
         );
         // dump('Get intermediate value for recalculation', $cacheQuery->toSql(), $cacheQuery->get());
@@ -937,7 +919,19 @@ class Cache
       ->filter()
       ->reduce(function ($cumulatedUpdates, $updates) {
         return $cumulatedUpdates->concat($updates);
-      }, collect([]));
+      }, collect([]))
+      ->filter(function ($update) {
+        // Filter out updates that should be ignored (i.e. usually updates that were executed before to avoid duplicates)
+        return !$this->ignoredUpdates->some(function ($ignoredUpdate) use ($update) {
+          return $update['foreignModelName'] === $ignoredUpdate['foreignModelName']
+            &&
+            $update['foreignKey'] === $ignoredUpdate['foreignKey']
+            &&
+            $update['summaryName'] === $ignoredUpdate['summaryName']
+            &&
+            $update['keyName'] === $ignoredUpdate['keyName'];
+        });
+      });
 
     // Group updates by model, key, foreign key and propagate and update each group independently
     $allUpdates
@@ -988,7 +982,7 @@ class Cache
                 });
 
                 // Update foreign model as well
-                (new Cache(
+                (new Hoard(
                   $foreignModel,
                   $propagations
                     ->map(function ($propagation) {
@@ -1001,6 +995,8 @@ class Cache
           });
         });
       });
+
+    return $allUpdates;
   }
 
   /**
@@ -1013,7 +1009,7 @@ class Cache
    * @param ?any $propagateValue Value to propagate
    * @return array
    */
-  public function prepareCacheUpdate(
+  public function prepareHoardUpdate(
     $foreignKeys,
     array $configuration,
     $event,
@@ -1099,7 +1095,7 @@ class Cache
    *
    * @return \Illuminate\Database\Query\Builder
    */
-  protected static function prepareCacheQuery($modelName, $configuration)
+  protected static function prepareHoardQuery($modelName, $configuration)
   {
     $function = $configuration['function'];
     $valueName = $configuration['valueName'];
@@ -1258,7 +1254,7 @@ class Cache
 
       // Determine if model is relevant for count
       if ($throw && !array_key_exists($attribute, $attributes)) {
-        throw new UnableToCacheException(
+        throw new UnableToHoardException(
           'Unable to cache "' .
             $configuration['function'] .
             '(' .
@@ -1309,8 +1305,8 @@ class Cache
    *
    * @param Model     $model
    */
-  protected static function getMorphClass(
-    $model,
+  public static function getMorphClass(
+    Model $model,
   ) {
     // Ugly workaround to get access to the morphClass property
     $morphClassProperty = new ReflectionProperty(

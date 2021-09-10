@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernelContract;
 use Illuminate\Filesystem\Filesystem;
 use Jaulz\Hoard\Support\FindCacheableClasses;
+use Jaulz\Hoard\Support\FindHoardableClasses;
 use LogicException;
 use Throwable;
 
@@ -82,9 +83,9 @@ class CacheCommand extends Command
      */
     protected function getFreshConfiguration()
     {
-        $classNames = (new FindCacheableClasses(
+        $classNames = (new FindHoardableClasses(
           app_path()
-        ))->getAllIsCacheableTraitClasses();
+        ))->getClassNames();
     
         // Iterate through all cacheable classes and gather their configurations
         $configurations = [];

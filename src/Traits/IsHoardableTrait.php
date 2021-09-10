@@ -2,14 +2,15 @@
 
 namespace Jaulz\Hoard\Traits;
 
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Jaulz\Hoard\Support\Cache;
-use Jaulz\Hoard\Support\CacheObserver;
-use Jaulz\Hoard\Support\FindCacheableClasses;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Jaulz\Hoard\Support\Hoard;
+use Jaulz\Hoard\Support\HoardObserver;
+use Jaulz\Hoard\Support\FindHoardableClasses;
 use ReflectionClass;
 
-trait IsCacheableTrait
+trait IsHoardableTrait
 {
   /**
    * Keep track of foreign hoard configurations in a static property so we don't need to find them again.
@@ -26,12 +27,17 @@ trait IsCacheableTrait
   private static array $hoardConfigurations = [];
 
   /**
+   * @var array
+   */
+  static private array $hoardRelations = [];
+
+  /**
    * Boot the trait and its event bindings when a model is created.
    */
-  public static function bootIsCacheableTrait()
+  public static function bootIsHoardableTrait()
   {
     // Observe own model
-    static::observe(CacheObserver::class);
+    static::observe(HoardObserver::class);
 
     // In case we are dealing with a pivot model, we are attaching a cache config to that model as well
     foreach (static::hoard() as $configuration) {
@@ -42,14 +48,10 @@ trait IsCacheableTrait
       // Get relation details
       $relationName = $configuration['relationName'];
       $relation = (new static())->{$relationName}();
-      if ($relation instanceof MorphToMany /*!is_a($relation, MorphToMany::class, true)*/) {
+      if ($relation instanceof BelongsToMany) {
         $pivotClass = $relation->getPivotClass();
         $pivotClass::appendHoardConfiguration($configuration);
-        $relatedClass = get_class($relation->getRelated());
-        /*$relatedClass::appendHoardConfiguration(array_merge([], $configuration, [
-          'relationName' => null,
-          'foreignModelName' => 
-        ], ));*/
+        $pivotClass::rememberHoardRelation(get_class(), $relation);
       }
     }
   }
@@ -72,14 +74,12 @@ trait IsCacheableTrait
   {
     // Merge with static configurations (which were set from another model) and also expand foreignModelName key (which can be an array)
     return collect(static::$hoardConfigurations)->merge(static::hoard())->reduce(function ($cumulatedConfigurations, $configuration) {
-      if (!isset($configuration['foreignModelName'])) {
+      // If foreignModelName is not an array we can simply push it to the list of configurations
+      if (!isset($configuration['foreignModelName']) || !is_array($configuration['foreignModelName'])) {
         return $cumulatedConfigurations->push($configuration);
       }
 
-      if (!is_array($configuration['foreignModelName'])) {
-        return $cumulatedConfigurations->push($configuration);
-      }
-
+      // Expand foreignModelName key (which can be an array)
       collect($configuration['foreignModelName'])->each(function ($foreignModelName) use ($configuration, $cumulatedConfigurations) {
         $cumulatedConfigurations->push(array_merge($configuration, [
           'foreignModelName' => $foreignModelName,
@@ -124,9 +124,9 @@ trait IsCacheableTrait
       $modelName = get_class();
       $reflector = new ReflectionClass($modelName);
       $directory = dirname($reflector->getFileName());
-      $foreignModelNames = (new FindCacheableClasses(
+      $foreignModelNames = (new FindHoardableClasses(
         $directory
-      ))->getAllIsCacheableTraitClasses();
+      ))->getClassNames();
 
       // Go through all other classes and check if they reference the current class
       static::$foreignHoardConfigurations = [];
@@ -136,9 +136,7 @@ trait IsCacheableTrait
         $foreignModelName::getHoardConfigurations()
           ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
             $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? null;
-if (str_ends_with(get_class(), 'Image')) {
-  dump($foreignModelName);
-}
+
             // Resolve model name via relation if necessary
             if (!$foreignForeignModelName && isset($foreignConfiguration['relationName'])) {
               $relationName = $foreignConfiguration['relationName'];
@@ -161,7 +159,7 @@ if (str_ends_with(get_class(), 'Image')) {
             return $foreignForeignModelName === $modelName;
           })
           ->each(function ($foreignConfiguration) use ($foreignModelName, $foreignConfigurations) {
-            $foreignConfigurations->push(Cache::prepareConfiguration($foreignModelName, $foreignConfiguration, true, get_class()));
+            $foreignConfigurations->push(Hoard::prepareConfiguration($foreignModelName, $foreignConfiguration, true, get_class()));
           });
 
         // If there are no configurations that affect this model
@@ -178,16 +176,38 @@ if (str_ends_with(get_class(), 'Image')) {
   }
 
   /**
-   * Rebuild cache for the model.
+   * Refresh cache for the model.
    *
    * @return array
    */
-  public function rebuildCache()
+  public function refreshHoard()
   {
-    // Rebuild cache
-    $cache = new Cache($this);
-    $cache->rebuild();
+    $hoard = new Hoard($this);
+    $hoard->run();
 
     return $this;
+  }
+
+  /**
+   * Return the hoard relations for the model.
+   *
+   * @return array
+   */
+  public static function getHoardRelations()
+  {
+    return static::$hoardRelations;
+  }
+
+  /**
+   * Get protected "morphClass" attribute of model.
+   *
+   * @param string     $modelName
+   * @param Relation     $morphType
+   */
+  protected static function rememberHoardRelation(
+    string $modelName,
+    Relation $morphType
+  ) {
+    static::$hoardRelations[$modelName] = $morphType;
   }
 }
