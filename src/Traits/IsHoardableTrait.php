@@ -40,7 +40,7 @@ trait IsHoardableTrait
     static::observe(HoardObserver::class);
 
     // In case we are dealing with a pivot model, we are attaching a cache config to that model as well
-    foreach (static::hoard() as $configuration) {
+    foreach (static::getHoardConfigurations(false) as $configuration) {
       if (!isset($configuration['relationName'])) {
         continue;
       }
@@ -68,14 +68,17 @@ trait IsHoardableTrait
   /**
    * Return the hoard configuration for the model.
    *
+   * @param ?bool $local
    * @return array
    */
-  public static function getHoardConfigurations()
+  public static function getHoardConfigurations($all = true)
   {
-    // Merge with static configurations (which were set from another model) and also expand foreignModelName key (which can be an array)
-    return collect(static::$hoardConfigurations)->merge(static::hoard())->reduce(function ($cumulatedConfigurations, $configuration) {
-      // If foreignModelName is not an array we can simply push it to the list of configurations
-      if (!isset($configuration['foreignModelName']) || !is_array($configuration['foreignModelName'])) {
+    // Merge with configurations which were set from another model if required
+    $mergedConfigurations = collect($all ? static::$hoardConfigurations : []);
+  
+    // Expand foreignModelName and relationName key (which can both be arrays)
+    $mergedConfigurations = $mergedConfigurations->merge(static::hoard())->reduce(function ($cumulatedConfigurations, $configuration) {
+      if (!isset($configuration['foreignModelName']) ||!is_array($configuration['foreignModelName'])) {
         return $cumulatedConfigurations->push($configuration);
       }
 
@@ -86,6 +89,12 @@ trait IsHoardableTrait
         ]));
       });
 
+      return $cumulatedConfigurations;
+    }, collect())->reduce(function ($cumulatedConfigurations, $configuration) {
+      if (!isset($configuration['relationName']) ||!is_array($configuration['relationName'])) {
+        return $cumulatedConfigurations->push($configuration);
+      }
+
       // Expand relationName key (which can be an array)
       collect($configuration['relationName'])->each(function ($relationName) use ($configuration, $cumulatedConfigurations) {
         $cumulatedConfigurations->push(array_merge($configuration, [
@@ -95,6 +104,8 @@ trait IsHoardableTrait
 
       return $cumulatedConfigurations;
     }, collect());
+
+    return $mergedConfigurations;
   }
 
   /**
