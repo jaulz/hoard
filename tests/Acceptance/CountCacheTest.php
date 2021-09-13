@@ -201,13 +201,32 @@ class CountCacheTest extends AcceptanceTestCase
         $post = $this->data['post'];
 
         $this->startQueryLog();
-        $post->tags()->attach($this->data['tag']->id);
+        $post->tags()->attach($this->data['tag']->id, [
+            'weight' => 1,
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
         $this->assertEquals(1, User::first()->posts_count);
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals(1, Post::first()->tags_count);
+        $this->assertEquals(0, Post::first()->important_tags_count);
+        $this->assertEquals($post->created_at, Tag::first()->first_created_at);
+        $this->assertEquals($post->created_at, Tag::first()->last_created_at);
+
+        $secondTag = new Tag();
+        $secondTag->title = 'Updates';
+        $secondTag->save();
+        
+        $post->tags()->attach($secondTag->id, [
+            'weight' => 10,
+        ]);
+
+        $this->assertEquals(3, count($queryLog));
+        $this->assertEquals(1, User::first()->posts_count);
+        $this->assertEquals(1, Tag::first()->taggables_count);
+        $this->assertEquals(2, Post::first()->tags_count);
+        $this->assertEquals(1, Post::first()->important_tags_count);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
         $this->assertEquals($post->created_at, Tag::first()->last_created_at);
 
@@ -218,13 +237,17 @@ class CountCacheTest extends AcceptanceTestCase
         $secondPost->save();
 
         $this->startQueryLog();
-        $secondPost->tags()->attach($this->data['tag']->id);
+        $secondPost->tags()->attach($this->data['tag']->id, [
+            'weight' => 3,
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
-        $this->assertEquals(1, Post::first()->tags_count);
+        $this->assertEquals(2, Post::first()->tags_count);
+        $this->assertEquals(1, Post::first()->important_tags_count);
         $this->assertEquals(1, $secondPost->refresh()->tags_count);
+        $this->assertEquals(0, $secondPost->refresh()->important_tags_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
 
@@ -232,20 +255,24 @@ class CountCacheTest extends AcceptanceTestCase
         $post->tags()->detach($this->data['tag']->id);
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals(3, count($queryLog));
+        $this->assertEquals(4, count($queryLog));
         $this->assertEquals(1, Tag::first()->taggables_count);
-        $this->assertEquals(0, Post::first()->tags_count);
+        $this->assertEquals(1, Post::first()->tags_count);
+        $this->assertEquals(1, Post::first()->important_tags_count);
         $this->assertEquals(1, $secondPost->refresh()->tags_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($secondPost->created_at, Tag::first()->first_created_at);
 
         $this->startQueryLog();
-        $post->tags()->attach($this->data['tag']->id);
+        $post->tags()->attach($this->data['tag']->id, [
+            'weight' => 3,
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
-        $this->assertEquals(1, Post::first()->tags_count);
+        $this->assertEquals(2, Post::first()->tags_count);
+        $this->assertEquals(1, Post::first()->important_tags_count);
         $this->assertEquals(1, $secondPost->refresh()->tags_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
@@ -254,7 +281,7 @@ class CountCacheTest extends AcceptanceTestCase
         $post->delete();
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals(4, count($queryLog));
+        $this->assertEquals(5, count($queryLog));
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals(1, $secondPost->refresh()->tags_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
@@ -264,9 +291,10 @@ class CountCacheTest extends AcceptanceTestCase
         $post->restore();
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals(4, count($queryLog));
+        $this->assertEquals(5, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
-        $this->assertEquals(1, Post::first()->tags_count);
+        $this->assertEquals(2, Post::first()->tags_count);
+        $this->assertEquals(1, Post::first()->important_tags_count);
         $this->assertEquals(1, $secondPost->refresh()->tags_count);
         $this->assertEquals($secondPost->created_at, Tag::first()->last_created_at);
         $this->assertEquals($post->created_at, Tag::first()->first_created_at);
@@ -293,7 +321,9 @@ class CountCacheTest extends AcceptanceTestCase
         $image->save();
 
         $this->startQueryLog();
-        $image->tags()->attach($this->data['tag']->id);
+        $image->tags()->attach($this->data['tag']->id, [
+            'weight' => 3
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
@@ -314,7 +344,9 @@ class CountCacheTest extends AcceptanceTestCase
         $post = $this->data['post'];
 
         $this->startQueryLog();
-        $tag->posts()->attach($post->id);
+        $tag->posts()->attach($post->id, [
+            'weight' => 1,
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
@@ -331,7 +363,9 @@ class CountCacheTest extends AcceptanceTestCase
         $secondPost->save();
 
         $this->startQueryLog();
-        $tag->posts()->attach($secondPost->id);
+        $tag->posts()->attach($secondPost->id, [
+            'weight' => 1,
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
@@ -346,7 +380,7 @@ class CountCacheTest extends AcceptanceTestCase
         $tag->posts()->detach($this->data['post']->id);
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals(3, count($queryLog));
+        $this->assertEquals(4, count($queryLog));
         $this->assertEquals(2, User::first()->posts_count);
         $this->assertEquals(1, Tag::first()->taggables_count);
         $this->assertEquals(0, Post::first()->tags_count);
@@ -361,7 +395,9 @@ class CountCacheTest extends AcceptanceTestCase
         $post = $this->data['post'];
 
         $this->startQueryLog();
-        $tag->posts()->attach($post->id);
+        $tag->posts()->attach($post->id, [
+            'weight' => 1,
+        ]);
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals(3, count($queryLog));
@@ -375,7 +411,7 @@ class CountCacheTest extends AcceptanceTestCase
         $taggable->delete();
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals(3, count($queryLog));
+        $this->assertEquals(4, count($queryLog));
         $this->assertEquals(0, Tag::first()->taggables_count);
         $this->assertEquals(0, $post->refresh()->tags_count);
         $this->assertEquals(Tag::first()->first_created_at, null);

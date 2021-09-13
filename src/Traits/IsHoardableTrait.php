@@ -86,6 +86,13 @@ trait IsHoardableTrait
         ]));
       });
 
+      // Expand relationName key (which can be an array)
+      collect($configuration['relationName'])->each(function ($relationName) use ($configuration, $cumulatedConfigurations) {
+        $cumulatedConfigurations->push(array_merge($configuration, [
+          'relationName' => $relationName,
+        ]));
+      });
+
       return $cumulatedConfigurations;
     }, collect());
   }
@@ -159,7 +166,7 @@ trait IsHoardableTrait
             return $foreignForeignModelName === $modelName;
           })
           ->each(function ($foreignConfiguration) use ($foreignModelName, $foreignConfigurations) {
-            $foreignConfigurations->push(Hoard::prepareConfiguration($foreignModelName, $foreignConfiguration, true, get_class()));
+            $foreignConfigurations->push(Hoard::prepareConfiguration($foreignModelName, $foreignConfiguration, get_class(), true));
           });
 
         // If there are no configurations that affect this model

@@ -53,11 +53,12 @@ class AcceptanceTestCase extends TestCase
             $table->string('slug')->nullable();
             $table->integer('comments_count')->default(0)->nullable();
             $table->integer('tags_count')->default(0)->nullable();
+            $table->integer('important_tags_count')->default(0)->nullable();
             $table->integer('images_count')->default(0)->nullable();
             $table->boolean('visible')->default(false);
-            $table->integer('weight')->default(0);
             $table->timestamp('first_commented_at')->nullable();
             $table->timestamp('last_commented_at')->nullable();
+            $table->integer('weight')->default(1);
             $table->softDeletes();
             $table->timestamps();
         });
@@ -103,6 +104,7 @@ class AcceptanceTestCase extends TestCase
             $table->increments('id');
             $table->morphs('taggable');
             $table->integer('tag_id');
+            $table->integer('weight')->default(0);
             $table->timestamps();
         });
 

@@ -90,10 +90,10 @@ class Post extends Model
     {
         return $this->belongsTo(User::class);
     }
-    
+
     public function tags()
     {
-        return $this->morphToMany(Tag::class, 'taggable')->using(Taggable::class);
+        return $this->morphToMany(Tag::class, 'taggable')->using(Taggable::class)->withPivot('weight');
     }
 
     public function images()

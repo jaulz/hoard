@@ -4,7 +4,11 @@ namespace Jaulz\Hoard\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOneOrMany;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
+use Illuminate\Database\Eloquent\Relations\MorphOneOrMany;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -107,8 +111,8 @@ class Hoard
   public static function prepareConfiguration(
     $model,
     $configuration,
+    ?string $foreignModelName = null,
     ?bool $checkForeignModel = true,
-    ?string $foreignModelName = null
   ) {
     $model = $model instanceof Model ? $model : new $model();
     $modelName = get_class($model);
@@ -119,6 +123,7 @@ class Hoard
       'valueName' => 'id',
       'keyName' => 'id',
       'where' => [],
+      'wherePivot' => [],
       'relationName' => null,
       'ignoreEmptyForeignKeys' => false,
       'foreignKeyStrategy' => '',
@@ -160,40 +165,59 @@ class Hoard
 
           $configuration['foreignModelName'] = $foreignModelName;
           $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getForeignKeyName();
-          $configuration['where'][$morphType] =
-            $configuration['foreignModelName'];
-        } elseif ($relation instanceof MorphToMany) {
-          $relationType = 'MorphToMany';
-          $configuration['foreignModelName'] = $relation->getRelated();
-          $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getForeignKeyName();
-          $configuration['keyName'] = $relation->getOwnerKeyName();
+          $configuration['where'][$morphType] = $configuration['foreignModelName'];
         } else {
-          $configuration['foreignModelName'] = $relation->getRelated();
+          $relationType = 'BelongsTo';
+
+          $foreignModelName = $foreignModelName ?? $relation->getRelated();
+
+          $configuration['foreignModelName'] = $foreignModelName;
         }
       } elseif ($relation instanceof HasOneOrMany) {
-        $relationType = 'HasOneOrMany';
-        $configuration['foreignModelName'] = $relation->getRelated();
-      } elseif ($relation instanceof MorphToMany) {
-        $relationType = 'MorphToMany';
-        $relatedPivotKeyName = $relation->getRelatedPivotKeyName();
-        $foreignPivotKeyName = $relation->getForeignPivotKeyName();
-        $parentKeyName = $relation->getParentKeyName();
-        $morphClass = $relation->getMorphClass();
-        $morphType = $relation->getMorphType();
-        $pivotModelName = $relation->getPivotClass();
+        if ($relation instanceof MorphOneOrMany) {
+          $relationType = 'MorphOneOrMany';
 
-        $configuration['foreignModelName'] = $relation->getRelated();
-        $configuration['ignoreEmptyForeignKeys'] = true;
-        $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getParentKeyName();
-        $configuration['foreignKeyStrategy'] = 'MorphToMany';
-        $configuration['foreignKeyOptions'] = [
-          'pivotModelName' => $pivotModelName,
-          'morphClass' =>  $morphClass,
-          'morphType' =>  $morphType,
-          'foreignPivotKeyName' =>  $foreignPivotKeyName,
-          'relatedPivotKeyName' =>  $relatedPivotKeyName,
-          'parentKeyName' =>  $parentKeyName,
-        ];
+          throw new \Exception('MorphOneOrMany is not implemented in Hoard.');
+        } else {
+          $relationType = 'HasOneOrMany';
+
+          $foreignModelName = $foreignModelName ?? $relation->getRelated();
+  
+          $configuration['foreignModelName'] = $foreignModelName;
+        }
+      } elseif ($relation instanceof BelongsToMany) {
+        if ($relation instanceof MorphToMany) {
+          $relationType = 'MorphToMany';
+          $relatedPivotKeyName = $relation->getRelatedPivotKeyName();
+          $foreignPivotKeyName = $relation->getForeignPivotKeyName();
+          $parentKeyName = $relation->getParentKeyName();
+          $morphClass = $relation->getMorphClass();
+          $morphType = $relation->getMorphType();
+          $pivotModelName = $relation->getPivotClass();
+  
+          $foreignModelName = $foreignModelName ?? $relation->getRelated();
+  
+          $configuration['foreignModelName'] = $foreignModelName;
+          $configuration['ignoreEmptyForeignKeys'] = true;
+          $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getParentKeyName();
+          $configuration['foreignKeyStrategy'] = 'MorphToMany';
+          $configuration['foreignKeyOptions'] = [
+            'pivotModelName' => $pivotModelName,
+            'morphClass' =>  $morphClass,
+            'morphType' =>  $morphType,
+            'foreignPivotKeyName' =>  $foreignPivotKeyName,
+            'relatedPivotKeyName' =>  $relatedPivotKeyName,
+            'parentKeyName' =>  $parentKeyName,
+          ];
+        } else {
+          throw new \Exception('BelongsToMany is not implemented in Hoard.');
+        }
+      } else if ($relation instanceof HasManyThrough) {
+        if ($relation instanceof HasOneThrough) {
+          throw new \Exception('HasOneThrough is not implemented in Hoard.');
+        } else {
+          throw new \Exception('HasManyThrough is not implemented in Hoard.');
+        }
       }
     }
 
@@ -247,8 +271,8 @@ class Hoard
         $foreignConfiguration = static::prepareConfiguration(
           $foreignModelName,
           $foreignConfiguration,
-          false,
-          $modelName
+          $modelName,
+          false
         );
 
         if (!$foreignConfiguration) {
@@ -274,9 +298,10 @@ class Hoard
       'foreignKeyOptions' => $foreignKeyOptions,
       'ignoreEmptyForeignKeys' => $ignoreEmptyForeignKeys,
       'where' => $configuration['where'],
-      'propagate' => $propagate,
-      'pivotModelName' => $pivotModelName,
       'relationType' => $relationType,
+      'wherePivot' => $configuration['wherePivot'],
+      'pivotModelName' => $pivotModelName,
+      'propagate' => $propagate,
     ];
   }
 
@@ -369,7 +394,7 @@ class Hoard
             $model,
             $pivotModel,
             $eventName,
-            $foreignKeyHoard
+            $foreignKeyCache
           ) use (
             $options
           ) {
@@ -396,8 +421,8 @@ class Hoard
               $morphType,
               $morphClass,
             ]);
-            if ($foreignKeyHoard->has($cacheKey)) {
-              return $foreignKeyHoard->get($cacheKey);
+            if ($foreignKeyCache->has($cacheKey)) {
+              return $foreignKeyCache->get($cacheKey);
             }
 
             // Get all foreign keys by querying the pivot table
@@ -405,7 +430,7 @@ class Hoard
               ::where($foreignPivotKeyName, $key)
               ->where($morphType, $morphClass)
               ->pluck($relatedPivotKeyName);
-            $foreignKeyHoard->put($cacheKey, $keys);
+            $foreignKeyCache->put($cacheKey, $keys);
 
             return $keys;
           };
@@ -854,14 +879,32 @@ class Hoard
   public function apply(string $eventName, \Closure $callback)
   {
     // Gather all updates from every configuration
-    $foreignKeyHoard = collect();
+    $foreignKeyCache = collect();
     $allUpdates = collect($this->configurations)
       ->map(function ($configuration) use (
         $eventName,
         $callback,
-        $foreignKeyHoard
+        $foreignKeyCache
       ) {
         $where = $configuration['where'];
+        $wherePivot = $configuration['wherePivot'];
+
+        // Check if the pivot model is relevant
+        if ($this->pivotModel) {
+          $isPivotRelevant = $this::checkWhereCondition(
+            $this->pivotModel,
+            $this->pivotModel->getAttributes(),
+            $wherePivot,
+            true,
+            $configuration
+          );
+
+          if (!$isPivotRelevant) {
+            return;
+          }
+        }
+
+          // Check if the actual model is relevant
         $isRelevant = $this::checkWhereCondition(
           $this->model,
           $this->model->getAttributes(),
@@ -894,7 +937,7 @@ class Hoard
             $this->model,
             $this->pivotModel,
             $eventName,
-            $foreignKeyHoard
+            $foreignKeyCache
           )
         );
         // dump('Get intermediate value for recalculation', $cacheQuery->toSql(), $cacheQuery->get());
@@ -1099,12 +1142,35 @@ class Hoard
   {
     $function = $configuration['function'];
     $valueName = $configuration['valueName'];
+    $where = $configuration['where'];
     $defaultValue = static::getDefaultValue($function);
 
     // Create cache query
     $cacheQuery = DB::table(static::getModelTable($modelName))
       ->select(DB::raw("COALESCE($function($valueName), $defaultValue)"))
       ->where($configuration['where']);
+
+      // Add where statement
+        foreach ($where as $attribute => $value) {
+          // Get attribute, operator and value
+          $operator = '=';
+          if (is_array($value)) {
+            if (count($value) > 2) {
+              $attribute = $value[0];
+              $operator = $value[1];
+              $value = $value[2];
+            } else {
+              $attribute = $value[0];
+              $value = $value[2];
+            }
+          }
+
+          if ($operator === 'in') {
+            $cacheQuery->whereIn($attribute, $value);
+          } else {
+            $cacheQuery->where($attribute, $operator, $value);
+          }
+        }
 
     // Respect soft delete
     if (
@@ -1269,30 +1335,33 @@ class Hoard
         );
       }
 
-      $relevant = false;
+      $isRelevant = false;
       $modelValue = $attributes[$attribute] ?? null;
       switch ($operator) {
         case '=':
-          $relevant = $modelValue === $value;
+          $isRelevant = $modelValue === $value;
           break;
         case '<':
-          $relevant = $modelValue < $value;
+          $isRelevant = $modelValue < $value;
           break;
         case '<=':
-          $relevant = $modelValue <= $value;
+          $isRelevant = $modelValue <= $value;
           break;
         case '>':
-          $relevant = $modelValue > $value;
+          $isRelevant = $modelValue > $value;
           break;
         case '>=':
-          $relevant = $modelValue > $value;
+          $isRelevant = $modelValue > $value;
           break;
         case '<>':
-          $relevant = $modelValue !== $value;
+          $isRelevant = $modelValue !== $value;
+          break;
+        case 'in':
+          $isRelevant = collect($value)->some(fn ($singleValue) => $modelValue === $singleValue);
           break;
       }
 
-      if (!$relevant) {
+      if (!$isRelevant) {
         return false;
       }
     }

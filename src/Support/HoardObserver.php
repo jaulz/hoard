@@ -24,6 +24,16 @@ class HoardObserver
     }
 
     /**
+     * When the model is updated, update the hoardable fields.
+     *
+     * @param $model
+     */
+    public function updated($model)
+    {
+        $this->hoard($model, 'update');
+    }
+
+    /**
      * When the model is deleted, update the hoardable fields.
      *
      * @param $model
@@ -34,13 +44,16 @@ class HoardObserver
     }
 
     /**
-     * When the model is updated, update the hoardable fields.
+     * When the model is about to be deleted, we refresh it before to have all relevant fields.
      *
      * @param $model
      */
-    public function updated($model)
+    public function deleting($model)
     {
-        $this->hoard($model, 'update');
+        // TODO: refresh only if really necessary (i.e. if we need it in the configuration)
+        if ($model instanceof Pivot) {
+            $model->refresh();
+        }
     }
 
     /**
@@ -64,11 +77,13 @@ class HoardObserver
                 $previousUpdates = collect();
 
                 foreach ($relations as $relatedModelName => $relation) {
-                    $skip = $relation->getInverse() ? false: ($morphClass && $morphClass !== $relatedModelName);
+                    // The inverse relation must always be updated and the (morph) relation only if the model names are the same
+                    $skip = $relation->getInverse() ? false : ($morphClass && $morphClass !== $relatedModelName);
                     if ($skip) {
                         continue;
                     }
 
+                    // Identify actual model 
                     if ($model->pivotParent && get_class($model->pivotParent) === $relatedModelName) {
                         $relatedModel = $model->pivotParent;
                     } else {
