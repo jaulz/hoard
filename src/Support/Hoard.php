@@ -208,6 +208,7 @@ class Hoard
             'foreignPivotKeyName' =>  $foreignPivotKeyName,
             'relatedPivotKeyName' =>  $relatedPivotKeyName,
             'parentKeyName' =>  $parentKeyName,
+            'wherePivot' => $configuration['wherePivot']
           ];
         } else {
           throw new \Exception('BelongsToMany is not implemented in Hoard.');
@@ -342,6 +343,7 @@ class Hoard
             $foreignPivotKeyName = $options['foreignPivotKeyName'];
             $relatedPivotKeyName = $options['relatedPivotKeyName'];
             $pivotModelName = $options['pivotModelName'];
+            $wherePivot = $options['wherePivot'];
 
             // Get all models that are mentioned in the pivot table
             $query->whereIn($parentKeyName, function ($whereQuery) use (
@@ -350,13 +352,15 @@ class Hoard
               $morphClass,
               $foreignPivotKeyName,
               $relatedPivotKeyName,
-              $foreignKey
+              $foreignKey,
+              $wherePivot
             ) {
               $whereQuery
                 ->select($foreignPivotKeyName)
                 ->from(static::getModelTable($pivotModelName))
                 ->where($relatedPivotKeyName, $foreignKey)
-                ->where($morphType, $morphClass);
+                ->where($morphType, $morphClass)
+                ->where($wherePivot);
             });
           };
 
