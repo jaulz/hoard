@@ -4,6 +4,7 @@ namespace Jaulz\Hoard\Traits;
 
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Jaulz\Hoard\Support\Hoard;
 use Jaulz\Hoard\Support\HoardObserver;
@@ -50,7 +51,9 @@ trait IsHoardableTrait
       $relation = (new static())->{$relationName}();
       if ($relation instanceof BelongsToMany) {
         $pivotClass = $relation->getPivotClass();
-        $pivotClass::appendHoardConfiguration($configuration);
+        $pivotClass::appendHoardConfiguration(array_merge([
+          'inverse' => $relation instanceof MorphToMany ? $relation->getInverse() : false,
+        ], $configuration));
         $pivotClass::rememberHoardRelation(get_class(), $relation);
       }
     }
@@ -177,7 +180,7 @@ trait IsHoardableTrait
             return $foreignForeignModelName === $modelName;
           })
           ->each(function ($foreignConfiguration) use ($foreignModelName, $foreignConfigurations) {
-            $foreignConfigurations->push(Hoard::prepareConfiguration($foreignModelName, $foreignConfiguration, get_class(), true));
+            $foreignConfigurations->push(Hoard::prepareConfiguration($foreignModelName, null, $foreignConfiguration, get_class(), true));
           });
 
         // If there are no configurations that affect this model

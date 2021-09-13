@@ -83,6 +83,7 @@ class Hoard
       ->map(
         fn ($configuration) => static::prepareConfiguration(
           $this->model,
+          $this->pivotModel,
           $configuration
         )
       )
@@ -100,9 +101,10 @@ class Hoard
   }
 
   /**
-   * Take a user configuration and standardize it.
+   * Take a configuration and standardize it.
    *
    * @param Model|string $model
+   * @param ?Model $pivotModel
    * @param array $configuration
    * @param ?bool $checkForeignModel
    * @param ?string $foreignModelName
@@ -110,7 +112,8 @@ class Hoard
    */
   public static function prepareConfiguration(
     $model,
-    $configuration,
+    $pivotModel = null,
+    $configuration = [],
     ?string $foreignModelName = null,
     ?bool $checkForeignModel = true,
   ) {
@@ -129,6 +132,7 @@ class Hoard
       'foreignKeyStrategy' => '',
       'foreignKeyOptions' => [],
       'propagate' => false,
+      'inverse' => false,
     ];
     $configuration = array_merge($defaults, $configuration);
 
@@ -182,7 +186,7 @@ class Hoard
           $relationType = 'HasOneOrMany';
 
           $foreignModelName = $foreignModelName ?? $relation->getRelated();
-  
+
           $configuration['foreignModelName'] = $foreignModelName;
         }
       } elseif ($relation instanceof BelongsToMany) {
@@ -194,9 +198,10 @@ class Hoard
           $morphClass = $relation->getMorphClass();
           $morphType = $relation->getMorphType();
           $pivotModelName = $relation->getPivotClass();
-  
-          $foreignModelName = $foreignModelName ?? $relation->getRelated();
-  
+
+          $foreignModelName = $configuration['inverse'] ? $relation->getRelated()
+            : $foreignModelName ?? $relation->getRelated();
+
           $configuration['foreignModelName'] = $foreignModelName;
           $configuration['ignoreEmptyForeignKeys'] = true;
           $configuration['foreignKeyName'] = $configuration['foreignKeyName'] ?? $relation->getParentKeyName();
@@ -271,6 +276,7 @@ class Hoard
       ) use ($foreignModelName, $summaryName, $modelName) {
         $foreignConfiguration = static::prepareConfiguration(
           $foreignModelName,
+          null,
           $foreignConfiguration,
           $modelName,
           false
@@ -908,7 +914,7 @@ class Hoard
           }
         }
 
-          // Check if the actual model is relevant
+        // Check if the actual model is relevant
         $isRelevant = $this::checkWhereCondition(
           $this->model,
           $this->model->getAttributes(),
@@ -1154,27 +1160,27 @@ class Hoard
       ->select(DB::raw("COALESCE($function($valueName), $defaultValue)"))
       ->where($configuration['where']);
 
-      // Add where statement
-        foreach ($where as $attribute => $value) {
-          // Get attribute, operator and value
-          $operator = '=';
-          if (is_array($value)) {
-            if (count($value) > 2) {
-              $attribute = $value[0];
-              $operator = $value[1];
-              $value = $value[2];
-            } else {
-              $attribute = $value[0];
-              $value = $value[2];
-            }
-          }
-
-          if ($operator === 'in') {
-            $cacheQuery->whereIn($attribute, $value);
-          } else {
-            $cacheQuery->where($attribute, $operator, $value);
-          }
+    // Add where statement
+    foreach ($where as $attribute => $value) {
+      // Get attribute, operator and value
+      $operator = '=';
+      if (is_array($value)) {
+        if (count($value) > 2) {
+          $attribute = $value[0];
+          $operator = $value[1];
+          $value = $value[2];
+        } else {
+          $attribute = $value[0];
+          $value = $value[2];
         }
+      }
+
+      if ($operator === 'in') {
+        $cacheQuery->whereIn($attribute, $value);
+      } else {
+        $cacheQuery->where($attribute, $operator, $value);
+      }
+    }
 
     // Respect soft delete
     if (

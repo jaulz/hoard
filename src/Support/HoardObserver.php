@@ -91,7 +91,6 @@ class HoardObserver
                         $relatedModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};
                     }
 
-
                     // Run updates and cache all previous updates so we avoid duplicates
                     $hoard = new Hoard($relatedModel, [], $model, $previousUpdates);
                     $updates = $hoard->{$method}();
