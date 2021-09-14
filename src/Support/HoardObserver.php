@@ -89,6 +89,7 @@ class HoardObserver
                     } else {
                         $relatedModel = new $relatedModelName();
                         $relatedModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};
+                        $relatedModel->refresh();
                     }
 
                     // Run updates and cache all previous updates so we avoid duplicates
