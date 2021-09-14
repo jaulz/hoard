@@ -77,20 +77,28 @@ class HoardObserver
                 $previousUpdates = collect();
 
                 foreach ($relations as $relatedModelName => $relation) {
-                    /*// The inverse relation must always be updated and the (morph) relation only if the model names are the same
-                    $skip = $relation->getInverse() ? false : ($morphClass && $morphClass !== $relatedModelName);
-                    if ($skip) {
-                        continue;
-                    }*/
+                    $morphType = $relation->getMorphType();
+                    $inverse = $relation->getInverse();
+
+                    if ($inverse) {
+                    } else {
+                        if ($model->{$morphType} !== $relatedModelName) {
+                            continue;
+                        }
+                    }
 
                     // Identify actual model 
                     if ($model->pivotParent && get_class($model->pivotParent) === $relatedModelName) {
                         $relatedModel = $model->pivotParent;
                     } else {
-                        // TODO: check if we cannot somehow get the existing model
-                        $relatedModel = $relatedModelName::where($model->getKeyName(), $model->{$model->getRelatedKey()})->first();
-                        /*$relatedModel = new $relatedModelName();
-                        $relatedModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};*/
+                        $foreignPivotKeyName = $relation->getForeignPivotKeyName();
+                        $relatedModel = new $relatedModelName();
+                        $relatedModel->exists = true;
+                        $relatedModel->{$relatedModel->getKeyName()} = $model->{$foreignPivotKeyName};
+                        // TODO: check if we can prevent this query and call refresh only if necessary
+                        // e.g. when the configuration uses the primary key column as a "valueName" and there is no where
+                        // condition, then we could skip this
+                        $relatedModel->refresh();
                     }
 
                     // Run updates and cache all previous updates so we avoid duplicates
