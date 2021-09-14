@@ -90,8 +90,7 @@ class HoardObserver
                         // TODO: check if we cannot somehow get the existing model
                         $relatedModel = $relatedModelName::where($model->getKeyName(), $model->{$model->getRelatedKey()})->first();
                         /*$relatedModel = new $relatedModelName();
-                        $relatedModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};
-                        $relatedModel->refresh();*/
+                        $relatedModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};*/
                     }
 
                     // Run updates and cache all previous updates so we avoid duplicates
