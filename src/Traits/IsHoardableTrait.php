@@ -207,9 +207,7 @@ trait IsHoardableTrait
   public function refreshHoard()
   {
     $hoard = new Hoard($this);
-    $hoard->run();
-
-    return $this;
+    return $hoard->run();
   }
 
   /**

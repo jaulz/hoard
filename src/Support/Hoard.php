@@ -583,7 +583,7 @@ class Hoard
         ->update($updates);
     }
 
-    return $this->model;
+    return $updates;
   }
 
   /*
