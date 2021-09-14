@@ -87,9 +87,11 @@ class HoardObserver
                     if ($model->pivotParent && get_class($model->pivotParent) === $relatedModelName) {
                         $relatedModel = $model->pivotParent;
                     } else {
-                        $relatedModel = new $relatedModelName();
+                        // TODO: check if we cannot somehow get the existing model
+                        $relatedModel = $relatedModelName::where($model->getKeyName(), $model->{$model->getRelatedKey()})->first();
+                        /*$relatedModel = new $relatedModelName();
                         $relatedModel->{$model->getKeyName()} = $model->{$model->getRelatedKey()};
-                        $relatedModel->refresh();
+                        $relatedModel->refresh();*/
                     }
 
                     // Run updates and cache all previous updates so we avoid duplicates
