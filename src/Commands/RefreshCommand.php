@@ -66,10 +66,10 @@ class RefreshCommand extends Command
         $bar->setMessage($message);
 
         // Check differences between the model before and after
-        $before = collect($model->getAttributes());
-        $model->refreshHoard();
-        $after = collect($model->refresh()->getAttributes());
-        $difference = $before->diffAssoc($after)->toArray();
+        $before = $model->getAttributes();
+        $updates = $model->refreshHoard();
+        $after = $model->refresh()->getAttributes();    
+        $difference = collect(array_intersect_key($before, $updates))->diffAssoc(array_intersect_key($after, $updates))->toArray();
 
         // Increase number of fixed caches
         if (count($difference) > 0) {
