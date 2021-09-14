@@ -51,9 +51,10 @@ trait IsHoardableTrait
       $relation = (new static())->{$relationName}();
       if ($relation instanceof BelongsToMany) {
         $pivotClass = $relation->getPivotClass();
+        /*$inverse = $relation instanceof MorphToMany ? $relation->getInverse() : false;
         $pivotClass::appendHoardConfiguration(array_merge([
-          'inverse' => $relation instanceof MorphToMany ? $relation->getInverse() : false,
-        ], $configuration));
+          'inverse' => $inverse,
+        ], $configuration));*/
         $pivotClass::rememberHoardRelation(get_class(), $relation);
       }
     }
@@ -155,7 +156,7 @@ trait IsHoardableTrait
         // Go through options and see where the model is referenced
         $foreignConfigurations = collect([]);
         $foreignModelName::getHoardConfigurations()
-          ->filter(function ($foreignConfiguration) use ($foreignModelName, $modelName) {
+          ->each(function ($foreignConfiguration) use ($foreignConfigurations, $foreignModelName, $modelName) {
             $foreignForeignModelName = $foreignConfiguration['foreignModelName'] ?? null;
 
             // Resolve model name via relation if necessary
@@ -177,13 +178,15 @@ trait IsHoardableTrait
               }
             }
 
-            return $foreignForeignModelName === $modelName;
-          })
-          ->each(function ($foreignConfiguration) use ($foreignModelName, $foreignConfigurations) {
-            $foreignConfigurations->push(Hoard::prepareConfiguration($foreignModelName, null, $foreignConfiguration, get_class(), true));
+            if ($foreignForeignModelName !== $modelName) {
+              return;
+            }
+
+            $foreignConfiguration = Hoard::prepareConfiguration($foreignModelName, null, $foreignConfiguration, get_class(), true);
+            $foreignConfigurations->push($foreignConfiguration);
           });
 
-        // If there are no configurations that affect this model
+        // If there are no configurations that affect this model we can stop here
         if ($foreignConfigurations->count() === 0) {
           return true;
         }

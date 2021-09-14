@@ -339,7 +339,7 @@ class CountCacheTest extends AcceptanceTestCase
         ]);
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals(3, count($queryLog));
+        $this->assertEquals(2, count($queryLog));
         $this->assertEquals(2, Tag::first()->taggables_count);
 
         $tag = Tag::first();

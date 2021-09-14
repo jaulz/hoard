@@ -77,8 +77,10 @@ class Hoard
     $this->ignoredUpdates = $ignoredUpdates ?? collect();
 
     // Get all the configurations that are relevant for this model
+    /*if ($this->modelName === "Tests\Acceptance\Models\Post") {
+    }*/
     $this->configurations = collect(
-      get_class($this->model)::getHoardConfigurations()
+      $this->modelName::getHoardConfigurations()
     )
       ->map(
         fn ($configuration) => static::prepareConfiguration(
@@ -132,7 +134,6 @@ class Hoard
       'foreignKeyStrategy' => '',
       'foreignKeyOptions' => [],
       'propagate' => false,
-      'inverse' => false,
     ];
     $configuration = array_merge($defaults, $configuration);
 
@@ -198,9 +199,15 @@ class Hoard
           $morphClass = $relation->getMorphClass();
           $morphType = $relation->getMorphType();
           $pivotModelName = $relation->getPivotClass();
+          $inverse = $relation->getInverse();
 
-          $foreignModelName = $configuration['inverse'] ? $relation->getRelated()
-            : $foreignModelName ?? $relation->getRelated();
+          // Note that $pivotModel can be null though it's a BelongsToMany relation 
+          // For example, if this method is called via getForeignHoardConfigurations method in IsHoardableTrait there
+          // won't be any $pivotModel instance.
+          $foreignModelName = $foreignModelName ?? get_class($relation->getRelated());
+          if ($inverse && $pivotModel && $pivotModel[$morphType] !== $foreignModelName) {
+            return null;
+          }
 
           $configuration['foreignModelName'] = $foreignModelName;
           $configuration['ignoreEmptyForeignKeys'] = true;

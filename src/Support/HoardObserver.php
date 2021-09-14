@@ -77,11 +77,11 @@ class HoardObserver
                 $previousUpdates = collect();
 
                 foreach ($relations as $relatedModelName => $relation) {
-                    // The inverse relation must always be updated and the (morph) relation only if the model names are the same
+                    /*// The inverse relation must always be updated and the (morph) relation only if the model names are the same
                     $skip = $relation->getInverse() ? false : ($morphClass && $morphClass !== $relatedModelName);
                     if ($skip) {
                         continue;
-                    }
+                    }*/
 
                     // Identify actual model 
                     if ($model->pivotParent && get_class($model->pivotParent) === $relatedModelName) {
