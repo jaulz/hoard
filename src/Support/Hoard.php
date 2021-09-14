@@ -603,6 +603,7 @@ class Hoard
       $function = $configuration['function'];
       $summaryName = $configuration['summaryName'];
       $valueName = $configuration['valueName'];
+      // TODO: find a way to differentiate between "not set" and actual "null"
       $value = $this->model->$valueName ?? null;
 
       // Handle certain cases more efficiently
