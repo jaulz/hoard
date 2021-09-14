@@ -48,7 +48,7 @@ class RefreshCommand extends Command
       }
 
       // Run through each model and rebuild cache
-      $this->comment('Recalculate "' . $className . '" caches');
+      $this->comment('Refresh "' . $className . '" caches');
       $bar = $this->output->createProgressBar($count);
       $bar->setFormat(
         '%current%/%max% [%bar%] %percent:3s%% (%elapsed:6s%/%estimated:-6s%): %message% <fg=white;bg=red>%warning%</>'
