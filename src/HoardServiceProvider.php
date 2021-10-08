@@ -10,11 +10,14 @@ use Jaulz\Hoard\Commands\RefreshCommand;
 class HoardServiceProvider extends ServiceProvider
 {
     /**
-     * Initialises the service provider, and here we attach our own blueprint
-     * resolver to the schema, so as to provide the enhanced functionality.
+     * Boots the service provider.
      */
     public function boot()
     {
+        $this->publishes([
+            __DIR__ . '/../database/migrations/' => database_path('migrations')
+        ], 'hoard-migrations');
+
         $this->commands([
             ClearCommand::class,
             CacheCommand::class,
