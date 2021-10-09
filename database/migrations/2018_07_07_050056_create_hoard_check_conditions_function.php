@@ -20,7 +20,8 @@ class CreateHoardCheckConditionsFunction extends Migration
             record record, 
             conditions text DEFAULT '1=1'::text
           )
-            RETURNS boolean AS $$
+          RETURNS boolean 
+          AS $$
             DECLARE
               filtered_record record;
               -- condition text[];

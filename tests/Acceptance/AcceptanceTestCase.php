@@ -2,12 +2,15 @@
 namespace Tests\Acceptance;
 
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase;
 
 class AcceptanceTestCase extends TestCase
 {
+    use RefreshDatabase;
+    
     public function setUp(): void
     {
         parent::setUp();
@@ -20,9 +23,12 @@ class AcceptanceTestCase extends TestCase
     {
         $app['config']->set('database.default', 'test');
         $app['config']->set('database.connections.test', array(
+            'driver'   => 'pgsql',
+            'database' => 'hoard'
+        ) /* array(
             'driver'   => 'sqlite',
             'database' => ':memory:'
-        ));
+        ) */);
     }
 
     protected function init()
