@@ -46,6 +46,27 @@ class HoardDefinition
     $attributes = $this->command->getAttributes();
     $attributes['conditions'][] = [$column, 'IS', null];
 
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * Refresh immediately.
+   *
+   * @param  string  $refreshKeyName
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function refreshImmediately($refreshKeyName = 'id') {
+    $attributes = $this->command->getAttributes();
+    $attributes['refreshKeyName'] = $refreshKeyName;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  private function setAttributes(array $attributes) {
     // Ugly workaround to get access to the attributes property
     $attributesProperty = new ReflectionProperty(
       Fluent::class,
@@ -53,7 +74,5 @@ class HoardDefinition
     );
     $attributesProperty->setAccessible(true);
     $attributesProperty->setValue($this->command, $attributes);
-
-    return $this;
   }
 }

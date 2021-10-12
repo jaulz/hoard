@@ -119,9 +119,9 @@ class HoardServiceProvider extends ServiceProvider
       $foreignConditions = $prepareConditions($command->foreignConditions);
       $conditions = $prepareConditions($command->conditions);
       $tableName = $command->tableName;
+      $refreshKeyName = $command->refreshKeyName;
 
-      return [
-
+      return array_filter([
         sprintf(
           "
             CREATE OR REPLACE FUNCTION hoard_exists_trigger(table_name text, _trigger_name text)
@@ -140,7 +140,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_set_value(record anyelement, key text, value text)
+            CREATE OR REPLACE FUNCTION hoard_set_row_value(record anyelement, key text, value text)
               RETURNS anyelement
               AS $$
                 SELECT json_populate_record(record, json_build_object(key, value));
@@ -150,7 +150,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_value(record anyelement, key text)
+            CREATE OR REPLACE FUNCTION hoard_get_row_value(record anyelement, key text)
               RETURNS text
               AS $$
                 BEGIN
@@ -207,7 +207,7 @@ class HoardServiceProvider extends ServiceProvider
                   RAISE NOTICE 'hoard_refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
 
                   -- Get key
-                  foreign_key := hoard_get_value(foreign_row, foreign_key_name);
+                  foreign_key := hoard_get_row_value(foreign_row, foreign_key_name);
 
                   -- Collect all updates in a JSON map
                   FOR trigger IN
@@ -227,7 +227,7 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Prepare refresh query
-                    refresh_query := hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, hoard_get_value(foreign_row, trigger.foreign_key_name), conditions);
+                    refresh_query := hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
 
                     -- Append query if necessary
                     existing_refresh_query := updates ->> foreign_aggregation_name;
@@ -484,8 +484,8 @@ class HoardServiceProvider extends ServiceProvider
                     IF OLD IS NULL THEN
                       -- Nothing to do but for some reason IS NOT NULL did not work
                     ELSE
-                      old_value := hoard_get_value(OLD, value_name);
-                      old_foreign_key := hoard_get_value(OLD, key_name);
+                      old_value := hoard_get_row_value(OLD, value_name);
+                      old_foreign_key := hoard_get_row_value(OLD, key_name);
                       -- EXECUTE format('SELECT ($1).%%s;', value_name) INTO old_value USING OLD;
                       -- EXECUTE format('SELECT ($1).%%s;', key_name) INTO old_foreign_key USING OLD;
                       EXECUTE format('SELECT true FROM (SELECT $1.*) record WHERE %%s;', conditions) USING OLD INTO old_relevant;
@@ -502,8 +502,8 @@ class HoardServiceProvider extends ServiceProvider
                     IF NEW IS NULL THEN
                       -- Nothing to do but for some reason IS NOT NULL did not work
                     ELSE
-                      new_value := hoard_get_value(NEW, value_name);
-                      new_foreign_key := hoard_get_value(NEW, key_name);
+                      new_value := hoard_get_row_value(NEW, value_name);
+                      new_foreign_key := hoard_get_row_value(NEW, key_name);
                       -- EXECUTE format('SELECT ($1).%%s;', value_name) INTO new_value USING NEW;
                       -- EXECUTE format('SELECT ($1).%%s;', key_name) INTO new_foreign_key USING NEW;
                       EXECUTE format('SELECT true FROM (SELECT $1.*) record WHERE %%s;', conditions) USING NEW INTO new_relevant;
@@ -542,23 +542,6 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-        ),
-
-        sprintf(
-          "
-            DO $$
-              BEGIN
-                IF NOT hoard_exists_trigger(%s, 'hoard_trigger_after') THEN
-                  CREATE TRIGGER hoard_trigger_after
-                    AFTER INSERT OR UPDATE OR DELETE ON %s
-                    FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_trigger_after();
-                END IF;
-              END;
-            $$ LANGUAGE PLPGSQL;
-          ",
-          $this->quoteString($tableName),
-          $tableName
         ),
 
         sprintf(
@@ -609,13 +592,13 @@ class HoardServiceProvider extends ServiceProvider
                       conditions := trigger.conditions;
 
                       -- Get key of new record
-                      foreign_key := hoard_get_value(NEW, foreign_key_name);
+                      foreign_key := hoard_get_row_value(NEW, foreign_key_name);
 
                       -- Get actual value for aggregation column
                       EXECUTE hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, foreign_key, conditions) INTO value;
 
                       -- Assign value to new record
-                      NEW := hoard_set_value(NEW, foreign_aggregation_name, value);
+                      NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value);
                     END LOOP;
                   END IF;
               
@@ -634,6 +617,23 @@ class HoardServiceProvider extends ServiceProvider
                     BEFORE INSERT OR UPDATE OR DELETE ON %s
                     FOR EACH ROW 
                     EXECUTE FUNCTION hoard_trigger_before();
+                END IF;
+              END;
+            $$ LANGUAGE PLPGSQL;
+          ",
+          $this->quoteString($tableName),
+          $tableName
+        ),
+
+        sprintf(
+          "
+            DO $$
+              BEGIN
+                IF NOT hoard_exists_trigger(%s, 'hoard_trigger_after') THEN
+                  CREATE TRIGGER hoard_trigger_after
+                    AFTER INSERT OR UPDATE OR DELETE ON %s
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION hoard_trigger_after();
                 END IF;
               END;
             $$ LANGUAGE PLPGSQL;
@@ -686,7 +686,25 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($foreignAggregationName),
           DB::getPdo()->quote($foreignConditions),
         ),
-      ];
+
+        $refreshKeyName ? sprintf(
+          "
+            DO $$
+              BEGIN
+                PERFORM hoard_refresh_all(%, %);
+                IF NOT hoard_exists_trigger('hoard_triggers', 'hoard_trigger_before') THEN
+                  CREATE TRIGGER hoard_trigger_before
+                    BEFORE INSERT ON hoard_triggers
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION hoard_trigger_before();
+                END IF;
+              END;
+            $$ LANGUAGE PLPGSQL;
+          ",
+          $this->quoteString($tableName),
+          $this->quoteString($refreshKeyName)
+        ) : null,
+      ]);
     });
   }
 }
