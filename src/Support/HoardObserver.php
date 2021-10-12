@@ -50,6 +50,11 @@ class HoardObserver
      */
     public function deleting($model)
     {
+        // Do not do anything if Hoard is disabled
+        if (!Hoard::$enabled) {
+          return;
+        }
+        
         // TODO: refresh only if really necessary (i.e. if we need it in the configuration)
         if ($model instanceof Pivot) {
             $model->refresh();
@@ -64,6 +69,11 @@ class HoardObserver
      */
     private function hoard(Model $model, string $method)
     {
+        // Do not do anything if Hoard is disabled
+        if (!Hoard::$enabled) {
+          return;
+        }
+
         $relations = get_class($model)::getHoardRelations();
 
         DB::transaction(function () use ($model, $method, $relations) {

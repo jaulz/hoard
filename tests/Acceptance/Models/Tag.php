@@ -31,11 +31,11 @@ class Tag extends Model
     
     public function posts()
     {
-        return $this->morphedByMany(Post::class, 'taggable')->using(Taggable::class);
+        return $this->morphedByMany(Post::class, 'taggable')->using(Taggable::class)->withTimestamps();
     }
     
     public function images()
     {
-        return $this->morphedByMany(Image::class, 'taggable')->using(Taggable::class);
+        return $this->morphedByMany(Image::class, 'taggable')->using(Taggable::class)->withTimestamps();
     }
 }

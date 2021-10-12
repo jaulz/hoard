@@ -28,6 +28,11 @@ use ReflectionProperty;
 class Hoard
 {
   /**
+   * Define if Hoard is enabled.
+   */
+  public static bool $enabled = true;
+
+  /**
    * @var Model
    */
   private Model $model;

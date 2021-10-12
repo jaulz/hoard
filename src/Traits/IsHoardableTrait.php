@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\DB;
 use Jaulz\Hoard\Support\Hoard;
 use Jaulz\Hoard\Support\HoardObserver;
 use Jaulz\Hoard\Support\FindHoardableClasses;
@@ -18,7 +19,7 @@ trait IsHoardableTrait
    *
    * @var ?array
    */
-  private static $foreignHoardConfigurations = null;
+  private static $hoardForeignConfigurations = null;
 
   /**
    * Store dynamic configurations that were created at runtime.
@@ -141,7 +142,7 @@ trait IsHoardableTrait
     }
 
     // Otherwise we build the configuration tree from scratch if it hasn't been build yet
-    if (is_null(static::$foreignHoardConfigurations)) {
+    if (is_null(static::$hoardForeignConfigurations)) {
       // Get all other model classes
       $modelName = get_class();
       $reflector = new ReflectionClass($modelName);
@@ -151,7 +152,7 @@ trait IsHoardableTrait
       ))->getClassNames();
 
       // Go through all other classes and check if they reference the current class
-      static::$foreignHoardConfigurations = [];
+      static::$hoardForeignConfigurations = [];
       collect($foreignModelNames)->each(function ($foreignModelName) use ($modelName) {
         // Go through options and see where the model is referenced
         $foreignConfigurations = collect([]);
@@ -192,22 +193,32 @@ trait IsHoardableTrait
         }
 
         // Eventually add the configuration to our static collection
-        static::$foreignHoardConfigurations[$foreignModelName] = $foreignConfigurations->filter()->toArray();
+        static::$hoardForeignConfigurations[$foreignModelName] = $foreignConfigurations->filter()->toArray();
       });
     }
 
-    return static::$foreignHoardConfigurations;
+    return static::$hoardForeignConfigurations;
   }
 
   /**
    * Refresh cache for the model.
    *
+   * @param ?bool $native
    * @return array
    */
-  public function refreshHoard()
+  public function refreshHoard($native = true)
   {
-    $hoard = new Hoard($this);
-    return $hoard->run();
+    if (!$native) {
+      // Do not do anything if Hoard is disabled
+      if (!Hoard::$enabled) {
+        return;
+      }
+
+      $hoard = new Hoard($this);
+      return $hoard->run();
+    }
+
+    return DB::select('SELECT hoard_refresh_all(?, ?, ?)', [$this->getTable(), $this->getKeyName(), $this->getKeyName() . ' = ' . $this->getKey()]);
   }
 
   /**

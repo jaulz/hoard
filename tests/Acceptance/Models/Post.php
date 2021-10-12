@@ -93,7 +93,7 @@ class Post extends Model
 
     public function tags()
     {
-        return $this->morphToMany(Tag::class, 'taggable')->using(Taggable::class)->withPivot('weight');
+        return $this->morphToMany(Tag::class, 'taggable')->using(Taggable::class)->withPivot('weight', 'taggable_count', 'taggable_created_at')->withTimestamps();
     }
 
     public function images()
