@@ -44,7 +44,7 @@ class HoardDefinition
    */
   public function withoutSoftDeletes($column = 'deleted_at') {
     $attributes = $this->command->getAttributes();
-    $attributes['conditions'][] = [$column, 'IS', DB::raw('NULL')];
+    $attributes['conditions'][] = [$column, 'IS', null];
 
     // Ugly workaround to get access to the attributes property
     $attributesProperty = new ReflectionProperty(

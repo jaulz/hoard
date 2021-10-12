@@ -96,6 +96,9 @@ class HoardServiceProvider extends ServiceProvider
             // Finally either use a quoted value or as it is
             if ($value instanceof Expression) {
               $value = $value->getValue();
+            } else if (is_null($value)) {
+              $operator = 'IS';
+              $value = 'NULL';
             } else {
               $value = DB::getPdo()->quote($value);
             }
