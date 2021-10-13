@@ -165,6 +165,8 @@ class HoardServiceProvider extends ServiceProvider
             CREATE OR REPLACE FUNCTION hoard_get_refresh_query(aggregation_function text, value_name text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
               RETURNS text
               AS $$
+                DECLARE
+                  query text;
                 BEGIN
                   -- Ensure that we have any conditions
                   IF conditions = '' THEN
@@ -172,7 +174,18 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- Prepare refresh query
-                  RETURN format('SELECT %%s(%%s) FROM %%s WHERE %%s = %%s AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
+                  query := format('SELECT %%s(%%s) FROM %%s WHERE %%s = %%s AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
+
+                  -- Coalesce certain aggregation functions to prevent null values
+                  CASE aggregation_function 
+                    WHEN 'COUNT' THEN
+                      query := format('COALESCE((%%s), 0)', query);
+                    WHEN 'SUM' THEN
+                      query := format('COALESCE((%%s), 0)', query);
+                    ELSE
+                  END CASE;
+
+                  RETURN query;
                 END;
               $$ LANGUAGE PLPGSQL;
           "
@@ -186,7 +199,7 @@ class HoardServiceProvider extends ServiceProvider
                 foreign_row record
               )
               RETURNS void
-                AS $$
+              AS $$
                 DECLARE
                   trigger hoard_triggers%%rowtype;
                   foreign_key text;
@@ -250,7 +263,7 @@ class HoardServiceProvider extends ServiceProvider
                     updates :=  updates || jsonb_build_object(foreign_aggregation_name, refresh_query);
                   END LOOP;
 
-                  -- Run update
+                  -- Concatenate update
                   FOR foreign_aggregation_name, refresh_query IN 
                     SELECT * FROM jsonb_each_text(updates)
                   LOOP
@@ -261,9 +274,12 @@ class HoardServiceProvider extends ServiceProvider
                       END IF;
                   END LOOP;
                   
-                  update_query := format('UPDATE %%s SET %%s WHERE %%s = %%s', foreign_table_name, concatenated_updates, foreign_key_name, foreign_key);
-                  RAISE NOTICE 'hoard_refresh: update (update_query=%%)', update_query;
-                  EXECUTE update_query;
+                  -- Run update if required
+                  IF concatenated_updates IS NOT NULL THEN
+                    update_query := format('UPDATE %%s SET %%s WHERE %%s = %%s', foreign_table_name, concatenated_updates, foreign_key_name, foreign_key);
+                    RAISE NOTICE 'hoard_refresh: update (update_query=%%)', update_query;
+                    EXECUTE update_query;
+                  END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
@@ -321,7 +337,7 @@ class HoardServiceProvider extends ServiceProvider
                 new_relevant boolean
               )
               RETURNS void
-                AS $$
+              AS $$
                 DECLARE
                   changed_foreign_key boolean;
                   changed_value boolean;
@@ -428,9 +444,9 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_trigger_after()
+            CREATE OR REPLACE FUNCTION hoard_after_trigger()
               RETURNS trigger
-                AS $$
+              AS $$
                 DECLARE
                   trigger hoard_triggers%%rowtype;
 
@@ -455,7 +471,7 @@ class HoardServiceProvider extends ServiceProvider
                   changed_foreign_key boolean;
                   changed_value boolean;
                 BEGIN
-                  RAISE NOTICE 'hoard_trigger_after: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
+                  RAISE NOTICE 'hoard_after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
 
                   -- Get all triggers
                   FOR trigger IN
@@ -470,7 +486,7 @@ class HoardServiceProvider extends ServiceProvider
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
-                    RAISE NOTICE 'hoard_trigger_after: trigger (foreign_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', foreign_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
+                    RAISE NOTICE 'hoard_after_trigger: trigger (foreign_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', foreign_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
 
                     -- Ensure that we have any conditions
                     IF conditions = '' THEN
@@ -495,7 +511,7 @@ class HoardServiceProvider extends ServiceProvider
                         old_relevant := false;
                       END IF;
 
-                      RAISE NOTICE 'hoard_trigger_after: old (old_value=%%, old_foreign_key=%%, old_relevant=%%)', old_value, old_foreign_key, old_relevant;
+                      RAISE NOTICE 'hoard_after_trigger: old (old_value=%%, old_foreign_key=%%, old_relevant=%%)', old_value, old_foreign_key, old_relevant;
                     END IF;
                 
                     -- Get foreign key and value from new record
@@ -513,7 +529,7 @@ class HoardServiceProvider extends ServiceProvider
                         new_relevant := false;
                       END IF;
 
-                      RAISE NOTICE 'hoard_trigger_after: new (new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_value=%%, changed_foreign_key=%%)', new_value, new_foreign_key, new_relevant, changed_value, changed_foreign_key;
+                      RAISE NOTICE 'hoard_after_trigger: new (new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_value=%%, changed_foreign_key=%%)', new_value, new_foreign_key, new_relevant, changed_value, changed_foreign_key;
                     END IF;
                 
                     -- Run update
@@ -546,7 +562,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_trigger_before()
+            CREATE OR REPLACE FUNCTION hoard_before_trigger()
               RETURNS trigger
                 AS $$
                 DECLARE
@@ -565,7 +581,7 @@ class HoardServiceProvider extends ServiceProvider
                   value text;
                   foreign_key text;
                 BEGIN
-                  RAISE NOTICE 'hoard_trigger_before: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
+                  RAISE NOTICE 'hoard_before_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
 
                   -- Nothing to do on DELETE
                   IF TG_OP = 'DELETE' THEN
@@ -612,11 +628,11 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                IF NOT hoard_exists_trigger(%s, 'hoard_trigger_before') THEN
-                  CREATE TRIGGER hoard_trigger_before
+                IF NOT hoard_exists_trigger(%s, 'hoard_before_trigger') THEN
+                  CREATE TRIGGER hoard_before_trigger
                     BEFORE INSERT OR UPDATE OR DELETE ON %s
                     FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_trigger_before();
+                    EXECUTE FUNCTION hoard_before_trigger();
                 END IF;
               END;
             $$ LANGUAGE PLPGSQL;
@@ -629,11 +645,11 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                IF NOT hoard_exists_trigger(%s, 'hoard_trigger_after') THEN
-                  CREATE TRIGGER hoard_trigger_after
+                IF NOT hoard_exists_trigger(%s, 'hoard_after_trigger') THEN
+                  CREATE TRIGGER hoard_after_trigger
                     AFTER INSERT OR UPDATE OR DELETE ON %s
                     FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_trigger_after();
+                    EXECUTE FUNCTION hoard_after_trigger();
                 END IF;
               END;
             $$ LANGUAGE PLPGSQL;
@@ -691,13 +707,7 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                PERFORM hoard_refresh_all(%, %);
-                IF NOT hoard_exists_trigger('hoard_triggers', 'hoard_trigger_before') THEN
-                  CREATE TRIGGER hoard_trigger_before
-                    BEFORE INSERT ON hoard_triggers
-                    FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_trigger_before();
-                END IF;
+                PERFORM hoard_refresh_all(%s, %s);
               END;
             $$ LANGUAGE PLPGSQL;
           ",
