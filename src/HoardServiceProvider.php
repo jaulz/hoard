@@ -166,7 +166,7 @@ class HoardServiceProvider extends ServiceProvider
               RETURNS text
               AS $$
                 DECLARE
-                  query text;
+                  refresh_query text;
                 BEGIN
                   -- Ensure that we have any conditions
                   IF conditions = '' THEN
@@ -174,18 +174,18 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- Prepare refresh query
-                  query := format('SELECT %%s(%%s) FROM %%s WHERE %%s = %%s AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
+                  refresh_query := format('SELECT %%s(%%s) FROM %%s WHERE %%s = %%s AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
 
                   -- Coalesce certain aggregation functions to prevent null values
                   CASE aggregation_function 
                     WHEN 'COUNT' THEN
-                      query := format('COALESCE((%%s), 0)', query);
+                      refresh_query := format('COALESCE((%%s), 0)', refresh_query);
                     WHEN 'SUM' THEN
-                      query := format('COALESCE((%%s), 0)', query);
+                      refresh_query := format('COALESCE((%%s), 0)', refresh_query);
                     ELSE
                   END CASE;
 
-                  RETURN query;
+                  RETURN refresh_query;
                 END;
               $$ LANGUAGE PLPGSQL;
           "
