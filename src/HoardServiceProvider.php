@@ -114,6 +114,7 @@ class HoardServiceProvider extends ServiceProvider
       $keyName = $command->keyName;
       $foreignTableName = $command->foreignTableName;
       $foreignKeyName = $command->foreignKeyName;
+      $valueType = $command->valueType ?? 'text';
       $aggregationFunction = Str::upper($command->aggregationFunction);
       $valueName = $command->valueName;
       $foreignConditions = $prepareConditions($command->foreignConditions);
@@ -150,6 +151,16 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
+            CREATE OR REPLACE FUNCTION hoard_set_row_value(record anyelement, key text, value jsonb)
+              RETURNS anyelement
+              AS $$
+                SELECT json_populate_record(record, json_build_object(key, value), true);
+              $$ LANGUAGE SQL;
+          "
+        ),
+
+        sprintf(
+          "
             CREATE OR REPLACE FUNCTION hoard_get_row_value(record anyelement, key text)
               RETURNS text
               AS $$
@@ -162,7 +173,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_refresh_query(aggregation_function text, value_name text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
+            CREATE OR REPLACE FUNCTION hoard_get_refresh_query(aggregation_function text, value_name text, value_type text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
               RETURNS text
               AS $$
                 DECLARE
@@ -179,9 +190,11 @@ class HoardServiceProvider extends ServiceProvider
                   -- Coalesce certain aggregation functions to prevent null values
                   CASE aggregation_function 
                     WHEN 'COUNT' THEN
-                      refresh_query := format('COALESCE((%%s), 0)', refresh_query);
+                      refresh_query := format('SELECT COALESCE((%%s), 0)', refresh_query);
                     WHEN 'SUM' THEN
-                      refresh_query := format('COALESCE((%%s), 0)', refresh_query);
+                      refresh_query := format('SELECT COALESCE((%%s), 0)', refresh_query);
+                    WHEN 'JSONB_AGG' THEN
+                      refresh_query := format('SELECT COALESCE((%%s), ''[]''::jsonb)', refresh_query);
                     ELSE
                   END CASE;
 
@@ -213,6 +226,7 @@ class HoardServiceProvider extends ServiceProvider
                   foreign_aggregation_name text;
                   aggregation_function text;
                   value_name text;
+                  value_type text;
                   key_name text;
                   conditions text;
                   foreign_conditions text;
@@ -230,6 +244,7 @@ class HoardServiceProvider extends ServiceProvider
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
                     aggregation_function := trigger.aggregation_function;
                     value_name := trigger.value_name;
+                    value_type := trigger.value_type;
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
@@ -240,7 +255,7 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Prepare refresh query
-                    refresh_query := hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
+                    refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
 
                     -- Append query if necessary
                     existing_refresh_query := updates ->> foreign_aggregation_name;
@@ -254,6 +269,8 @@ class HoardServiceProvider extends ServiceProvider
                           refresh_query := format('GREATEST(%%s, %%s)', existing_refresh_query, refresh_query);
                         WHEN 'MIN' THEN
                           refresh_query := format('LEAST(%%s, %%s)', existing_refresh_query, refresh_query);
+                        WHEN 'JSONB_AGG' THEN
+                          refresh_query := format('((%%s) || (%%s))', existing_refresh_query, refresh_query);
                         ELSE
                           refresh_query := format('%%s(%%s, %%s)', aggregation_function, existing_refresh_query, refresh_query);
                       END CASE;
@@ -325,6 +342,7 @@ class HoardServiceProvider extends ServiceProvider
                 foreign_aggregation_name text,
                 aggregation_function text,
                 value_name text,
+                value_type text,
                 conditions text,
                 foreign_conditions text,
 
@@ -342,9 +360,11 @@ class HoardServiceProvider extends ServiceProvider
                   changed_foreign_key boolean;
                   changed_value boolean;
                   old_query text;
+                  old_update text;
                   old_refresh_query text;
                   old_condition text;
                   new_query text;
+                  new_update text;
                   new_refresh_query text;
                   new_condition text;
                 BEGIN
@@ -354,7 +374,7 @@ class HoardServiceProvider extends ServiceProvider
                     changed_value := new_value IS DISTINCT FROM old_value;
                   END IF;
 
-                  RAISE NOTICE 'hoard_update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, aggregation_function=%%, value_name=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
+                  RAISE NOTICE 'hoard_update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
                     table_name,
                     key_name,
                     foreign_table_name,
@@ -362,6 +382,7 @@ class HoardServiceProvider extends ServiceProvider
                     foreign_aggregation_name,
                     aggregation_function,
                     value_name,
+                    value_type,
                     conditions,
                     foreign_conditions,
 
@@ -381,8 +402,8 @@ class HoardServiceProvider extends ServiceProvider
                   new_condition := format('%%s = ''%%s'' AND ( %%s )', foreign_key_name, new_foreign_key, foreign_conditions);
 
                   -- Prepare refresh query that can be used to get the aggregated value
-                  old_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, old_foreign_key, conditions);
-                  new_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, new_foreign_key, conditions);
+                  old_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
+                  new_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, new_foreign_key, conditions);
 
                   -- Update row if
                   -- 1. Foreign row with matching conditions is deleted
@@ -400,6 +421,18 @@ class HoardServiceProvider extends ServiceProvider
                       WHEN 'MIN' THEN
                         IF old_value != '' THEN
                           old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                        END IF;
+                      WHEN 'JSONB_AGG' THEN
+                        IF old_value != '' THEN
+                          IF value_type = 'text' THEN
+                            old_update := format('%%s - ''%%s''', foreign_aggregation_name, old_value);
+                          ELSIF value_type = 'numeric' THEN
+                            old_update := format('array_to_json(array_remove(array(select jsonb_array_elements_text(%%s)), %%s::text)::int[])', foreign_aggregation_name, old_value);
+                          ELSE  
+                            old_update := format('%%s - %%s', foreign_aggregation_name, old_value);
+                          END IF;
+
+                          old_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_table_name, foreign_aggregation_name, old_update, old_condition);
                         END IF;
                       ELSE
                         old_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_table_name, foreign_aggregation_name, old_refresh_query, old_condition);
@@ -428,6 +461,16 @@ class HoardServiceProvider extends ServiceProvider
                         IF new_value != '' THEN
                           new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' < %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
                         END IF;
+                      WHEN 'JSONB_AGG' THEN
+                        IF new_value != '' THEN
+                          IF value_type = 'text' THEN
+                            new_update := format('%%s::jsonb || ''[\"%%s\"]''::jsonb', foreign_aggregation_name, new_value);
+                          ELSE  
+                            new_update := format('%%s::jsonb || ''[%%s]''::jsonb', foreign_aggregation_name, new_value);
+                          END IF;
+
+                          new_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_table_name, foreign_aggregation_name, new_update, new_condition);
+                        END IF;  
                       ELSE
                         new_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_table_name, foreign_aggregation_name, new_refresh_query, new_condition);
                     END CASE;
@@ -456,6 +499,7 @@ class HoardServiceProvider extends ServiceProvider
                   foreign_key_name text;
                   aggregation_function text;
                   value_name text;
+                  value_type text;
                   key_name text;
                   conditions text;
                   foreign_conditions text;
@@ -483,6 +527,7 @@ class HoardServiceProvider extends ServiceProvider
                     foreign_key_name := trigger.foreign_key_name;
                     aggregation_function := trigger.aggregation_function;
                     value_name := trigger.value_name;
+                    value_type := trigger.value_type;
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
@@ -541,6 +586,7 @@ class HoardServiceProvider extends ServiceProvider
                       foreign_aggregation_name,
                       aggregation_function,
                       value_name,
+                      value_type,
                       conditions,
                       foreign_conditions,
 
@@ -574,6 +620,7 @@ class HoardServiceProvider extends ServiceProvider
                   foreign_key_name text;
                   aggregation_function text;
                   value_name text;
+                  value_type text;
                   key_name text;
                   conditions text;
             
@@ -604,6 +651,7 @@ class HoardServiceProvider extends ServiceProvider
                       foreign_key_name := trigger.foreign_key_name;
                       aggregation_function := trigger.aggregation_function;
                       value_name := trigger.value_name;
+                      value_type := trigger.value_type;
                       key_name := trigger.key_name;
                       conditions := trigger.conditions;
 
@@ -611,10 +659,14 @@ class HoardServiceProvider extends ServiceProvider
                       foreign_key := hoard_get_row_value(NEW, foreign_key_name);
 
                       -- Get actual value for aggregation column
-                      EXECUTE hoard_get_refresh_query(aggregation_function, value_name, table_name, key_name, foreign_key, conditions) INTO value;
+                      EXECUTE hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, foreign_key, conditions) INTO value;
 
                       -- Assign value to new record
-                      NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value);
+                      IF aggregation_function = 'JSONB_AGG' THEN
+                        NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value::jsonb);
+                      ELSE
+                        NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value);
+                      END IF;
                     END LOOP;
                   END IF;
               
@@ -664,7 +716,8 @@ class HoardServiceProvider extends ServiceProvider
               table_name, 
               key_name,
               aggregation_function, 
-              value_name, 
+              value_name,
+              value_type, 
               conditions,
               foreign_table_name, 
               foreign_key_name, 
@@ -679,23 +732,26 @@ class HoardServiceProvider extends ServiceProvider
               %7\$s,
               %8\$s,
               %9\$s,
-              %10\$s
+              %10\$s,
+              %11\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
               aggregation_function = %4\$s,
               value_name = %5\$s, 
-              conditions = %6\$s,
-              foreign_table_name = %7\$s, 
-              foreign_key_name = %8\$s,
-              foreign_aggregation_name = %9\$s,
-              foreign_conditions = %10\$s;
+              value_type = %6\$s, 
+              conditions = %7\$s,
+              foreign_table_name = %8\$s, 
+              foreign_key_name = %9\$s,
+              foreign_aggregation_name = %10\$s,
+              foreign_conditions = %11\$s;
           ",
           '',
           $this->quoteString($tableName),
           $this->quoteString($keyName),
           $this->quoteString($aggregationFunction),
           $this->quoteString($valueName),
+          $this->quoteString($valueType),
           DB::getPdo()->quote($conditions),
           $this->quoteString($foreignTableName),
           $this->quoteString($foreignKeyName),

@@ -37,7 +37,7 @@ class AcceptanceTestCase extends TestCase
         $this->app->useDatabasePath(implode(DIRECTORY_SEPARATOR, [__DIR__, '..', '..', 'database']));
         $this->runDatabaseMigrations();
         $this->migrate();
-        
+
         $this->init();
     }
 
@@ -93,6 +93,8 @@ class AcceptanceTestCase extends TestCase
             $table->integer('user_id')->nullable();
             $table->string('slug')->nullable();
             $table->integer('comments_count')->default(0)->nullable();
+            $table->jsonb('comments_ids')->default()->nullable();
+            $table->jsonb('comments_numeric_ids')->default()->nullable();
             $table->integer('tags_count')->default(0)->nullable();
             $table->integer('important_tags_count')->default(0)->nullable();
             $table->integer('images_count')->default(0)->nullable();
@@ -130,6 +132,8 @@ class AcceptanceTestCase extends TestCase
                 $table->hoard('post_id', 'posts', 'id', 'comments_count', 'COUNT', 'id')->withoutSoftDeletes();
                 $table->hoard('post_id', 'posts', 'id', 'last_commented_at', 'MAX', 'created_at')->withoutSoftDeletes();
                 $table->hoard('post_id', 'posts', 'id', 'first_commented_at', 'MIN', 'created_at')->withoutSoftDeletes();
+                $table->hoard('post_id', 'posts', 'id', 'comments_ids', 'JSONB_AGG', 'id')->withoutSoftDeletes();
+                $table->hoard('post_id', 'posts', 'id', 'comments_numeric_ids', 'JSONB_AGG', 'id')->withoutSoftDeletes()->type('numeric');
             }
         });
 

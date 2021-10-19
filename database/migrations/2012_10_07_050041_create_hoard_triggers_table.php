@@ -20,6 +20,7 @@ class CreateHoardTriggersTable extends Migration
       $table->string('key_name');
       $table->string('aggregation_function');
       $table->string('value_name');
+      $table->string('value_type')->nullable();
       $table->string('conditions');
       $table->string('foreign_table_name');
       $table->string('foreign_key_name');

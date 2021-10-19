@@ -52,6 +52,21 @@ class HoardDefinition
   }
 
   /**
+   * Set the type of the aggregated value column.
+   *
+   * @param  string  $type
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function type($type) {
+    $attributes = $this->command->getAttributes();
+    $attributes['valueType'] = $type;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
    * Refresh immediately.
    *
    * @param  string  $refreshKeyName
