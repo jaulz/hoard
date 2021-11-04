@@ -22,6 +22,13 @@ class HoardServiceProvider extends ServiceProvider
    */
   public function boot()
   {
+    $this->publishes(
+      [
+        __DIR__ . '/../database/migrations/' => database_path('migrations'),
+      ],
+      'hoard-migrations'
+    );
+
     $this->commands([
       ClearCommand::class,
       CacheCommand::class,
@@ -408,7 +415,7 @@ class HoardServiceProvider extends ServiceProvider
                   -- Update row if
                   -- 1. Foreign row with matching conditions is deleted
                   -- 2. Foreign row was updated and conditions are not matching anymore
-                  IF (operation = 'DELETE' AND old_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = true and new_relevant = false) OR (old_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
+                  IF old_foreign_key IS NOT NULL AND (operation = 'DELETE' AND old_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = true and new_relevant = false) OR (old_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
                     CASE aggregation_function 
                       WHEN 'COUNT' THEN
                         old_query := format('UPDATE %%s SET %%s = %%s - 1 WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, old_condition);
@@ -447,7 +454,7 @@ class HoardServiceProvider extends ServiceProvider
                   -- Update row if
                   -- 1. Foreign row with matching conditions is created
                   -- 2. Foreign row was updated and conditions are now matching
-                  IF (operation = 'INSERT' AND new_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = false AND new_relevant = true) OR (new_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
+                  IF new_foreign_key IS NOT NULL AND (operation = 'INSERT' AND new_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = false AND new_relevant = true) OR (new_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
                     CASE aggregation_function 
                       WHEN 'COUNT' THEN
                         new_query := format('UPDATE %%s SET %%s = %%s + 1 WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, new_condition);
@@ -680,8 +687,8 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                IF NOT hoard_exists_trigger(%s, 'hoard_before_trigger') THEN
-                  CREATE TRIGGER hoard_before_trigger
+                IF NOT hoard_exists_trigger(%s, '_hoard_before_trigger') THEN
+                  CREATE TRIGGER _hoard_before_trigger
                     BEFORE INSERT OR UPDATE OR DELETE ON %s
                     FOR EACH ROW 
                     EXECUTE FUNCTION hoard_before_trigger();
@@ -697,8 +704,8 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                IF NOT hoard_exists_trigger(%s, 'hoard_after_trigger') THEN
-                  CREATE TRIGGER hoard_after_trigger
+                IF NOT hoard_exists_trigger(%s, '_hoard_after_trigger') THEN
+                  CREATE TRIGGER _hoard_after_trigger
                     AFTER INSERT OR UPDATE OR DELETE ON %s
                     FOR EACH ROW 
                     EXECUTE FUNCTION hoard_after_trigger();
