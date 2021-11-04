@@ -4,9 +4,6 @@ namespace Jaulz\Hoard;
 
 use Illuminate\Database\Query\Expression;
 use Illuminate\Support\ServiceProvider;
-use Jaulz\Hoard\Commands\CacheCommand;
-use Jaulz\Hoard\Commands\ClearCommand;
-use Jaulz\Hoard\Commands\RefreshCommand;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\Grammar;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
@@ -30,9 +27,6 @@ class HoardServiceProvider extends ServiceProvider
     );
 
     $this->commands([
-      ClearCommand::class,
-      CacheCommand::class,
-      RefreshCommand::class,
     ]);
 
     $this->enhanceBlueprint();

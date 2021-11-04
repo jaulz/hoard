@@ -8,7 +8,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Jaulz\Hoard\HoardServiceProvider;
-use Jaulz\Hoard\Support\Hoard;
 use Orchestra\Testbench\Concerns\CreatesApplication;
 use Orchestra\Testbench\TestCase;
 use Tests\Acceptance\Models\Comment;
@@ -43,8 +42,6 @@ class AcceptanceTestCase extends TestCase
 
     public function init()
     {
-        Hoard::$enabled = !$this->native;
-
         $user = new User();
         $user->first_name = 'Kirk';
         $user->last_name = 'Bushell';
