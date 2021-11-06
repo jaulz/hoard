@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Jaulz\Hoard\HoardSchema;
 use Jaulz\Hoard\HoardServiceProvider;
 use Orchestra\Testbench\Concerns\CreatesApplication;
 use Orchestra\Testbench\TestCase;
@@ -34,10 +35,144 @@ class AcceptanceTestCase extends TestCase
         $serviceProvider->boot();
 
         $this->app->useDatabasePath(implode(DIRECTORY_SEPARATOR, [__DIR__, '..', '..', 'database']));
-        $this->runDatabaseMigrations();
+        // $this->runDatabaseMigrations();
         $this->migrate();
 
         $this->init();
+    }
+
+    private function migrate()
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('first_name');
+            $table->string('last_name');
+            $table->string('slug')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('posts', function (Blueprint $table) {
+            $table->increments('id');
+            $table->integer('user_id')->nullable();
+            $table->string('slug')->nullable();
+            $table->boolean('visible')->default(false);
+            $table->integer('weight')->default(1);
+            $table->softDeletes();
+            $table->timestamps();
+        });
+
+        Schema::create('comments', function (Blueprint $table) {
+            $table->increments('id');
+            $table->integer('user_id');
+            $table->integer('post_id');
+            $table->boolean('visible')->default(false);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('tags', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('title')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('taggables', function (Blueprint $table) {
+            $table->increments('id');
+            $table->morphs('taggable');
+            $table->integer('tag_id');
+            $table->integer('weight')->default(0);
+            $table->timestamps();
+        });
+
+        Schema::create('images', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('source');
+            $table->morphs('imageable');
+            $table->timestamps();
+        });
+
+        HoardSchema::table('posts', function (Blueprint $table) {
+            $table->integer('comments_count')->default(0)->nullable();
+            $table->jsonb('comments_ids')->default()->nullable();
+            $table->jsonb('comments_numeric_ids')->default()->nullable();
+            $table->integer('tags_count')->default(0)->nullable();
+            $table->integer('important_tags_count')->default(0)->nullable();
+            $table->integer('images_count')->default(0)->nullable();
+            $table->timestamp('first_commented_at')->nullable();
+            $table->timestamp('last_commented_at')->nullable();
+
+            $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id', [
+                ['deleted_at', 'IS', null]
+            ])->via('post_id');
+            $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes()->via('post_id');
+            $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes()->via('post_id');
+            $table->hoard('comments_ids')->aggregate('comments', 'JSONB_AGG', 'id')->withoutSoftDeletes()->via('post_id');
+            $table->hoard('comments_numeric_ids')->aggregate('comments',  'JSONB_AGG', 'id')->withoutSoftDeletes()->type('numeric')->via('post_id');
+
+            $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id', 'taggable_type = \'' . Post::class . '\'')->via('taggable_id');
+            $table->hoard('important_tags_count')->aggregate('taggables', 'COUNT', 'id',  [
+                ['taggable_type', '=', Post::class],
+                ['weight', '>', 5],
+            ])->via('taggable_id');
+
+            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id', [
+                ['imageable_type', '=', Post::class],
+            ])->via('imageable_id');
+        });
+
+        HoardSchema::table('users', function (Blueprint $table) {
+            $table->integer('comments_count')->default(0)->nullable();
+            $table->integer('posts_count')->default(0)->nullable();
+            $table->integer('posts_count_explicit')->default(0)->nullable();
+            $table->integer('posts_count_conditional')->default(0)->nullable();
+            $table->integer('posts_count_complex_conditional')->default(0)->nullable();
+            $table->integer('images_count')->default(0)->nullable();
+
+            $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
+                ['deleted_at', 'IS', null]
+            ])->via('user_id');
+            $table->hoard('posts_count')->aggregate('posts', 'COUNT', 'id', [
+                ['deleted_at', 'IS', null]
+            ])->via('user_id');
+            $table->hoard('posts_count_explicit')->aggregate('posts', 'COUNT', 'id', [
+                ['deleted_at', 'IS', null]
+            ])->via('user_id');
+            $table->hoard('posts_count_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND deleted_at IS NULL')->via('user_id');
+            $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL')->via('user_id');
+            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
+                'imageable_type' => User::class,
+            ])->via('imageable_id');
+        });
+
+        HoardSchema::extend('taggables', function (Blueprint $table) {
+            $table->integer('taggable_count')->default(0)->nullable();
+            $table->timestamp('taggable_created_at')->nullable();
+
+            $table->hoard('taggable_count')->aggregate('users', 'COUNT', 'id')->via('id', 'taggable_id', [
+                'taggable_type' => User::class,
+            ]);
+            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at')->via('id', 'taggable_id', [
+                'taggable_type' => User::class,
+            ]);
+
+            $table->hoard('taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->via('id', 'taggable_id',[
+                'taggable_type' => Post::class,
+            ]);
+            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->via('id', 'taggable_id',[
+                'taggable_type' => Post::class,
+            ]);
+        });
+
+        HoardSchema::table('tags', function (Blueprint $table) {
+            $table->integer('taggables_count')->default(0)->nullable();
+            $table->timestamp('first_created_at')->nullable();
+            $table->timestamp('last_created_at')->nullable();
+
+            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'taggable_count')->via('tag_id');
+            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at')->via('tag_id');
+            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at')->via('tag_id');
+        });
     }
 
     public function init()
@@ -56,130 +191,7 @@ class AcceptanceTestCase extends TestCase
         $tag->title = 'General';
         $tag->save();
 
-        $this->data =  compact('user', 'post', 'tag');
-    }
-
-    private function migrate()
-    {
-        Schema::create('users', function (Blueprint $table) {
-            $table->increments('id');
-            $table->string('first_name');
-            $table->string('last_name');
-            $table->string('slug')->nullable();
-            $table->integer('comments_count')->default(0)->nullable();
-            $table->integer('posts_count')->default(0)->nullable();
-            $table->integer('posts_count_explicit')->default(0)->nullable();
-            $table->integer('posts_count_conditional')->default(0)->nullable();
-            $table->integer('posts_count_complex_conditional')->default(0)->nullable();
-            $table->integer('post_comments_sum')->default(0)->nullable();
-            $table->integer('images_count')->default(0)->nullable();
-            $table->timestamps();
-
-            if ($this->native) {
-                $table->hoard('id', 'taggables', 'taggable_id', 'taggable_count', 'COUNT', 'id', [], [
-                    'taggable_type' => User::class,
-                ]);
-                $table->hoard('id', 'taggables', 'taggable_id', 'taggable_created_at', 'MAX', 'created_at', [], [
-                    'taggable_type' => User::class,
-                ]);
-            }
-        });
-
-        Schema::create('posts', function (Blueprint $table) {
-            $table->increments('id');
-            $table->integer('user_id')->nullable();
-            $table->string('slug')->nullable();
-            $table->integer('comments_count')->default(0)->nullable();
-            $table->jsonb('comments_ids')->default()->nullable();
-            $table->jsonb('comments_numeric_ids')->default()->nullable();
-            $table->integer('tags_count')->default(0)->nullable();
-            $table->integer('important_tags_count')->default(0)->nullable();
-            $table->integer('images_count')->default(0)->nullable();
-            $table->boolean('visible')->default(false);
-            $table->timestamp('first_commented_at')->nullable();
-            $table->timestamp('last_commented_at')->nullable();
-            $table->integer('weight')->default(1);
-            $table->softDeletes();
-            $table->timestamps();
-
-            if ($this->native) {
-                $table->hoard('user_id', 'users', 'id', 'posts_count', 'COUNT', 'id')->withoutSoftDeletes();
-                $table->hoard('user_id', 'users', 'id', 'posts_count_explicit', 'COUNT', 'id')->withoutSoftDeletes();
-                $table->hoard('user_id', 'users', 'id', 'posts_count_conditional', 'COUNT', 'id', 'visible = true')->withoutSoftDeletes();
-                $table->hoard('user_id', 'users', 'id', 'posts_count_complex_conditional', 'COUNT', 'id', 'visible = true AND weight > 5')->withoutSoftDeletes();
-                $table->hoard('id', 'taggables', 'taggable_id', 'taggable_count', 'COUNT', 'id', [], [
-                    'taggable_type' => Post::class,
-                ])->withoutSoftDeletes();
-                $table->hoard('id', 'taggables', 'taggable_id', 'taggable_created_at', 'MAX', 'created_at', [], [
-                    'taggable_type' => Post::class,
-                ])->withoutSoftDeletes();
-            }
-        });
-
-        Schema::create('comments', function (Blueprint $table) {
-            $table->increments('id');
-            $table->integer('user_id');
-            $table->integer('post_id');
-            $table->boolean('visible')->default(false);
-            $table->timestamps();
-            $table->softDeletes();
-
-            if ($this->native) {
-                $table->hoard('user_id', 'users', 'id', 'comments_count', 'COUNT', 'id')->withoutSoftDeletes();
-                $table->hoard('post_id', 'posts', 'id', 'comments_count', 'COUNT', 'id')->withoutSoftDeletes();
-                $table->hoard('post_id', 'posts', 'id', 'last_commented_at', 'MAX', 'created_at')->withoutSoftDeletes();
-                $table->hoard('post_id', 'posts', 'id', 'first_commented_at', 'MIN', 'created_at')->withoutSoftDeletes();
-                $table->hoard('post_id', 'posts', 'id', 'comments_ids', 'JSONB_AGG', 'id')->withoutSoftDeletes();
-                $table->hoard('post_id', 'posts', 'id', 'comments_numeric_ids', 'JSONB_AGG', 'id')->withoutSoftDeletes()->type('numeric');
-            }
-        });
-
-        Schema::create('tags', function (Blueprint $table) {
-            $table->increments('id');
-            $table->string('title')->nullable();
-            $table->integer('taggables_count')->default(0)->nullable();
-            $table->timestamp('first_created_at')->nullable();
-            $table->timestamp('last_created_at')->nullable();
-            $table->timestamps();
-            $table->softDeletes();
-        });
-
-        Schema::create('taggables', function (Blueprint $table) {
-            $table->increments('id');
-            $table->morphs('taggable');
-            $table->integer('tag_id');
-            $table->integer('weight')->default(0);
-            $table->integer('taggable_count')->default(1)->nullable();
-            $table->timestamp('taggable_created_at')->nullable();
-            $table->timestamps();
-
-            if ($this->native) {
-                $table->hoard('tag_id', 'tags', 'id', 'taggables_count', 'SUM', 'taggable_count', 'taggable_count > 0');
-                $table->hoard('taggable_id', 'posts', 'id', 'tags_count', 'COUNT', 'id', 'taggable_type = \'' . Post::class . '\'');
-                $table->hoard('taggable_id', 'posts', 'id', 'important_tags_count', 'COUNT', 'id', [
-                    ['taggable_type', '=', Post::class],
-                    ['weight', '>', 5],
-                ]);
-                $table->hoard('tag_id', 'tags', 'id', 'last_created_at', 'MAX', 'taggable_created_at');
-                $table->hoard('tag_id', 'tags', 'id', 'first_created_at', 'MIN', 'taggable_created_at');
-            }
-        });
-
-        Schema::create('images', function (Blueprint $table) {
-            $table->increments('id');
-            $table->string('source');
-            $table->morphs('imageable');
-            $table->timestamps();
-
-            if ($this->native) {
-                $table->hoard('imageable_id', 'users', 'id', 'images_count', 'COUNT', 'id', [
-                    'imageable_type' => User::class,
-                ]);
-                $table->hoard('imageable_id', 'posts', 'id', 'images_count', 'COUNT', 'id', [
-                    ['imageable_type', '=', Post::class],
-                ]);
-            }
-        });
+        $this->data = compact('user', 'post', 'tag');
     }
     
     protected function debug() {
@@ -210,11 +222,16 @@ class AcceptanceTestCase extends TestCase
     public function assertQueryLogCountEquals($count) {
         $queryLog = $this->stopQueryLog();
 
-        $this->assertEquals($this->native ? 1 : $count, count($queryLog));
+        $this->assertEquals($count, count($queryLog));
+    }
+
+    public function refresh($model) {
+        return $model->forceRefresh();
     }
 
     public function testCount()
     {
+        $this->startQueryLog();
         $user = User::first();
 
         $this->assertEquals(1, $user->posts_count);
@@ -242,35 +259,32 @@ class AcceptanceTestCase extends TestCase
         $comment->save();
 
         $this->assertEquals(1, User::first()->comments_count);
-        // $this->assertEquals(1, User::first()->post_comments_sum);
-        $this->assertEquals(1, $this->data['post']->refresh()->comments_count);
-        $this->assertEquals($comment->created_at, $this->data['post']->refresh()->first_commented_at);
-        $this->assertEquals($comment->created_at, $this->data['post']->refresh()->last_commented_at);
+        $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
+        $this->assertEquals($comment->created_at, $this->refresh($this->data['post'])->first_commented_at);
+        $this->assertEquals($comment->created_at, $this->refresh($this->data['post'])->last_commented_at);
 
         $comment->post_id = $post->id;
         $comment->save();
 
-        $this->assertEquals(0, $this->data['post']->refresh()->comments_count);
+        $this->assertEquals(0, $this->refresh($this->data['post'])->comments_count);
         $this->assertEquals(1, Post::get()[1]->comments_count);
-        $this->assertEquals(0, $this->data['user']->refresh()->posts_count_complex_conditional);
+        $this->assertEquals(0, $this->refresh($this->data['user'])->posts_count_complex_conditional);
 
         $post->weight = 8;
         $post->save();
 
         $this->assertEquals(0, Post::first()->comments_count);
         $this->assertEquals(1, Post::get()[1]->comments_count);
-        $this->assertEquals(1, $this->data['user']->refresh()->posts_count_complex_conditional);
+        $this->assertEquals(1, $this->refresh($this->data['user'])->posts_count_complex_conditional);
 
         $post->delete();
 
-        $this->assertEquals(1, $this->data['user']->refresh()->posts_count);
-        $this->assertEquals(1, $this->data['user']->refresh()->posts_count_explicit);
-        $this->assertEquals(0, $this->data['user']->refresh()->posts_count_conditional);
-        $this->assertEquals(0, $this->data['user']->refresh()->posts_count_complex_conditional);
+        $this->assertEquals(1, $this->refresh($this->data['user'])->posts_count);
+        $this->assertEquals(1, $this->refresh($this->data['user'])->posts_count_explicit);
+        $this->assertEquals(0, $this->refresh($this->data['user'])->posts_count_conditional);
+        $this->assertEquals(0, $this->refresh($this->data['user'])->posts_count_complex_conditional);
 
         $comment->delete();
-
-        // $this->assertEquals(0, User::first()->post_comments_sum);
     }
 
     public function testNegativeCounts()
@@ -285,40 +299,40 @@ class AcceptanceTestCase extends TestCase
         $comment->post_id = $this->data['post']->id;
         $comment->save();
 
-        $this->assertEquals(1, $this->data['post']->refresh()->comments_count);
+        $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
 
         $comment->delete();
 
-        $this->assertEquals(0, $this->data['post']->refresh()->comments_count);
-        $this->assertEquals(null, $this->data['post']->refresh()->first_commented_at);
-        $this->assertEquals(null, $this->data['post']->refresh()->last_commented_at);
+        $this->assertEquals(0, $this->refresh($this->data['post'])->comments_count);
+        $this->assertEquals(null, $this->refresh($this->data['post'])->first_commented_at);
+        $this->assertEquals(null, $this->refresh($this->data['post'])->last_commented_at);
 
-        $this->data['post']->refresh()->refreshHoard($this->native);
+        $this->refresh($this->data['post'])->refreshHoard($this->native);
 
-        $this->assertEquals(0, $this->data['post']->refresh()->comments_count);
-        $this->assertEquals(null, $this->data['post']->refresh()->first_commented_at);
-        $this->assertEquals(null, $this->data['post']->refresh()->last_commented_at);
+        $this->assertEquals(0, $this->refresh($this->data['post'])->comments_count);
+        $this->assertEquals(null, $this->refresh($this->data['post'])->first_commented_at);
+        $this->assertEquals(null, $this->refresh($this->data['post'])->last_commented_at);
 
         $secondComment = new Comment;
         $secondComment->user_id = $this->data['user']->id;
         $secondComment->post_id = $this->data['post']->id;
         $secondComment->save();
 
-        $this->assertEquals(1, $this->data['post']->refresh()->comments_count);
-        $this->assertEquals($secondComment->created_at, $this->data['post']->refresh()->first_commented_at);
-        $this->assertEquals($secondComment->created_at, $this->data['post']->refresh()->last_commented_at);
+        $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
+        $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->first_commented_at);
+        $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->last_commented_at);
 
-        $this->data['post']->refresh()->refreshHoard($this->native);
+        $this->refresh($this->data['post'])->refreshHoard($this->native);
 
-        $this->assertEquals(1, $this->data['post']->refresh()->comments_count);
-        $this->assertEquals($secondComment->created_at, $this->data['post']->refresh()->first_commented_at);
-        $this->assertEquals($secondComment->created_at, $this->data['post']->refresh()->last_commented_at);
+        $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
+        $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->first_commented_at);
+        $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->last_commented_at);
 
         $comment->restore();
 
-        $this->assertEquals(2, $this->data['post']->refresh()->comments_count);
-        $this->assertEquals($comment->created_at, $this->data['post']->refresh()->first_commented_at);
-        $this->assertEquals($secondComment->created_at, $this->data['post']->refresh()->last_commented_at);
+        $this->assertEquals(2, $this->refresh($this->data['post'])->comments_count);
+        $this->assertEquals($comment->created_at, $this->refresh($this->data['post'])->first_commented_at);
+        $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->last_commented_at);
     }
 
     public function testMorphManyCounts()
@@ -330,7 +344,7 @@ class AcceptanceTestCase extends TestCase
         $image->imageable()->associate($this->data['post']);
         $image->save();
 
-        $this->assertEquals(1, $post->refresh()->images_count);
+        $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(0, User::first()->images_count);
         
         // Test if we can assign an image to a Tag that doesn't update "images_count" in "tags" table
@@ -339,7 +353,7 @@ class AcceptanceTestCase extends TestCase
         $secondImage->imageable()->associate($this->data['tag']);
         $secondImage->save();
 
-        $this->assertEquals(1, $post->refresh()->images_count);
+        $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(0, User::first()->images_count);
 
         $thirdImage = new Image();
@@ -347,25 +361,24 @@ class AcceptanceTestCase extends TestCase
         $thirdImage->imageable()->associate($this->data['user']);
         $thirdImage->save();
 
-        $this->assertEquals(1, $post->refresh()->images_count);
+        $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(1, User::first()->images_count);
 
-        $this->data['post']->images_count = 3;
-        $this->data['post']->save();
+        DB::raw('UPDATE posts_cache SET images_count WHERE id = ' . $this->data['post']->id);
 
         $post->refreshHoard($this->native);
         
-        $this->assertEquals(1, $post->refresh()->images_count);
+        $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(1, User::first()->images_count);
 
         $image->delete();
 
-        $this->assertEquals(0, $post->refresh()->images_count);
+        $this->assertEquals(0, $this->refresh($post)->images_count);
         $this->assertEquals(1, User::first()->images_count);
 
         $secondImage->delete();
 
-        $this->assertEquals(0, $post->refresh()->images_count);
+        $this->assertEquals(0, $this->refresh($post)->images_count);
         $this->assertEquals(1, User::first()->images_count);
 
         $thirdImage = new Image();
@@ -374,7 +387,7 @@ class AcceptanceTestCase extends TestCase
         $thirdImage->imageable_id = $this->data['post']['id'];
         $thirdImage->save();
 
-        $this->assertEquals(1, $post->refresh()->images_count);
+        $this->assertEquals(1, $this->refresh($post)->images_count);
     }
 
     public function testMorphToMany()
@@ -386,13 +399,13 @@ class AcceptanceTestCase extends TestCase
             'weight' => 1,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
+        $this->assertQueryLogCountEquals(1);
         $this->assertEquals(1, User::first()->posts_count);
         $this->assertEquals(1, Tag::first()->taggables_count);
-        $this->assertEquals(1, $post->refresh()->tags_count);
-        $this->assertEquals(0, $post->refresh()->important_tags_count);
-        $this->assertEquals($post->refresh()->created_at, $this->data['tag']->refresh()->first_created_at);
-        $this->assertEquals($post->refresh()->created_at, $this->data['tag']->refresh()->last_created_at);
+        $this->assertEquals(1, $this->refresh($post)->tags_count);
+        $this->assertEquals(0, $this->refresh($post)->important_tags_count);
+        $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->first_created_at);
+        $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->last_created_at);
 
         $secondTag = new Tag();
         $secondTag->title = 'Updates';
@@ -403,13 +416,13 @@ class AcceptanceTestCase extends TestCase
             'weight' => 10,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
+        $this->assertQueryLogCountEquals(1);
         $this->assertEquals(1, User::first()->posts_count);
-        $this->assertEquals(1, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(2, $post->refresh()->tags_count);
-        $this->assertEquals(1, $post->refresh()->important_tags_count);
-        $this->assertEquals($post->refresh()->created_at, $this->data['tag']->refresh()->first_created_at);
-        $this->assertEquals($post->refresh()->created_at, $this->data['tag']->refresh()->last_created_at);
+        $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(2, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($post)->important_tags_count);
+        $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->first_created_at);
+        $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->last_created_at);
 
         Carbon::setTestNow(Carbon::now()->addSecond());
         $secondPost = new Post;
@@ -422,84 +435,84 @@ class AcceptanceTestCase extends TestCase
             'weight' => 3,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
-        $this->assertEquals(2, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(2, $post->refresh()->tags_count);
-        $this->assertEquals(1, $post->refresh()->important_tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals(0, $secondPost->refresh()->important_tags_count);
-        $this->assertEquals($secondPost->created_at, $this->data['tag']->refresh()->last_created_at);
-        $this->assertEquals($post->created_at, $this->data['tag']->refresh()->first_created_at);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(2, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($post)->important_tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals(0, $this->refresh($secondPost)->important_tags_count);
+        $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
+        $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
         $post->refreshHoard($this->native);
 
         $this->assertQueryLogCountEquals(1);
-        $this->assertEquals(2, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(2, $post->refresh()->tags_count);
-        $this->assertEquals(1, $post->refresh()->important_tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals(0, $secondPost->refresh()->important_tags_count);
-        $this->assertEquals($secondPost->created_at, $this->data['tag']->refresh()->last_created_at);
-        $this->assertEquals($post->created_at, $this->data['tag']->refresh()->first_created_at);
+        $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(2, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($post)->important_tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals(0, $this->refresh($secondPost)->important_tags_count);
+        $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
+        $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
         $post->tags()->detach($this->data['tag']->id);
 
-        $this->assertQueryLogCountEquals(5);
-        $this->assertEquals(1, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(1, $post->refresh()->tags_count);
-        $this->assertEquals(1, $post->refresh()->important_tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        // $this->assertEquals(Taggable::orderBy('created_at', 'desc')->first()->created_at, $this->data['tag']->refresh()->last_created_at);
-        // $this->assertEquals(Taggable::orderBy('created_at', 'asc')->first()->created_at, $this->data['tag']->refresh()->first_created_at);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(1, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($post)->important_tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        // $this->assertEquals(Taggable::orderBy('created_at', 'desc')->first()->created_at, $this->refresh($this->data['tag'])->last_created_at);
+        // $this->assertEquals(Taggable::orderBy('created_at', 'asc')->first()->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
         $post->tags()->attach($this->data['tag']->id, [
             'weight' => 3,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
-        $this->assertEquals(2, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(2, $post->refresh()->tags_count);
-        $this->assertEquals(1, $post->refresh()->important_tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals($secondPost->created_at, $this->data['tag']->refresh()->last_created_at);
-        $this->assertEquals($post->created_at, $this->data['tag']->refresh()->first_created_at);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(2, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($post)->important_tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
+        $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
         $post->delete();
 
-        $this->assertQueryLogCountEquals(5);
-        $this->assertEquals(1, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals($secondPost->created_at, $this->data['tag']->refresh()->last_created_at);
-        $this->assertEquals($secondPost->created_at, $this->data['tag']->refresh()->first_created_at);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
+        $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
         $post->restore();
 
-        $this->assertQueryLogCountEquals(5);
-        $this->assertEquals(2, $this->data['tag']->refresh()->taggables_count);
-        $this->assertEquals(2, $post->refresh()->tags_count);
-        $this->assertEquals(1, $post->refresh()->important_tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals($secondPost->created_at, $this->data['tag']->refresh()->last_created_at);
-        $this->assertEquals($post->created_at, $this->data['tag']->refresh()->first_created_at);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
+        $this->assertEquals(2, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($post)->important_tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
+        $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
         $post->tags()->detach();
 
         $this->assertQueryLogCountEquals(1);
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
-        $this->assertEquals($this->native ? 1 : 2, $this->data['tag']->refresh()->taggables_count);
+        $this->assertEquals($this->native ? 1 : 2, $this->refresh($this->data['tag'])->taggables_count);
 
-        $tag = $this->data['tag']->refresh();
+        $tag = $this->refresh($this->data['tag']);
         $this->startQueryLog();
         $tag->refreshHoard($this->native);
 
         $this->assertQueryLogCountEquals(1);
-        $this->assertEquals(1, $this->data['tag']->refresh()->taggables_count);
+        $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
 
         $image = new Image();
         $image->source = 'https://laravel.com/img/logotype.min.svg';
@@ -511,15 +524,15 @@ class AcceptanceTestCase extends TestCase
             'weight' => 3
         ]);
 
-        $this->assertQueryLogCountEquals(3);
-        $this->assertEquals(2, $this->data['tag']->refresh()->taggables_count);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
 
-        $tag = $this->data['tag']->refresh();
+        $tag = $this->refresh($this->data['tag']);
         $this->startQueryLog();
         $tag->refreshHoard($this->native);
 
         $this->assertQueryLogCountEquals(1);
-        $this->assertEquals(2, $this->data['tag']->refresh()->taggables_count);
+        $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
     }
 
     public function testMorphByMany()
@@ -532,12 +545,12 @@ class AcceptanceTestCase extends TestCase
             'weight' => 1,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
+        $this->assertQueryLogCountEquals(1);
         $this->assertEquals(1, User::first()->posts_count);
-        $this->assertEquals(1, $tag->refresh()->taggables_count);
-        $this->assertEquals(1, $post->refresh()->tags_count);
-        $this->assertEquals($tag->refresh()->first_created_at, $post->created_at);
-        $this->assertEquals($tag->refresh()->last_created_at, $post->created_at);
+        $this->assertEquals(1, $this->refresh($tag)->taggables_count);
+        $this->assertEquals(1, $this->refresh($post)->tags_count);
+        $this->assertEquals($this->refresh($tag)->first_created_at, $post->created_at);
+        $this->assertEquals($this->refresh($tag)->last_created_at, $post->created_at);
 
         Carbon::setTestNow(Carbon::now()->addSecond());
         $secondPost = new Post;
@@ -550,24 +563,24 @@ class AcceptanceTestCase extends TestCase
             'weight' => 1,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
+        $this->assertQueryLogCountEquals(1);
         $this->assertEquals(2, User::first()->posts_count);
-        $this->assertEquals(2, $tag->refresh()->taggables_count);
-        $this->assertEquals(1, $post->refresh()->tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals($tag->refresh()->first_created_at, $post->created_at);
-        $this->assertEquals($tag->refresh()->last_created_at, $secondPost->created_at);
+        $this->assertEquals(2, $this->refresh($tag)->taggables_count);
+        $this->assertEquals(1, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals($this->refresh($tag)->first_created_at, $post->created_at);
+        $this->assertEquals($this->refresh($tag)->last_created_at, $secondPost->created_at);
 
         $this->startQueryLog();
         $tag->posts()->detach($this->data['post']->id);
 
-        $this->assertQueryLogCountEquals(5);
+        $this->assertQueryLogCountEquals(1);
         $this->assertEquals(2, User::first()->posts_count);
-        $this->assertEquals(1, $tag->refresh()->taggables_count);
-        $this->assertEquals(0, $post->refresh()->tags_count);
-        $this->assertEquals(1, $secondPost->refresh()->tags_count);
-        $this->assertEquals($tag->refresh()->first_created_at, $secondPost->created_at);
-        $this->assertEquals($tag->refresh()->last_created_at, $secondPost->created_at);
+        $this->assertEquals(1, $this->refresh($tag)->taggables_count);
+        $this->assertEquals(0, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+        $this->assertEquals($this->refresh($tag)->first_created_at, $secondPost->created_at);
+        $this->assertEquals($this->refresh($tag)->last_created_at, $secondPost->created_at);
     }
 
     public function testPivot()
@@ -580,20 +593,20 @@ class AcceptanceTestCase extends TestCase
             'weight' => 1,
         ]);
 
-        $this->assertQueryLogCountEquals(4);
-        $this->assertEquals(1, $tag->refresh()->taggables_count);
-        $this->assertEquals(1, $post->refresh()->tags_count);
-        $this->assertEquals($tag->refresh()->first_created_at, $post->created_at);
-        $this->assertEquals($tag->refresh()->last_created_at, $post->created_at);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(1, $this->refresh($tag)->taggables_count);
+        $this->assertEquals(1, $this->refresh($post)->tags_count);
+        $this->assertEquals($this->refresh($tag)->first_created_at, $post->created_at);
+        $this->assertEquals($this->refresh($tag)->last_created_at, $post->created_at);
 
         $taggable = Taggable::first();
         $this->startQueryLog();
         $taggable->delete();
 
-        $this->assertQueryLogCountEquals(6);
-        $this->assertEquals(0, $tag->refresh()->taggables_count);
-        $this->assertEquals(0, $post->refresh()->tags_count);
-        $this->assertEquals($tag->refresh()->first_created_at, null);
-        $this->assertEquals($tag->refresh()->last_created_at, null);
+        $this->assertQueryLogCountEquals(1);
+        $this->assertEquals(0, $this->refresh($tag)->taggables_count);
+        $this->assertEquals(0, $this->refresh($post)->tags_count);
+        $this->assertEquals($this->refresh($tag)->first_created_at, null);
+        $this->assertEquals($this->refresh($tag)->last_created_at, null);
     }
 }

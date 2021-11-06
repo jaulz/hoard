@@ -22,6 +22,8 @@ return new class extends Migration {
       $table->string('value_type')->nullable();
       $table->string('conditions');
       $table->string('foreign_table_name');
+      $table->string('foreign_cache_table_name');
+      $table->string('foreign_primary_key_name');
       $table->string('foreign_key_name');
       $table->string('foreign_aggregation_name');
       $table->string('foreign_conditions');

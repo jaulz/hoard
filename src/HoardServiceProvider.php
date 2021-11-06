@@ -9,6 +9,7 @@ use Illuminate\Database\Schema\Grammars\Grammar;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\Str;
 
@@ -26,28 +27,52 @@ class HoardServiceProvider extends ServiceProvider
       'hoard-migrations'
     );
 
-    $this->commands([
-    ]);
+    $this->commands([]);
 
     $this->enhanceBlueprint();
   }
 
   public function enhanceBlueprint()
   {
-    Blueprint::macro('hoard', function (
-      string $keyName,
-      string $foreignTableName,
-      string $foreignKeyName,
-      string $foreignAggregationName,
-      string $aggregationFunction,
-      string $valueName,
-      string|array $conditions = '',
-      string|array $foreignConditions = ''
+    Blueprint::macro('hoardContext', function (
+      string $tableName,
+      ?string $primaryKeyName= 'id',
+      ?string $cacheTableName= null,
+      ?string $cachePrimaryKeyName = null
     ) {
       /** @var \Illuminate\Database\Schema\Blueprint $this */
-      $tableName = $this->prefix . $this->table;
-      $conditions = is_string($conditions) ? [$conditions] : $conditions; 
-      $foreignConditions = is_string($foreignConditions) ? [$foreignConditions] : $foreignConditions; 
+      $this->addCommand(
+        'hoardContext',
+        compact(
+          'tableName',
+          'primaryKeyName',
+          'cacheTableName',
+          'cachePrimaryKeyName'
+        )
+      );
+    });
+
+    Blueprint::macro('hoard', function (
+      string $foreignAggregationName
+    ) {
+      /** @var \Illuminate\Database\Schema\Blueprint $this */
+      $hoardContext = collect($this->getCommands())->first(function ($command) {
+        return $command->get('name') === 'hoardContext';
+      });
+      $foreignTableName = $this->prefix . $hoardContext->get('tableName');
+      $foreignCacheTableName = $hoardContext->get('cacheTableName') ? $this->prefix . $hoardContext->get('cacheTableName') : $foreignTableName;
+      $foreignPrimaryKeyName = $hoardContext->get('primaryKeyName');
+      $foreignCachePrimaryKeyName = $hoardContext->get('cachePrimaryKeyName') ?? $foreignPrimaryKeyName;
+
+      // Can be overriden with "via" method
+      $keyName = Str::singular($foreignTableName) . '_id';
+      $foreignKeyName = 'id';
+      $foreignConditions = [];
+
+      $aggregationFunction = '!NOT SET!';
+      $valueName = '!NOT SET!';
+      $conditions = [];
+      $tableName = '!NOT SET!';
 
       $command = $this->addCommand(
         'hoard',
@@ -55,12 +80,15 @@ class HoardServiceProvider extends ServiceProvider
           'foreignAggregationName',
           'keyName',
           'foreignTableName',
+          'foreignCacheTableName',
+          'foreignPrimaryKeyName',
           'foreignKeyName',
           'aggregationFunction',
           'valueName',
           'conditions',
           'foreignConditions',
-          'tableName'
+          'tableName',
+          'foreignCachePrimaryKeyName'
         )
       );
 
@@ -72,48 +100,49 @@ class HoardServiceProvider extends ServiceProvider
       Fluent $command
     ) {
       /** @var \Illuminate\Database\Schema\Grammars\PostgresGrammar $this */
-       $prepareConditions = function (array $conditions) {
+      $prepareConditions = function (array $conditions) {
         return collect($conditions)->mapWithKeys(function ($condition, $key) {
           $operator = '=';
           $value = $condition;
-  
+
           // In case a string is provided we just use it as it is
           if (is_numeric($key) && is_string($condition)) {
             return [$key, $condition];
           }
-          
-            // In case an array is provided, the second item is the operator and the third is the value
-            if (is_array($condition)) {
-              $key = $condition[0];
-              $operator = $condition[1];
-              $value = $condition[2];
-            }
-            if ($condition instanceof Collection) {
-              $key = $condition->get(0);
-              $operator = $condition->get(1);
-              $value = $condition->get(2);
-            }
-  
-            // Finally either use a quoted value or as it is
-            if ($value instanceof Expression) {
-              $value = $value->getValue();
-            } else if (is_null($value)) {
-              $operator = 'IS';
-              $value = 'NULL';
-            } else {
-              $value = DB::getPdo()->quote($value);
-            }
-  
-            if (!$value) {
-              return [];
-            }
-  
-            return  [$key => $key . ' ' . $operator . ' ' . $value];
-          })->values()->filter()->implode(' AND ');
+
+          // In case an array is provided, the second item is the operator and the third is the value
+          if (is_array($condition)) {
+            $key = $condition[0];
+            $operator = $condition[1];
+            $value = $condition[2];
+          }
+          if ($condition instanceof Collection) {
+            $key = $condition->get(0);
+            $operator = $condition->get(1);
+            $value = $condition->get(2);
+          }
+
+          // Finally either use a quoted value or as it is
+          if ($value instanceof Expression) {
+            $value = $value->getValue();
+          } else if (is_null($value)) {
+            $operator = 'IS';
+            $value = 'NULL';
+          } else {
+            $value = DB::getPdo()->quote($value);
+          }
+
+          if (!$value) {
+            return [];
+          }
+
+          return  [$key => $key . ' ' . $operator . ' ' . $value];
+        })->values()->filter()->implode(' AND ');
       };
       $foreignAggregationName = $command->foreignAggregationName;
       $keyName = $command->keyName;
       $foreignTableName = $command->foreignTableName;
+      $foreignCacheTableName = $command->foreignCacheTableName;
       $foreignKeyName = $command->foreignKeyName;
       $valueType = $command->valueType ?? 'text';
       $aggregationFunction = Str::upper($command->aggregationFunction);
@@ -122,15 +151,70 @@ class HoardServiceProvider extends ServiceProvider
       $conditions = $prepareConditions($command->conditions);
       $tableName = $command->tableName;
       $refreshKeyName = $command->refreshKeyName;
+      $foreignPrimaryKeyName = $command->foreignPrimaryKeyName;
+      $foreignCachePrimaryKeyName = $command->foreignCachePrimaryKeyName;
 
       return array_filter([
+        sprintf(
+          "
+            CREATE TABLE IF NOT EXISTS hoard_triggers (
+              id SERIAL PRIMARY KEY,
+              table_name varchar(255) NOT NULL,
+              key_name varchar(255) NOT NULL,
+              aggregation_function varchar(255) NOT NULL,
+              value_name varchar(255) NOT NULL,
+              value_type varchar(255),
+              conditions varchar(255) NOT NULL,
+              foreign_table_name varchar(255) NOT NULL,
+              foreign_primary_key_name varchar(255) NOT NULL,
+              foreign_key_name varchar(255) NOT NULL,
+              foreign_aggregation_name varchar(255) NOT NULL,
+              foreign_conditions varchar(255) NOT NULL,
+              foreign_cache_table_name varchar(255) NOT NULL,
+              foreign_cache_primary_key_name varchar(255) NOT NULL
+            );
+          "
+        ),
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION hoard_exists_trigger(table_name text, _trigger_name text)
               RETURNS bool
               AS $$
                 BEGIN
-                  IF EXISTS(SELECT * FROM information_schema.triggers WHERE triggers.event_object_table = table_name AND trigger_name = _trigger_name) THEN
+                  IF EXISTS(SELECT true FROM information_schema.triggers WHERE triggers.event_object_table = table_name AND trigger_name = _trigger_name) THEN
+                    RETURN true;
+                  ELSE
+                    RETURN false;
+                  END IF;
+                END;
+              $$ LANGUAGE PLPGSQL;
+          "
+        ),
+
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_exists_table(_table_name text)
+              RETURNS bool
+              AS $$
+                BEGIN
+                  IF EXISTS(SELECT true FROM information_schema.tables WHERE table_name = _table_name) THEN
+                    RETURN true;
+                  ELSE
+                    RETURN false;
+                  END IF;
+                END;
+              $$ LANGUAGE PLPGSQL;
+          "
+        ),
+
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_exists_view(_view_name text)
+              RETURNS bool
+              AS $$
+                BEGIN
+                  IF EXISTS(SELECT true FROM information_schema.views WHERE table_name = _view_name) THEN
                     RETURN true;
                   ELSE
                     RETURN false;
@@ -179,14 +263,23 @@ class HoardServiceProvider extends ServiceProvider
               AS $$
                 DECLARE
                   refresh_query text;
+                  cache_table_name text;
+                  cache_lateral_join text;
                 BEGIN
                   -- Ensure that we have any conditions
                   IF conditions = '' THEN
                     conditions := '1 = 1';
                   END IF;
 
+                  -- Check if cache table exists
+                  cache_table_name := format('%%s_with_caches', table_name);
+                  IF hoard_exists_view(cache_table_name) THEN
+                    table_name = cache_table_name;
+                    -- cache_lateral_join := format('CROSS JOIN LATERAL (SELECT * FROM %%s WHERE %%s.%%s = %%s.%%s) hoard', cache_table_name, table_name, 'id', cache_table_name, 'cache_id');
+                  END IF;
+
                   -- Prepare refresh query
-                  refresh_query := format('SELECT %%s(%%s) FROM %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
+                  refresh_query := format('SELECT %%s(%%s) FROM %%s %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, table_name, cache_lateral_join, key_name, foreign_key, conditions);
 
                   -- Coalesce certain aggregation functions to prevent null values
                   CASE aggregation_function 
@@ -209,14 +302,13 @@ class HoardServiceProvider extends ServiceProvider
           "
             CREATE OR REPLACE FUNCTION hoard_refresh(
                 foreign_table_name text,
-                foreign_key_name text,
                 foreign_row record
               )
               RETURNS void
               AS $$
                 DECLARE
                   trigger hoard_triggers%%rowtype;
-                  foreign_key text;
+                  foreign_primary_key text;
                   updates jsonb DEFAULT '{}';
                   refresh_query text;
                   existing_refresh_query text;
@@ -224,6 +316,9 @@ class HoardServiceProvider extends ServiceProvider
                   update_query text;
 
                   table_name text;
+                  foreign_cache_table_name text;
+                  foreign_cache_primary_key_name text;
+                  foreign_primary_key_name text;
                   foreign_aggregation_name text;
                   aggregation_function text;
                   value_name text;
@@ -234,21 +329,25 @@ class HoardServiceProvider extends ServiceProvider
                 BEGIN
                   RAISE NOTICE 'hoard_refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
 
-                  -- Get key
-                  foreign_key := hoard_get_row_value(foreign_row, foreign_key_name);
-
                   -- Collect all updates in a JSON map
                   FOR trigger IN
                     EXECUTE format('SELECT * FROM hoard_triggers WHERE hoard_triggers.foreign_table_name = ''%%s''', foreign_table_name)
                   LOOP
                     table_name := trigger.table_name;
+                    foreign_cache_table_name := trigger.foreign_cache_table_name;
+                    foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
+                    foreign_primary_key_name := trigger.foreign_primary_key_name;
                     aggregation_function := trigger.aggregation_function;
                     value_name := trigger.value_name;
                     value_type := trigger.value_type;
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
+
+                    -- Get primary key
+                    -- TODO: currently, this takes the last primary key of the last primary key name for the whole update but instead there should be something like a groupBy(foreign_primary_key_name)
+                    foreign_primary_key := hoard_get_row_value(foreign_row, foreign_primary_key_name);
 
                     -- Ensure that we have any conditions
                     IF conditions = '' THEN
@@ -278,7 +377,7 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Set new refresh query in updates map
-                    updates :=  updates || jsonb_build_object(foreign_aggregation_name, refresh_query);
+                    updates := updates || jsonb_build_object(foreign_aggregation_name, refresh_query);
                   END LOOP;
 
                   -- Concatenate update
@@ -294,7 +393,7 @@ class HoardServiceProvider extends ServiceProvider
                   
                   -- Run update if required
                   IF concatenated_updates IS NOT NULL THEN
-                    update_query := format('UPDATE %%s SET %%s WHERE %%s = %%s', foreign_table_name, concatenated_updates, foreign_key_name, foreign_key);
+                    update_query := format('UPDATE %%s SET %%s WHERE %%s = %%s', foreign_cache_table_name, concatenated_updates, foreign_cache_primary_key_name, foreign_primary_key);
                     RAISE NOTICE 'hoard_refresh: update (update_query=%%)', update_query;
                     EXECUTE update_query;
                   END IF;
@@ -307,7 +406,6 @@ class HoardServiceProvider extends ServiceProvider
           "
             CREATE OR REPLACE FUNCTION hoard_refresh_all(
                 foreign_table_name text,
-                foreign_key_name text,
                 foreign_table_conditions text DEFAULT '1 = 1'
               )
               RETURNS void
@@ -315,7 +413,7 @@ class HoardServiceProvider extends ServiceProvider
                 DECLARE
                   foreign_row record;
                 BEGIN
-                  RAISE NOTICE 'hoard_refresh_all: start (foreign_table_name=%%, foreign_key_name=%%, foreign_table_conditions=%%)', foreign_table_name, foreign_key_name, foreign_table_conditions;
+                  RAISE NOTICE 'hoard_refresh_all: start (foreign_table_name=%%, foreign_table_conditions=%%)', foreign_table_name, foreign_table_conditions;
 
                   -- Ensure that we have any conditions
                   IF foreign_table_conditions = '' THEN
@@ -326,7 +424,7 @@ class HoardServiceProvider extends ServiceProvider
                   FOR foreign_row IN
                     EXECUTE format('SELECT * FROM %%s WHERE %%s', foreign_table_name, foreign_table_conditions)
                   LOOP
-                    PERFORM hoard_refresh(foreign_table_name, foreign_key_name, foreign_row);
+                    PERFORM hoard_refresh(foreign_table_name, foreign_row);
                   END LOOP;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -339,8 +437,11 @@ class HoardServiceProvider extends ServiceProvider
                 table_name text,
                 key_name text,
                 foreign_table_name text,
+                foreign_primary_key_name text,
                 foreign_key_name text,
                 foreign_aggregation_name text,
+                foreign_cache_table_name text,
+                foreign_cache_primary_key_name text,
                 aggregation_function text,
                 value_name text,
                 value_type text,
@@ -375,12 +476,15 @@ class HoardServiceProvider extends ServiceProvider
                     changed_value := new_value IS DISTINCT FROM old_value;
                   END IF;
 
-                  RAISE NOTICE 'hoard_update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
+                  RAISE NOTICE 'hoard_update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
                     table_name,
                     key_name,
                     foreign_table_name,
+                    foreign_primary_key_name,
                     foreign_key_name,
                     foreign_aggregation_name,
+                    foreign_cache_table_name,
+                    foreign_cache_primary_key_name,
                     aggregation_function,
                     value_name,
                     value_type,
@@ -399,8 +503,13 @@ class HoardServiceProvider extends ServiceProvider
                   ;
 
                   -- Prepare conditions
-                  old_condition := format('%%s = ''%%s'' AND ( %%s )', foreign_key_name, old_foreign_key, foreign_conditions);
-                  new_condition := format('%%s = ''%%s'' AND ( %%s )', foreign_key_name, new_foreign_key, foreign_conditions);
+                  IF foreign_table_name = foreign_cache_table_name THEN
+                    old_condition := format('%%s = ''%%s'' AND ( %%s )', foreign_key_name, old_foreign_key, foreign_conditions);
+                    new_condition := format('%%s = ''%%s'' AND ( %%s )', foreign_key_name, new_foreign_key, foreign_conditions);
+                   ELSE 
+                    old_condition := format('%%s = (SELECT %%s FROM %%s WHERE %%s = ''%%s'' AND ( %%s ))', foreign_cache_primary_key_name, foreign_primary_key_name, foreign_table_name, foreign_key_name, old_foreign_key, foreign_conditions);
+                    new_condition := format('%%s = (SELECT %%s FROM %%s WHERE %%s = ''%%s'' AND ( %%s ))', foreign_cache_primary_key_name, foreign_primary_key_name, foreign_table_name, foreign_key_name, new_foreign_key, foreign_conditions);
+                   END IF;
 
                   -- Prepare refresh query that can be used to get the aggregated value
                   old_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
@@ -412,16 +521,17 @@ class HoardServiceProvider extends ServiceProvider
                   IF old_foreign_key IS NOT NULL AND (operation = 'DELETE' AND old_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = true and new_relevant = false) OR (old_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
                     CASE aggregation_function 
                       WHEN 'COUNT' THEN
-                        old_query := format('UPDATE %%s SET %%s = %%s - 1 WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, old_condition);
+                        old_query := format('UPDATE %%s SET %%s = %%s - 1 WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, old_condition);
                       WHEN 'SUM' THEN
-                        old_query := format('UPDATE %%s SET %%s = %%s - %%s WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, old_value, old_condition);
+                        -- NOTE: the value will be added later so we don't need to calculate the difference
+                        old_query := format('UPDATE %%s SET %%s = %%s - %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, old_value, old_condition);
                       WHEN 'MAX' THEN
                         IF old_value != '' THEN
-                          old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                          old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
                         END IF;
                       WHEN 'MIN' THEN
                         IF old_value != '' THEN
-                          old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                          old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
                         END IF;
                       WHEN 'JSONB_AGG' THEN
                         IF old_value != '' THEN
@@ -433,10 +543,10 @@ class HoardServiceProvider extends ServiceProvider
                             old_update := format('%%s - %%s', foreign_aggregation_name, old_value);
                           END IF;
 
-                          old_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_table_name, foreign_aggregation_name, old_update, old_condition);
+                          old_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_update, old_condition);
                         END IF;
                       ELSE
-                        old_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_table_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                        old_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_refresh_query, old_condition);
                     END CASE;
 
                     IF old_query != '' THEN
@@ -451,16 +561,17 @@ class HoardServiceProvider extends ServiceProvider
                   IF new_foreign_key IS NOT NULL AND (operation = 'INSERT' AND new_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = false AND new_relevant = true) OR (new_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
                     CASE aggregation_function 
                       WHEN 'COUNT' THEN
-                        new_query := format('UPDATE %%s SET %%s = %%s + 1 WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, new_condition);
+                        new_query := format('UPDATE %%s SET %%s = %%s + 1 WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_condition);
                       WHEN 'SUM' THEN
-                        new_query := format('UPDATE %%s SET %%s = %%s + %%s WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, new_condition);
+                        -- NOTE: the value was deducted before so we don't need to calculate the difference
+                        new_query := format('UPDATE %%s SET %%s = %%s + %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, new_condition);
                       WHEN 'MAX' THEN
                         IF new_value != '' THEN
-                          new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' > %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
+                          new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' > %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
                         END IF;
                       WHEN 'MIN' THEN
                         IF new_value != '' THEN
-                          new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' < %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
+                          new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' < %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
                         END IF;
                       WHEN 'JSONB_AGG' THEN
                         IF new_value != '' THEN
@@ -470,10 +581,10 @@ class HoardServiceProvider extends ServiceProvider
                             new_update := format('%%s::jsonb || ''[%%s]''::jsonb', foreign_aggregation_name, new_value);
                           END IF;
 
-                          new_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_table_name, foreign_aggregation_name, new_update, new_condition);
+                          new_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, new_update, new_condition);
                         END IF;  
                       ELSE
-                        new_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_table_name, foreign_aggregation_name, new_refresh_query, new_condition);
+                        new_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, new_refresh_query, new_condition);
                     END CASE;
 
                     IF new_query != '' THEN
@@ -496,7 +607,10 @@ class HoardServiceProvider extends ServiceProvider
 
                   table_name text;
                   foreign_table_name text;
+                  foreign_cache_table_name text;
                   foreign_aggregation_name text;
+                  foreign_primary_key_name text;
+                  foreign_cache_primary_key_name text;
                   foreign_key_name text;
                   aggregation_function text;
                   value_name text;
@@ -515,16 +629,25 @@ class HoardServiceProvider extends ServiceProvider
                   new_relevant boolean DEFAULT false;
                   changed_foreign_key boolean;
                   changed_value boolean;
+
+                  foreign_key text;
+                  foreign_primary_key text;
+                  foreign_cache_primary_key text;
+                  value text;
+                  refresh_query text;
                 BEGIN
                   RAISE NOTICE 'hoard_after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
 
-                  -- Get all triggers
+                  -- Get all triggers that affect OTHER tables
                   FOR trigger IN
                     SELECT * FROM hoard_triggers WHERE hoard_triggers.table_name = TG_TABLE_NAME
                   LOOP
                     table_name := trigger.table_name;
                     foreign_table_name := trigger.foreign_table_name;
+                    foreign_cache_table_name := trigger.foreign_cache_table_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
+                    foreign_primary_key_name := trigger.foreign_primary_key_name;
+                    foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                     foreign_key_name := trigger.foreign_key_name;
                     aggregation_function := trigger.aggregation_function;
                     value_name := trigger.value_name;
@@ -532,7 +655,7 @@ class HoardServiceProvider extends ServiceProvider
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
-                    RAISE NOTICE 'hoard_after_trigger: trigger (foreign_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', foreign_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
+                    RAISE NOTICE 'hoard_after_trigger: trigger (foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
 
                     -- Ensure that we have any conditions
                     IF conditions = '' THEN
@@ -583,8 +706,11 @@ class HoardServiceProvider extends ServiceProvider
                       table_name,
                       key_name,
                       foreign_table_name,
+                      foreign_primary_key_name,
                       foreign_key_name,
                       foreign_aggregation_name,
+                      foreign_cache_table_name,
+                      foreign_cache_primary_key_name,
                       aggregation_function,
                       value_name,
                       value_type,
@@ -601,6 +727,10 @@ class HoardServiceProvider extends ServiceProvider
                     );
                   END LOOP;
               
+                  IF TG_OP = 'DELETE' THEN
+                    RETURN OLD;
+                  END IF;
+
                   RETURN NEW;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -617,6 +747,7 @@ class HoardServiceProvider extends ServiceProvider
 
                   table_name text;
                   foreign_table_name text;
+                  foreign_cache_table_name text;
                   foreign_aggregation_name text;
                   foreign_key_name text;
                   aggregation_function text;
@@ -624,10 +755,14 @@ class HoardServiceProvider extends ServiceProvider
                   value_type text;
                   key_name text;
                   conditions text;
+                  foreign_conditions text;
             
                   refresh_query text;
                   value text;
                   foreign_key text;
+                  foreign_primary_key text;
+                  foreign_primary_key_name text;
+                  foreign_cache_primary_key_name text;
                 BEGIN
                   RAISE NOTICE 'hoard_before_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
 
@@ -636,11 +771,7 @@ class HoardServiceProvider extends ServiceProvider
                     RETURN OLD;
                   END IF;
 
-                  -- Nothing to do on UPDATE
-                  IF TG_OP = 'UPDATE' THEN
-                  END IF;
-
-                  -- Refresh on INSERT
+                  -- If this is the first row we need to create an entry in the cache table as well
                   IF TG_OP = 'INSERT' THEN
                     -- Get all foreign triggers
                     FOR trigger IN
@@ -648,6 +779,9 @@ class HoardServiceProvider extends ServiceProvider
                     LOOP
                       table_name := trigger.table_name;
                       foreign_table_name := trigger.foreign_table_name;
+                      foreign_cache_table_name := trigger.foreign_cache_table_name;
+                      foreign_primary_key_name := trigger.foreign_primary_key_name;
+                      foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                       foreign_aggregation_name := trigger.foreign_aggregation_name;
                       foreign_key_name := trigger.foreign_key_name;
                       aggregation_function := trigger.aggregation_function;
@@ -655,18 +789,39 @@ class HoardServiceProvider extends ServiceProvider
                       value_type := trigger.value_type;
                       key_name := trigger.key_name;
                       conditions := trigger.conditions;
+                      RAISE NOTICE 'hoard_after_trigger: foreign trigger (foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%, foreign_primary_key_name=%%, foreign_cache_primary_key_name=%%)', foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions, foreign_primary_key_name, foreign_cache_primary_key_name;
 
                       -- Get key of new record
                       foreign_key := hoard_get_row_value(NEW, foreign_key_name);
+                      IF foreign_key IS NULL THEN
+                        RAISE EXCEPTION 'hoard_after_trigger: foreign_key is empty: foreign_key_name=%%, TG_TABLE_NAME=%%, NEW=%%', foreign_key_name, TG_TABLE_NAME, NEW::text;
+                      END IF;
+
+                      foreign_primary_key := hoard_get_row_value(NEW, foreign_primary_key_name);
+                      IF foreign_primary_key IS NULL THEN
+                        RAISE EXCEPTION 'hoard_after_trigger: foreign_primary_key is empty: foreign_primary_key=%%, TG_TABLE_NAME=%%, NEW=%%', foreign_primary_key, TG_TABLE_NAME, NEW::text;
+                      END IF;
 
                       -- Get actual value for aggregation column
-                      EXECUTE hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, foreign_key, conditions) INTO value;
+                      refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, foreign_key, conditions);
 
-                      -- Assign value to new record
-                      IF aggregation_function = 'JSONB_AGG' THEN
-                        NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value::jsonb);
+                      -- Assign value either to current new record (if the cache table name is the same) or insert into cache table
+                      IF foreign_table_name = foreign_cache_table_name THEN
+                        -- EXECUTE format('UPDATE %%s SET %%s = (%%s) WHERE %%s = %%s', foreign_cache_table_name, foreign_aggregation_name, refresh_query, foreign_cache_primary_key_name, foreign_primary_key);
+
+                        -- NOTE: THIS ONLY WORKS IN BEFORE TRIGGER AND THUS IS BROKE AT THE MOMENT
+                        EXECUTE refresh_query INTO value;
+                        
+                        IF aggregation_function = 'JSONB_AGG' THEN
+                          NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value::jsonb);
+                          RAISE NOTICE 'hoard_after_trigger: foreign trigger, set json: foreign_aggregation_name=%%, value=%%', foreign_aggregation_name, value::jsonb;
+                        ELSE
+                          NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value);
+                          RAISE NOTICE 'hoard_after_trigger: foreign trigger, set raw: foreign_aggregation_name=%%, value=%%', foreign_aggregation_name, value;
+                        END IF;
                       ELSE
-                        NEW := hoard_set_row_value(NEW, foreign_aggregation_name, value);
+                        EXECUTE format('INSERT INTO %%s (%%s, %%s) VALUES (%%s, (%%s)) ON CONFLICT (%%s) DO UPDATE SET %%s = (%%s)', foreign_cache_table_name, foreign_cache_primary_key_name, foreign_aggregation_name, foreign_primary_key, refresh_query, foreign_cache_primary_key_name, foreign_aggregation_name, refresh_query);
+                        RAISE NOTICE 'hoard_after_trigger: foreign trigger, create cache entry: foreign_aggregation_name=%%, value=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%', foreign_aggregation_name, value, foreign_cache_table_name, foreign_cache_primary_key_name;
                       END IF;
                     END LOOP;
                   END IF;
@@ -679,19 +834,52 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            DO $$
-              BEGIN
-                IF NOT hoard_exists_trigger(%s, '_hoard_before_trigger') THEN
-                  CREATE TRIGGER _hoard_before_trigger
-                    BEFORE INSERT OR UPDATE OR DELETE ON %s
-                    FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_before_trigger();
-                END IF;
-              END;
-            $$ LANGUAGE PLPGSQL;
+            CREATE OR REPLACE FUNCTION hoard_initiate(table_name text)
+              RETURNS void
+                AS $$
+                DECLARE
+                BEGIN
+                  RAISE NOTICE 'hoard_initiate: start (table_name=%%)', table_name;
+
+                  -- Create triggers for table
+                  IF NOT hoard_exists_trigger(table_name, '_hoard_before_trigger') THEN
+                    EXECUTE format('
+                        CREATE TRIGGER _hoard_before_trigger
+                        BEFORE INSERT OR UPDATE OR DELETE ON %%s
+                        FOR EACH ROW 
+                        EXECUTE FUNCTION hoard_before_trigger()
+                      ', table_name);
+                  END IF;
+
+                  IF NOT hoard_exists_trigger(table_name, '_hoard_after_trigger') THEN
+                    EXECUTE format('
+                      CREATE TRIGGER _hoard_after_trigger
+                        AFTER INSERT OR UPDATE OR DELETE ON %%s
+                        FOR EACH ROW 
+                        EXECUTE FUNCTION hoard_after_trigger()
+                      ', table_name);
+                  END IF;
+                END;
+              $$ LANGUAGE PLPGSQL;
           ",
-          $this->quoteString($tableName),
-          $tableName
+        ),
+
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_create_trigger()
+              RETURNS trigger
+                AS $$
+                DECLARE
+                BEGIN
+                  RAISE NOTICE 'hoard_create_trigger: start (table_name=%%, foreign_table_name=%%)', NEW.table_name, NEW.foreign_table_name;
+
+                  PERFORM hoard_initiate(NEW.table_name);
+                  PERFORM hoard_initiate(NEW.foreign_table_name);
+
+                  RETURN NEW;
+                END;
+              $$ LANGUAGE PLPGSQL;
+          ",
         ),
 
         sprintf(
@@ -700,15 +888,15 @@ class HoardServiceProvider extends ServiceProvider
               BEGIN
                 IF NOT hoard_exists_trigger(%s, '_hoard_after_trigger') THEN
                   CREATE TRIGGER _hoard_after_trigger
-                    AFTER INSERT OR UPDATE OR DELETE ON %s
+                    AFTER INSERT OR UPDATE ON %s
                     FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_after_trigger();
+                    EXECUTE FUNCTION hoard_create_trigger();
                 END IF;
               END;
             $$ LANGUAGE PLPGSQL;
           ",
-          $this->quoteString($tableName),
-          $tableName
+          $this->quoteString('hoard_triggers'),
+          'hoard_triggers'
         ),
 
         sprintf(
@@ -720,10 +908,13 @@ class HoardServiceProvider extends ServiceProvider
               value_name,
               value_type, 
               conditions,
-              foreign_table_name, 
+              foreign_table_name,
+              foreign_cache_table_name,  
               foreign_key_name, 
               foreign_aggregation_name,
-              foreign_conditions
+              foreign_conditions,
+              foreign_primary_key_name,
+              foreign_cache_primary_key_name
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -734,7 +925,10 @@ class HoardServiceProvider extends ServiceProvider
               %8\$s,
               %9\$s,
               %10\$s,
-              %11\$s
+              %11\$s,
+              %12\$s,
+              %13\$s,
+              %14\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
@@ -743,9 +937,12 @@ class HoardServiceProvider extends ServiceProvider
               value_type = %6\$s, 
               conditions = %7\$s,
               foreign_table_name = %8\$s, 
-              foreign_key_name = %9\$s,
-              foreign_aggregation_name = %10\$s,
-              foreign_conditions = %11\$s;
+              foreign_cache_table_name = %9\$s, 
+              foreign_key_name = %10\$s,
+              foreign_aggregation_name = %11\$s,
+              foreign_conditions = %12\$s,
+              foreign_primary_key_name = %13\$s,
+              foreign_cache_primary_key_name = %14\$s;
           ",
           '',
           $this->quoteString($tableName),
@@ -755,9 +952,12 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($valueType),
           DB::getPdo()->quote($conditions),
           $this->quoteString($foreignTableName),
+          $this->quoteString($foreignCacheTableName),
           $this->quoteString($foreignKeyName),
           $this->quoteString($foreignAggregationName),
           DB::getPdo()->quote($foreignConditions),
+          $this->quoteString($foreignPrimaryKeyName),
+          $this->quoteString($foreignCachePrimaryKeyName),
         ),
 
         $refreshKeyName ? sprintf(

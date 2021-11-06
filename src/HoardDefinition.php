@@ -42,9 +42,51 @@ class HoardDefinition
    * @param  string  $column
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function withoutSoftDeletes($column = 'deleted_at') {
+  public function withoutSoftDeletes(string $column = 'deleted_at') {
     $attributes = $this->command->getAttributes();
     $attributes['conditions'][] = [$column, 'IS', null];
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * Set the aggregation.
+   *
+   * @param  string  $tableName
+   * @param  string  $aggregationFunction
+   * @param  string  $valueName
+   * @param  string|array $conditions
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function aggregate(string $tableName,
+  string $aggregationFunction,
+  string $valueName, string|array $conditions = '') {
+    $attributes = $this->command->getAttributes();
+    $attributes['tableName'] = $tableName;
+    $attributes['aggregationFunction'] = $aggregationFunction;
+    $attributes['valueName'] = $valueName;
+    $attributes['conditions'] = is_string($conditions) ? [$conditions] : $conditions;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * Set the key names.
+   *
+   * @param  string  $keyName
+   * @param  string  $foreignKeyName
+   * @param  string|array  $foreignConditions
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function via(string $keyName, string $foreignKeyName = 'id', string|array $foreignConditions = '') {
+    $attributes = $this->command->getAttributes();
+    $attributes['keyName'] = $keyName;
+    $attributes['foreignKeyName'] = $foreignKeyName;
+    $attributes['foreignConditions'] = is_string($foreignConditions) ? [$foreignConditions] : $foreignConditions;
 
     $this->setAttributes($attributes);
 
@@ -57,7 +99,7 @@ class HoardDefinition
    * @param  string  $type
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function type($type) {
+  public function type(string $type) {
     $attributes = $this->command->getAttributes();
     $attributes['valueType'] = $type;
 
@@ -72,7 +114,7 @@ class HoardDefinition
    * @param  string  $refreshKeyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function refreshImmediately($refreshKeyName = 'id') {
+  public function refreshImmediately(string $refreshKeyName = 'id') {
     $attributes = $this->command->getAttributes();
     $attributes['refreshKeyName'] = $refreshKeyName;
 

@@ -9,8 +9,6 @@ use Jaulz\Hoard\Traits\IsHoardableTrait;
 
 class Taggable extends MorphPivot
 {
-    use IsHoardableTrait;
-    
   /**
    * The table associated with the model.
    *
