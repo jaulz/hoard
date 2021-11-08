@@ -64,30 +64,13 @@ class HoardServiceProvider extends ServiceProvider
       $foreignPrimaryKeyName = $hoardContext->get('primaryKeyName');
       $foreignCachePrimaryKeyName = $hoardContext->get('cachePrimaryKeyName') ?? $foreignPrimaryKeyName;
 
-      // Can be overriden with "via" method
-      $keyName = Str::singular($foreignTableName) . '_id';
-      $foreignKeyName = 'id';
-      $foreignConditions = [];
-
-      $aggregationFunction = '!NOT SET!';
-      $valueName = '!NOT SET!';
-      $conditions = [];
-      $tableName = '!NOT SET!';
-
       $command = $this->addCommand(
         'hoard',
         compact(
           'foreignAggregationName',
-          'keyName',
           'foreignTableName',
           'foreignCacheTableName',
           'foreignPrimaryKeyName',
-          'foreignKeyName',
-          'aggregationFunction',
-          'valueName',
-          'conditions',
-          'foreignConditions',
-          'tableName',
           'foreignCachePrimaryKeyName'
         )
       );
@@ -140,16 +123,16 @@ class HoardServiceProvider extends ServiceProvider
         })->values()->filter()->implode(' AND ');
       };
       $foreignAggregationName = $command->foreignAggregationName;
-      $keyName = $command->keyName;
       $foreignTableName = $command->foreignTableName;
+      $foreignKeyName = $command->foreignKeyName ?? 'id';
+      $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
       $foreignCacheTableName = $command->foreignCacheTableName;
-      $foreignKeyName = $command->foreignKeyName;
       $valueType = $command->valueType ?? 'text';
-      $aggregationFunction = Str::upper($command->aggregationFunction);
-      $valueName = $command->valueName;
-      $foreignConditions = $prepareConditions($command->foreignConditions);
-      $conditions = $prepareConditions($command->conditions);
-      $tableName = $command->tableName;
+      $aggregationFunction = Str::upper($command->aggregationFunction) ?? '!NOT SET!';
+      $valueName = $command->valueName ?? '!NOT SET!';
+      $foreignConditions = $prepareConditions($command->foreignConditions ?? []);
+      $conditions = $prepareConditions($command->conditions ?? []);
+      $tableName = $command->tableName ?? '!NOT SET!';
       $refreshKeyName = $command->refreshKeyName;
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName;
       $foreignCachePrimaryKeyName = $command->foreignCachePrimaryKeyName;
