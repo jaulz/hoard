@@ -133,28 +133,30 @@ class HoardServiceProvider extends ServiceProvider
       $foreignConditions = $prepareConditions($command->foreignConditions ?? []);
       $conditions = $prepareConditions($command->conditions ?? []);
       $tableName = $command->tableName ?? '!NOT SET!';
-      $refreshKeyName = $command->refreshKeyName;
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName;
       $foreignCachePrimaryKeyName = $command->foreignCachePrimaryKeyName;
+      $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
+      $lazy = $command->kazy ?? false;
 
       return array_filter([
         sprintf(
           "
             CREATE TABLE IF NOT EXISTS hoard_triggers (
               id SERIAL PRIMARY KEY,
-              table_name varchar(255) NOT NULL,
-              key_name varchar(255) NOT NULL,
-              aggregation_function varchar(255) NOT NULL,
-              value_name varchar(255) NOT NULL,
-              value_type varchar(255),
-              conditions varchar(255) NOT NULL,
-              foreign_table_name varchar(255) NOT NULL,
-              foreign_primary_key_name varchar(255) NOT NULL,
-              foreign_key_name varchar(255) NOT NULL,
-              foreign_aggregation_name varchar(255) NOT NULL,
-              foreign_conditions varchar(255) NOT NULL,
-              foreign_cache_table_name varchar(255) NOT NULL,
-              foreign_cache_primary_key_name varchar(255) NOT NULL
+              table_name VARCHAR(255) NOT NULL,
+              key_name VARCHAR(255) NOT NULL,
+              aggregation_function VARCHAR(255) NOT NULL,
+              value_name VARCHAR(255) NOT NULL,
+              value_type VARCHAR(255),
+              conditions VARCHAR(255) NOT NULL,
+              foreign_table_name VARCHAR(255) NOT NULL,
+              foreign_primary_key_name VARCHAR(255) NOT NULL,
+              foreign_key_name VARCHAR(255) NOT NULL,
+              foreign_aggregation_name VARCHAR(255) NOT NULL,
+              foreign_conditions VARCHAR(255) NOT NULL,
+              foreign_cache_table_name VARCHAR(255) NOT NULL,
+              foreign_cache_primary_key_name VARCHAR(255) NOT NULL,
+              lazy BOOLEAN DEFAULT false
             );
           "
         ),
@@ -623,7 +625,7 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- Get all triggers that affect OTHER tables
                   FOR trigger IN
-                    SELECT * FROM hoard_triggers WHERE hoard_triggers.table_name = TG_TABLE_NAME
+                    SELECT * FROM hoard_triggers WHERE hoard_triggers.table_name = TG_TABLE_NAME AND lazy = false
                   LOOP
                     table_name := trigger.table_name;
                     foreign_table_name := trigger.foreign_table_name;
@@ -897,7 +899,8 @@ class HoardServiceProvider extends ServiceProvider
               foreign_aggregation_name,
               foreign_conditions,
               foreign_primary_key_name,
-              foreign_cache_primary_key_name
+              foreign_cache_primary_key_name,
+              lazy
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -911,7 +914,8 @@ class HoardServiceProvider extends ServiceProvider
               %11\$s,
               %12\$s,
               %13\$s,
-              %14\$s
+              %14\$s,
+              %15\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
@@ -925,7 +929,8 @@ class HoardServiceProvider extends ServiceProvider
               foreign_aggregation_name = %11\$s,
               foreign_conditions = %12\$s,
               foreign_primary_key_name = %13\$s,
-              foreign_cache_primary_key_name = %14\$s;
+              foreign_cache_primary_key_name = %14\$s,
+              lazy = %15\$s;
           ",
           '',
           $this->quoteString($tableName),
@@ -941,9 +946,10 @@ class HoardServiceProvider extends ServiceProvider
           DB::getPdo()->quote($foreignConditions),
           $this->quoteString($foreignPrimaryKeyName),
           $this->quoteString($foreignCachePrimaryKeyName),
+          $lazy ? 'true' : 'false'
         ),
 
-        $refreshKeyName ? sprintf(
+        $refreshConditions ? sprintf(
           "
             DO $$
               BEGIN
@@ -952,7 +958,7 @@ class HoardServiceProvider extends ServiceProvider
             $$ LANGUAGE PLPGSQL;
           ",
           $this->quoteString($tableName),
-          $this->quoteString($refreshKeyName)
+          DB::getPdo()->quote($refreshConditions),
         ) : null,
       ]);
     });

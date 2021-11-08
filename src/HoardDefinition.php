@@ -109,14 +109,29 @@ class HoardDefinition
   }
 
   /**
-   * Refresh immediately.
+   * Set the lazyness of the cache definition.
    *
-   * @param  string  $refreshKeyName
+   * @param  string  $type
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function refreshImmediately(string $refreshKeyName = 'id') {
+  public function lazy() {
     $attributes = $this->command->getAttributes();
-    $attributes['refreshKeyName'] = $refreshKeyName;
+    $attributes['lazy'] = true;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * Refresh immediately.
+   *
+   * @param  string|array  $refreshConditions
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function refreshImmediately(string|array $refreshConditions = '') {
+    $attributes = $this->command->getAttributes();
+    $attributes['refreshConditions'] = $refreshConditions;
 
     $this->setAttributes($attributes);
 
