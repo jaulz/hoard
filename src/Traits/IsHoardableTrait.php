@@ -18,7 +18,7 @@ trait IsHoardableTrait
     $keyName = $instance->getKeyName();
     $tableName = $instance->getTable();
     $cacheTableName = HoardSchema::getCacheTableName($tableName);
-    $cachePrimaryKeyName = HoardSchema::getCachePrimaryKey($tableName, $keyName);
+    $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($keyName);
 
     static::addGlobalScope('select', function (Builder $query) use ($tableName, $cacheTableName) {
       $query->addSelect($tableName . '.*');

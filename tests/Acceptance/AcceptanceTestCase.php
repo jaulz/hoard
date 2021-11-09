@@ -92,6 +92,8 @@ class AcceptanceTestCase extends TestCase
             $table->timestamps();
         });
 
+        HoardSchema::init();
+
         HoardSchema::table('posts', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
             $table->jsonb('comments_ids')->default()->nullable();
@@ -145,7 +147,7 @@ class AcceptanceTestCase extends TestCase
             ])->via('imageable_id');
         });
 
-        HoardSchema::extend('taggables', function (Blueprint $table) {
+        HoardSchema::table('taggables', function (Blueprint $table) {
             $table->integer('taggable_count')->default(0)->nullable();
             $table->timestamp('taggable_created_at')->nullable();
 
@@ -162,6 +164,13 @@ class AcceptanceTestCase extends TestCase
             $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->via('id', 'taggable_id',[
                 'taggable_type' => Post::class,
             ]);
+
+            $table->hoard('taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->via('id', 'taggable_id',[
+                'taggable_type' => Image::class,
+            ]);
+            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->via('id', 'taggable_id',[
+                'taggable_type' => Image::class,
+            ]);
         });
 
         HoardSchema::table('tags', function (Blueprint $table) {
@@ -169,9 +178,9 @@ class AcceptanceTestCase extends TestCase
             $table->timestamp('first_created_at')->nullable();
             $table->timestamp('last_created_at')->nullable();
 
-            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'taggable_count')->via('tag_id');
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at')->via('tag_id');
-            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at')->via('tag_id');
+            $table->hoard('taggables_count')->aggregate('taggables_cache', 'SUM', 'taggable_count')->via('tag_id');
+            $table->hoard('last_created_at')->aggregate('taggables_cache', 'MAX', 'taggable_created_at')->via('tag_id');
+            $table->hoard('first_created_at')->aggregate('taggables_cache', 'MIN', 'taggable_created_at')->via('tag_id');
         });
     }
 
@@ -307,7 +316,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(null, $this->refresh($this->data['post'])->first_commented_at);
         $this->assertEquals(null, $this->refresh($this->data['post'])->last_commented_at);
 
-        $this->refresh($this->data['post'])->refreshHoard($this->native);
+        $this->refresh($this->data['post'])->refreshHoard();
 
         $this->assertEquals(0, $this->refresh($this->data['post'])->comments_count);
         $this->assertEquals(null, $this->refresh($this->data['post'])->first_commented_at);
@@ -322,7 +331,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->first_commented_at);
         $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->last_commented_at);
 
-        $this->refresh($this->data['post'])->refreshHoard($this->native);
+        $this->refresh($this->data['post'])->refreshHoard();
 
         $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
         $this->assertEquals($secondComment->created_at, $this->refresh($this->data['post'])->first_commented_at);
@@ -366,7 +375,7 @@ class AcceptanceTestCase extends TestCase
 
         DB::raw('UPDATE posts_cache SET images_count WHERE id = ' . $this->data['post']->id);
 
-        $post->refreshHoard($this->native);
+        $post->refreshHoard();
         
         $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(1, User::first()->images_count);
@@ -445,7 +454,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
         $this->startQueryLog();
-        $post->refreshHoard($this->native);
+        $post->refreshHoard();
 
         $this->assertQueryLogCountEquals(1);
         $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
@@ -509,7 +518,7 @@ class AcceptanceTestCase extends TestCase
 
         $tag = $this->refresh($this->data['tag']);
         $this->startQueryLog();
-        $tag->refreshHoard($this->native);
+        $tag->refreshHoard();
 
         $this->assertQueryLogCountEquals(1);
         $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
@@ -529,7 +538,7 @@ class AcceptanceTestCase extends TestCase
 
         $tag = $this->refresh($this->data['tag']);
         $this->startQueryLog();
-        $tag->refreshHoard($this->native);
+        $tag->refreshHoard();
 
         $this->assertQueryLogCountEquals(1);
         $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);

@@ -62,7 +62,7 @@ class HoardDefinition
    */
   public function aggregate(string $tableName,
   string $aggregationFunction,
-  string $valueName, string|array $conditions = '') {
+  string $valueName, string|array|null $conditions = null) {
     $attributes = $this->command->getAttributes();
     $attributes['tableName'] = $tableName;
     $attributes['aggregationFunction'] = $aggregationFunction;
@@ -75,14 +75,21 @@ class HoardDefinition
   }
 
   /**
-   * Set the key names.
+   * Set the key names:
+   * $keyName is related to the table that is the basis for the cache calculation (i.e. where the COUNT or MAX is applied to).
+   * $foreignKeyName is related to the table where the cache will be stored.
+   * 
+   * These are the typical use cases:
+   * - The name of the key in the table is different (e.g. name, or code) and then you would need to call "->via('country_code', 'code')".
+   * - For polymorphic relations where you cache something into the pivot table and hence another condition must be applied 
+   *  (i.e. the type of the polymorphism) and then you would need to call "->via('id', 'commentable_id', [ 'commentable_type' => Post::class ]])
    *
    * @param  string  $keyName
-   * @param  string  $foreignKeyName
-   * @param  string|array  $foreignConditions
+   * @param  ?string  $foreignKeyName
+   * @param  ?string|array  $foreignConditions
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function via(string $keyName, string $foreignKeyName = 'id', string|array $foreignConditions = '') {
+  public function via(string $keyName, ?string $foreignKeyName = null, string|array|null $foreignConditions = null) {
     $attributes = $this->command->getAttributes();
     $attributes['keyName'] = $keyName;
     $attributes['foreignKeyName'] = $foreignKeyName;
