@@ -122,6 +122,18 @@ class HoardDefinition
   }
 
   /**
+   * Set the key names for the scenario when the own table is referenced via a parent key.
+   *
+   * @param  string  $keyName
+   * @param  string  $parentPrefix
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function viaParent(?string $keyName = 'id', ?string $parentPrefix = 'parent')
+  {
+    return $this->via($keyName, $parentPrefix . '_' . $keyName);
+  }
+
+  /**
    * Set the key names for the morphable scenario.
    *
    * @param  string  $morphable
