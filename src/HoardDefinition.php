@@ -32,8 +32,8 @@ class HoardDefinition
    */
   public function __construct(Blueprint $blueprint, $command)
   {
-      $this->blueprint = $blueprint;
-      $this->command = $command;
+    $this->blueprint = $blueprint;
+    $this->command = $command;
   }
 
   /**
@@ -42,7 +42,8 @@ class HoardDefinition
    * @param  string  $column
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function withoutSoftDeletes(string $column = 'deleted_at') {
+  public function withoutSoftDeletes(string $column = 'deleted_at')
+  {
     $attributes = $this->command->getAttributes();
     $attributes['conditions'][] = [$column, 'IS', null];
 
@@ -57,18 +58,22 @@ class HoardDefinition
    * @param  string  $tableName
    * @param  string  $aggregationFunction
    * @param  string  $valueName
-   * @param  string|array $conditions
-   * @param  bool $cached
+   * @param  ?string|array $conditions
+   * @param  ?bool $cached
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function aggregate(string $tableName,
-  string $aggregationFunction,
-  string $valueName, string|array|null $conditions = null, bool $cached = null) {
+  public function aggregate(
+    string $tableName,
+    string $aggregationFunction,
+    string $valueName,
+    string|array|null $conditions = null,
+    bool $cached = null
+  ) {
     $attributes = $this->command->getAttributes();
     $attributes['tableName'] = $tableName;
     $attributes['aggregationFunction'] = $aggregationFunction;
     $attributes['valueName'] = $valueName;
-    $attributes['conditions'] = is_string($conditions) ? [$conditions] : $conditions;
+    $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], is_string($conditions) ? [$conditions] : ($conditions ?? []));
     $attributes['cached'] = $cached;
 
     $this->setAttributes($attributes);
@@ -86,20 +91,67 @@ class HoardDefinition
    * - For polymorphic relations where you cache something into the pivot table and hence another condition must be applied 
    *  (i.e. the type of the polymorphism) and then you would need to call "->via('id', 'commentable_id', [ 'commentable_type' => Post::class ]])
    *
-   * @param  string  $keyName
-   * @param  ?string  $foreignKeyName
+   * @param  string  $foreignKeyName
+   * @param  ?string  $keyName
    * @param  ?string|array  $foreignConditions
+   * @param  ?string  $foreignPrimaryKeyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function via(string $keyName, ?string $foreignKeyName = null, string|array|null $foreignConditions = null) {
+  public function via(string $foreignKeyName = null, ?string $keyName = null, string|array|null $foreignConditions = null, string $foreignPrimaryKeyName = null)
+  {
     $attributes = $this->command->getAttributes();
     $attributes['keyName'] = $keyName;
     $attributes['foreignKeyName'] = $foreignKeyName;
-    $attributes['foreignConditions'] = is_string($foreignConditions) ? [$foreignConditions] : $foreignConditions;
+    $attributes['foreignConditions'] = array_merge($attributes['foreignConditions'] ?? [], is_string($foreignConditions) ? [$foreignConditions] : ($foreignConditions ?? []));
+    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName;
 
     $this->setAttributes($attributes);
 
     return $this;
+  }
+
+  /**
+   * Set the key names for the morphable scenario.
+   *
+   * @param  string  $morphable
+   * @param  string  $morphableTypeValue
+   * @param  ?string  $keyName
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function viaMorph(string $morphable, string $morphableTypeValue, ?string $keyName = 'id')
+  {
+    $morphableKey = $morphable . '_' . $keyName;
+    $morphableType = $morphable . '_type';
+    $conditions = [];
+    $conditions[$morphableType] = $morphableTypeValue;
+
+    $attributes = $this->command->getAttributes();
+    $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], $conditions);
+    $this->setAttributes($attributes);
+
+    return $this->via($keyName, $morphableKey);
+  }
+
+  /**
+   * Set the key names for the morphable scenario.
+   *
+   * @param  string  $morphable
+   * @param  string  $morphableTypeValue
+   * @param  ?string  $keyName
+   * @param  ?string  $foreignPrimaryKeyName
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $foreignPrimaryKeyName = 'id')
+  {
+    $morphableKey = $morphable . '_' . $keyName;
+    $morphableType = $morphable . '_type';
+    $foreignConditions = [];
+
+    if ($morphableTypeValue) {
+      $foreignConditions[$morphableType] = $morphableTypeValue;
+    }
+
+    return $this->via($morphableKey, $keyName, $foreignConditions, $foreignPrimaryKeyName);
   }
 
   /**
@@ -108,7 +160,8 @@ class HoardDefinition
    * @param  string  $type
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function type(string $type) {
+  public function type(string $type)
+  {
     $attributes = $this->command->getAttributes();
     $attributes['valueType'] = $type;
 
@@ -123,7 +176,8 @@ class HoardDefinition
    * @param  string  $type
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function lazy() {
+  public function lazy()
+  {
     $attributes = $this->command->getAttributes();
     $attributes['lazy'] = true;
 
@@ -138,7 +192,8 @@ class HoardDefinition
    * @param  string|array  $refreshConditions
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function refreshImmediately(string|array $refreshConditions = '') {
+  public function refreshImmediately(string|array $refreshConditions = '')
+  {
     $attributes = $this->command->getAttributes();
     $attributes['refreshConditions'] = $refreshConditions;
 
@@ -147,7 +202,8 @@ class HoardDefinition
     return $this;
   }
 
-  private function setAttributes(array $attributes) {
+  private function setAttributes(array $attributes)
+  {
     // Ugly workaround to get access to the attributes property
     $attributesProperty = new ReflectionProperty(
       Fluent::class,

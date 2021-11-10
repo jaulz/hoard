@@ -23,8 +23,6 @@ class AcceptanceTestCase extends TestCase
     use RefreshDatabase;
     use DatabaseMigrations;
 
-    protected $native = false;
-
     protected $data = [];
     
     public function setUp(): void
@@ -106,24 +104,23 @@ class AcceptanceTestCase extends TestCase
 
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id', [
                 ['deleted_at', 'IS', null]
-            ])->via('post_id');
-            $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes()->via('post_id');
-            $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes()->via('post_id');
-            $table->hoard('comments_ids')->aggregate('comments', 'JSONB_AGG', 'id')->withoutSoftDeletes()->via('post_id');
-            $table->hoard('comments_numeric_ids')->aggregate('comments',  'JSONB_AGG', 'id')->withoutSoftDeletes()->type('numeric')->via('post_id');
+            ]);
+            $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes();
+            $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes();
+            $table->hoard('comments_ids')->aggregate('comments', 'JSONB_AGG', 'id')->withoutSoftDeletes();
+            $table->hoard('comments_numeric_ids')->aggregate('comments',  'JSONB_AGG', 'id')->withoutSoftDeletes()->type('numeric');
 
-            $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id', 'taggable_type = \'' . Post::class . '\'')->via('taggable_id');
+            $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id')->viaMorph('taggable', Post::class);
             $table->hoard('important_tags_count')->aggregate('taggables', 'COUNT', 'id',  [
-                ['taggable_type', '=', Post::class],
                 ['weight', '>', 5],
-            ])->via('taggable_id');
+            ])->viaMorph('taggable', Post::class);
 
             $table->hoard('images_count')->aggregate('images', 'COUNT', 'id', [
-                ['imageable_type', '=', Post::class],
-            ])->via('imageable_id');
+            ])->viaMorph('imageable', Post::class);
         });
 
         HoardSchema::create('users', function (Blueprint $table) {
+            $table->timestampTz('copied_created_at')->nullable();
             $table->integer('comments_count')->default(0)->nullable();
             $table->integer('posts_count')->default(0)->nullable();
             $table->integer('posts_count_explicit')->default(0)->nullable();
@@ -131,46 +128,35 @@ class AcceptanceTestCase extends TestCase
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
             $table->integer('images_count')->default(0)->nullable();
 
+            $table->hoard('copied_created_at')->aggregate('users', 'DISTINCT', 'created_at')->via('id' ,'id');
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
                 ['deleted_at', 'IS', null]
-            ])->via('user_id');
+            ]);
             $table->hoard('posts_count')->aggregate('posts', 'COUNT', 'id', [
                 ['deleted_at', 'IS', null]
-            ])->via('user_id');
+            ]);
             $table->hoard('posts_count_explicit')->aggregate('posts', 'COUNT', 'id', [
                 ['deleted_at', 'IS', null]
-            ])->via('user_id');
-            $table->hoard('posts_count_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND deleted_at IS NULL')->via('user_id');
-            $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL')->via('user_id');
+            ]);
+            $table->hoard('posts_count_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND deleted_at IS NULL');
+            $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
             $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
                 'imageable_type' => User::class,
-            ])->via('imageable_id');
+            ])->viaMorph('imageable', User::class);
         });
 
         HoardSchema::create('taggables', function (Blueprint $table) {
             $table->integer('cached_taggable_count')->default(0)->nullable();
             $table->timestamp('taggable_created_at')->nullable();
 
-            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'id')->via('id', 'taggable_id', [
-                'taggable_type' => User::class,
-            ]);
-            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at')->via('id', 'taggable_id', [
-                'taggable_type' => User::class,
-            ]);
+            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'id')->viaMorphPivot('taggable', User::class);
+            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at')->viaMorphPivot('taggable', User::class);
 
-            $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->via('id', 'taggable_id',[
-                'taggable_type' => Post::class,
-            ]);
-            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->via('id', 'taggable_id',[
-                'taggable_type' => Post::class,
-            ]);
+            $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
+            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
 
-            $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->via('id', 'taggable_id',[
-                'taggable_type' => Image::class,
-            ]);
-            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->via('id', 'taggable_id',[
-                'taggable_type' => Image::class,
-            ]);
+            $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Image::class);
+            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Image::class);
         });
 
         HoardSchema::create('tags', function (Blueprint $table) {
@@ -178,9 +164,9 @@ class AcceptanceTestCase extends TestCase
             $table->timestamp('first_created_at')->nullable();
             $table->timestamp('last_created_at')->nullable();
 
-            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count')->via('tag_id');
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, true)->via('tag_id');
-            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, true)->via('tag_id');
+            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null);
+            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, true);
+            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, true);
         });
     }
 
@@ -238,7 +224,14 @@ class AcceptanceTestCase extends TestCase
         return $model->forceRefresh();
     }
 
-    public function testCount()
+    public function testDistinct()
+    {
+        $user = User::first();
+
+        $this->assertNotEmpty($user->copied_created_at);
+    }
+
+    public function testSimpleCount()
     {
         $user = User::first();
 
@@ -246,7 +239,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(1, $user->posts_count_explicit);
     }
 
-    public function testComplexCounts()
+    public function testComplexCount()
     {
         $post = new Post;
         $post->user_id = $this->data['user']->id;

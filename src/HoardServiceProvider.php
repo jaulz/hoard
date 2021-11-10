@@ -125,13 +125,12 @@ class HoardServiceProvider extends ServiceProvider
       $conditions = $prepareConditions($command->conditions ?? []);
       $tableName = $command->tableName ?? '!NOT SET!';
       $primaryKeyName = $command->primaryKeyName ?? '!NOT SET!';
-      $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? 'id'; // TODO: is necessary?
+      $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
       $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
       $lazy = $command->lazy ?? false;
       $cached = $command->cached ?? Str::startsWith($valueName, 'cached_');
 
       return array_filter([
-
         sprintf(
           "
             CREATE TABLE IF NOT EXISTS hoard_triggers (
@@ -367,7 +366,6 @@ class HoardServiceProvider extends ServiceProvider
                 DECLARE
                   refresh_query text;
                   cache_view_name text;
-                  cache_lateral_join text;
                 BEGIN
                   -- Ensure that we have any conditions
                   IF conditions = '' THEN
@@ -381,7 +379,11 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- Prepare refresh query
-                  refresh_query := format('SELECT %%s(%%s) FROM %%s %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, table_name, cache_lateral_join, key_name, foreign_key, conditions);
+                  CASE aggregation_function 
+                    WHEN 'X' THEN
+                    ELSE
+                      refresh_query := format('SELECT %%s(%%s) FROM %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
+                  END CASE;
 
                   -- Coalesce certain aggregation functions to prevent null values
                   CASE aggregation_function 
@@ -426,11 +428,11 @@ class HoardServiceProvider extends ServiceProvider
                   LOOP
                     concatenated_keys := format('%%s, %%s', concatenated_keys, key);
                     concatenated_values := format('%%s, (%%s)', concatenated_values, value);
-                    concatenated_updates := format('%%s, %%s = (%%s)', concatenated_updates, key, value);
+                    concatenated_updates := format('%%s, %%s = excluded.%%s', concatenated_updates, key, key);
                   END LOOP;
                   
                   -- Run update if required
-                  query := format('INSERT INTO %%s (%%s %%s, txid, cached_at) VALUES (%%s %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
+                  query := format('INSERT INTO %%s (%%s %%s, txid, cached_at) VALUES (''%%s'' %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
                   RAISE NOTICE 'hoard_upsert_cache: execute (query=%%)', query;
                   EXECUTE query;
                 END;
@@ -502,7 +504,7 @@ class HoardServiceProvider extends ServiceProvider
                     next_foreign_primary_key := hoard_get_row_value(foreign_row, foreign_primary_key_name);
 
                     -- Check if foreign conditions are met
-                    EXECUTE format('SELECT true FROM %%s WHERE %%s = %%s AND %%s;', hoard_get_table_name(foreign_table_name), foreign_primary_key_name, next_foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
+                    EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', hoard_get_table_name(foreign_table_name), foreign_primary_key_name, next_foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
 
                     IF relevant IS NOT NULL THEN
                       -- Execute updates whenever the foreign primary key changes
@@ -528,6 +530,8 @@ class HoardServiceProvider extends ServiceProvider
                           WHEN 'MIN' THEN
                             refresh_query := format('LEAST((%%s), (%%s))', existing_refresh_query, refresh_query);
                           WHEN 'JSONB_AGG' THEN
+                            refresh_query := format('((%%s) || (%%s))', existing_refresh_query, refresh_query);
+                          WHEN 'COPY' THEN
                             refresh_query := format('((%%s) || (%%s))', existing_refresh_query, refresh_query);
                           ELSE
                             refresh_query := format('%%s((%%s), (%%s))', aggregation_function, existing_refresh_query, refresh_query);
