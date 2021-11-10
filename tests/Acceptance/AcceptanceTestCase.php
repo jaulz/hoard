@@ -128,7 +128,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
             $table->integer('images_count')->default(0)->nullable();
 
-            $table->hoard('copied_created_at')->aggregate('users', 'DISTINCT', 'created_at')->via('id' ,'id');
+            $table->hoard('copied_created_at')->aggregate('users', 'DISTINCT', 'created_at')->viaOwn();
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
                 ['deleted_at', 'IS', null]
             ]);

@@ -111,6 +111,17 @@ class HoardDefinition
   }
 
   /**
+   * Set the key names for the scenario when the own table is referenced.
+   *
+   * @param  string  $keyName
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function viaOwn(?string $keyName = 'id')
+  {
+    return $this->via($keyName, $keyName);
+  }
+
+  /**
    * Set the key names for the morphable scenario.
    *
    * @param  string  $morphable
