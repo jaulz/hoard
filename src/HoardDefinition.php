@@ -58,16 +58,18 @@ class HoardDefinition
    * @param  string  $aggregationFunction
    * @param  string  $valueName
    * @param  string|array $conditions
+   * @param  bool $cached
    * @return \Jaulz\Hoard\HoardDefinition
    */
   public function aggregate(string $tableName,
   string $aggregationFunction,
-  string $valueName, string|array|null $conditions = null) {
+  string $valueName, string|array|null $conditions = null, bool $cached = null) {
     $attributes = $this->command->getAttributes();
     $attributes['tableName'] = $tableName;
     $attributes['aggregationFunction'] = $aggregationFunction;
     $attributes['valueName'] = $valueName;
     $attributes['conditions'] = is_string($conditions) ? [$conditions] : $conditions;
+    $attributes['cached'] = $cached;
 
     $this->setAttributes($attributes);
 
