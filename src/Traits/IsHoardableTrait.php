@@ -36,6 +36,29 @@ trait IsHoardableTrait
   }
 
   /**
+   * Initialize the trait
+   *
+   * @return void
+   */
+  public function initializeIsHoardableTrait()
+  {
+  }
+
+  /**
+   * Get a new query builder for the model's table.
+   *
+   * @return \Illuminate\Database\Eloquent\Builder
+   */
+  public function newQuery()
+  {
+    /*if (!HoardSchema::isCacheViewName($this->getTable())) {
+      $this->setTable(HoardSchema::getCacheViewName($this->getTable()));
+    }*/
+
+    return parent::newQuery();
+  }
+
+  /**
    * Reload the current model instance with fresh attributes from the database.
    *
    * @param  array|string  $with

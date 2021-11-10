@@ -94,7 +94,7 @@ class AcceptanceTestCase extends TestCase
 
         HoardSchema::init();
 
-        HoardSchema::table('posts', function (Blueprint $table) {
+        HoardSchema::create('posts', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
             $table->jsonb('comments_ids')->default()->nullable();
             $table->jsonb('comments_numeric_ids')->default()->nullable();
@@ -123,7 +123,7 @@ class AcceptanceTestCase extends TestCase
             ])->via('imageable_id');
         });
 
-        HoardSchema::table('users', function (Blueprint $table) {
+        HoardSchema::create('users', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
             $table->integer('posts_count')->default(0)->nullable();
             $table->integer('posts_count_explicit')->default(0)->nullable();
@@ -147,7 +147,7 @@ class AcceptanceTestCase extends TestCase
             ])->via('imageable_id');
         });
 
-        HoardSchema::table('taggables', function (Blueprint $table) {
+        HoardSchema::create('taggables', function (Blueprint $table) {
             $table->integer('cached_taggable_count')->default(0)->nullable();
             $table->timestamp('taggable_created_at')->nullable();
 
@@ -173,7 +173,7 @@ class AcceptanceTestCase extends TestCase
             ]);
         });
 
-        HoardSchema::table('tags', function (Blueprint $table) {
+        HoardSchema::create('tags', function (Blueprint $table) {
             $table->integer('taggables_count')->default(0)->nullable();
             $table->timestamp('first_created_at')->nullable();
             $table->timestamp('last_created_at')->nullable();
@@ -240,7 +240,6 @@ class AcceptanceTestCase extends TestCase
 
     public function testCount()
     {
-        $this->startQueryLog();
         $user = User::first();
 
         $this->assertEquals(1, $user->posts_count);

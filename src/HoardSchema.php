@@ -6,7 +6,6 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use ReflectionProperty;
 
 class HoardSchema
 {
@@ -35,7 +34,7 @@ class HoardSchema
    * @param  ?string  $primaryKeyName
    * @param  ?string  $primaryKeyType
    */
-  public static function table(
+  public static function create(
     string $tableName,
     \Closure $callback,
     ?string $primaryKeyName = 'id',
@@ -46,8 +45,7 @@ class HoardSchema
     $cacheViewName = static::getCacheViewName($tableName); // collect(DB::select('SELECT hoard_get_cache_view_name(?) as name', [$tableName]))->first()->name;
 
     // Create cache table
-    $method = Schema::hasTable($cacheTableName) ? 'table' : 'create';
-    Schema::{$method}($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableName, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
+    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
@@ -75,22 +73,36 @@ class HoardSchema
         JOIN %3\$s
           ON %4\$s = %5\$s;
     ", $cacheViewName, $tableName, $cacheTableName, $primaryKeyName, $cachePrimaryKeyName));
+
+    // Create rule to insert into 
+    /*DB::statement(sprintf("
+      CREATE RULE \"_RETURN\" AS ON SELECT TO %1\$s DO INSTEAD
+          SELECT * FROM %2\$s;
+    ", $tableName, $cacheViewName));*/
+    /*DB::statement(sprintf("
+      CREATE RULE \"_RETURN\" AS ON SELECT TO %1\$s DO INSTEAD
+        SELECT * 
+        FROM %2\$s
+        JOIN %3\$s
+          ON %4\$s = %5\$s;
+    ", $tableName, $tableName, $cacheTableName, $primaryKeyName, $cachePrimaryKeyName));*/
   }
 
   /**
-   * Return the cache table name for a given table name.
+   * Update the cache table for a given table name.
    *
    * @param  string  $tableName
    * @param  \Closure  $callback
    * @param  ?string  $primaryKeyName
    */
-  public static function extend(
+  public static function table(
     string $tableName,
     \Closure $callback,
     ?string $primaryKeyName = 'id'
   ) {
-    // Create cache table
-    Schema::table($tableName, function (Blueprint $table) use ($tableName, $primaryKeyName, $callback) {
+    $cacheTableName = static::getCacheTableName($tableName);
+
+    return Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $primaryKeyName, $callback) {
       $table->hoardContext($tableName, $primaryKeyName);
 
       $callback($table);
@@ -144,5 +156,17 @@ class HoardSchema
     string $tableName
   ) {
     return $tableName . static::$cacheViewNameSuffix;
+  }
+
+  /**
+   * Return the cache view name for a given table name.
+   *
+   * @param  string  $tableName
+   * @return bool
+   */
+  public static function isCacheViewName(
+    string $tableName
+  ) {
+    return Str::endsWith($tableName, static::$cacheViewNameSuffix);
   }
 }
