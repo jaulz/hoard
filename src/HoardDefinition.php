@@ -119,10 +119,10 @@ class HoardDefinition
   public function via(string $foreignKeyName = null, ?string $keyName = null, string|array|null $foreignConditions = null, string $foreignPrimaryKeyName = null)
   {
     $attributes = $this->command->getAttributes();
-    $attributes['keyName'] = $keyName ?? $attributes['keyName'];
-    $attributes['foreignKeyName'] = $foreignKeyName ?? $attributes['foreignKeyName'];
+    $attributes['keyName'] = $keyName ?? $attributes['keyName']?? null;
+    $attributes['foreignKeyName'] = $foreignKeyName ?? $attributes['foreignKeyName']?? null;
     $attributes['foreignConditions'] = array_merge($attributes['foreignConditions'] ?? [], is_string($foreignConditions) ? [$foreignConditions] : ($foreignConditions ?? []));
-    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName ?? $attributes['foreignPrimaryKeyName'];
+    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName ?? $attributes['foreignPrimaryKeyName']?? null;
     $this->setAttributes($attributes);
 
     return $this;
