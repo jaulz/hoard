@@ -233,6 +233,22 @@ class HoardDefinition
   }
 
   /**
+   * Set if the attribute will be hidden in cache view.
+   *
+   * @param  string  $type
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function hidden()
+  {
+    $attributes = $this->command->getAttributes();
+    $attributes['hidden'] = true;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
    * Refresh immediately.
    *
    * @param  string|array  $refreshConditions

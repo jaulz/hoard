@@ -129,6 +129,7 @@ class HoardServiceProvider extends ServiceProvider
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
       $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
       $lazy = $command->lazy ?? false;
+      $hidden = $command->hidden ?? false;
       $cacheTableGroup = $command->cacheTableGroup;
       $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup);
       $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
@@ -152,7 +153,8 @@ class HoardServiceProvider extends ServiceProvider
               value_name VARCHAR(255) NOT NULL,
               value_type VARCHAR(255),
               conditions VARCHAR(255) NOT NULL,
-              lazy BOOLEAN DEFAULT false
+              lazy BOOLEAN DEFAULT false,
+              hidden BOOLEAN DEFAULT false
             );
           "
         ),
@@ -1090,11 +1092,13 @@ class HoardServiceProvider extends ServiceProvider
                 BEGIN
                   RAISE NOTICE 'hoard_create_view: start (_foreign_table_name=%%)', _foreign_table_name;
 
-                  -- Get all triggers that affect OTHER tables
+                  -- Get all visible cached fields
                   FOR trigger IN
                     SELECT * FROM hoard_triggers
                     WHERE 
                         hoard_triggers.foreign_table_name = _foreign_table_name
+                      AND
+                        hidden = false
                   LOOP
                     foreign_table_name := trigger.foreign_table_name;
                     foreign_primary_key_name := trigger.foreign_primary_key_name;
@@ -1227,7 +1231,8 @@ class HoardServiceProvider extends ServiceProvider
               lazy,
               primary_key_name,
               foreign_cache_table_name,
-              foreign_cache_primary_key_name
+              foreign_cache_primary_key_name,
+              hidden
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -1243,7 +1248,8 @@ class HoardServiceProvider extends ServiceProvider
               %13\$s,
               %14\$s,
               %15\$s,
-              %16\$s
+              %16\$s,
+              %17\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
@@ -1259,7 +1265,8 @@ class HoardServiceProvider extends ServiceProvider
               lazy = %13\$s,
               primary_key_name = %14\$s,
               foreign_cache_table_name = %15\$s,
-              foreign_cache_primary_key_name = %16\$s;
+              foreign_cache_primary_key_name = %16\$s,
+              hidden = %17\$s;
           ",
           '',
           $this->quoteString($tableName),
@@ -1277,6 +1284,7 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($primaryKeyName),
           $this->quoteString($foreignCacheTableName),
           $this->quoteString($foreignCachePrimaryKeyName),
+          $hidden ? 'true' : 'false',
         ),
 
         $refreshConditions ? sprintf(
