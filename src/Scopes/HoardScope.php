@@ -23,7 +23,7 @@ class HoardScope implements Scope {
     $cacheViewName = HoardSchema::getCacheViewName($tableName);
     $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($tableName, $keyName);
     $className = class_basename($model);
-    $alias = Str::snake($className) . '_hoard';
+    $alias = Str::snake($className) . '_hoard_' . rand(1, 1000);
 
     $query->addSelect($alias . '.*')->crossJoin(DB::raw('
       LATERAL (
