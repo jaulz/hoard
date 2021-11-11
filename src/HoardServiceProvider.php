@@ -1120,7 +1120,7 @@ class HoardServiceProvider extends ServiceProvider
                   -- Create view
                   IF foreign_primary_key_name IS NOT NULL THEN
                     cache_view_name := hoard_get_cache_view_name(_foreign_table_name);
-                    EXECUTE format('CREATE VIEW %%s AS SELECT %%s %%s FROM %%s %%s', cache_view_name, hoard_get_cache_primary_key_name(foreign_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
+                    EXECUTE format('CREATE VIEW %%s AS SELECT %%s.%%s %%s FROM %%s %%s', cache_view_name, foreign_cache_table_name, hoard_get_cache_primary_key_name(foreign_cache_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
