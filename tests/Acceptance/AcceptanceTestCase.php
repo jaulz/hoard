@@ -42,7 +42,7 @@ class AcceptanceTestCase extends TestCase
     private function migrate()
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->increments('id');
+            $table->increments('sequence');
             $table->string('first_name');
             $table->string('last_name');
             $table->string('slug')->nullable();
@@ -51,7 +51,7 @@ class AcceptanceTestCase extends TestCase
 
         Schema::create('posts', function (Blueprint $table) {
             $table->increments('id');
-            $table->integer('user_id')->nullable();
+            $table->integer('user_sequence')->nullable();
             $table->string('slug')->nullable();
             $table->boolean('visible')->default(false);
             $table->integer('weight')->default(1);
@@ -61,7 +61,7 @@ class AcceptanceTestCase extends TestCase
 
         Schema::create('comments', function (Blueprint $table) {
             $table->increments('id');
-            $table->integer('user_id');
+            $table->integer('user_sequence');
             $table->integer('post_id');
             $table->boolean('visible')->default(false);
             $table->timestamps();
@@ -142,15 +142,15 @@ class AcceptanceTestCase extends TestCase
             $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
             $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
                 'imageable_type' => User::class,
-            ])->viaMorph('imageable', User::class);
-        });
+            ])->viaMorph('imageable', User::class, 'sequence');
+        }, 'sequence');
 
         HoardSchema::create('taggables', 'default', function (Blueprint $table) {
             $table->integer('cached_taggable_count')->default(0)->nullable();
             $table->timestamp('taggable_created_at')->nullable();
 
-            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'id')->viaMorphPivot('taggable', User::class);
-            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at')->viaMorphPivot('taggable', User::class);
+            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'sequence', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
+            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
 
             $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
             $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
@@ -164,9 +164,9 @@ class AcceptanceTestCase extends TestCase
             $table->timestamp('first_created_at')->nullable();
             $table->timestamp('last_created_at')->nullable();
 
-            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null, 'default');
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, 'default');
-            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, 'default');
+            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null, null, 'default');
+            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null,null, 'default');
+            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, null, 'default');
         });
     }
 
@@ -178,7 +178,7 @@ class AcceptanceTestCase extends TestCase
         $user->save();
 
         $post = new Post();
-        $post->user_id = $user->id;
+        $post->user_sequence = $user->sequence;
         $post->visible = false;
         $post->save();
 
@@ -242,7 +242,7 @@ class AcceptanceTestCase extends TestCase
     public function testComplexCount()
     {
         $post = new Post;
-        $post->user_id = $this->data['user']->id;
+        $post->user_sequence = $this->data['user']->sequence;
         $post->visible = true;
         $post->weight = 3;
         $post->save();
@@ -255,7 +255,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(null, Post::first()->first_commented_at);
 
         $comment = new Comment;
-        $comment->user_id = $this->data['user']->id;
+        $comment->user_sequence = $this->data['user']->sequence;
         $comment->post_id = $this->data['post']->id;
         $comment->save();
 
@@ -291,12 +291,12 @@ class AcceptanceTestCase extends TestCase
     public function testNegativeCounts()
     {
         $post = new Post;
-        $post->user_id = $this->data['user']->id;
+        $post->user_sequence = $this->data['user']->sequence;
         $post->visible = false;
         $post->save();
 
         $comment = new Comment();
-        $comment->user_id = $this->data['user']->id;
+        $comment->user_sequence = $this->data['user']->sequence;
         $comment->post_id = $this->data['post']->id;
         $comment->save();
 
@@ -315,7 +315,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(null, $this->refresh($this->data['post'])->last_commented_at);
 
         $secondComment = new Comment;
-        $secondComment->user_id = $this->data['user']->id;
+        $secondComment->user_sequence = $this->data['user']->sequence;
         $secondComment->post_id = $this->data['post']->id;
         $secondComment->save();
 
@@ -427,7 +427,7 @@ class AcceptanceTestCase extends TestCase
 
         Carbon::setTestNow(Carbon::now()->addSecond());
         $secondPost = new Post;
-        $secondPost->user_id = $this->data['user']->id;
+        $secondPost->user_sequence = $this->data['user']->sequence;
         $secondPost->visible = false;
         $secondPost->save();
 
@@ -555,7 +555,7 @@ class AcceptanceTestCase extends TestCase
 
         Carbon::setTestNow(Carbon::now()->addSecond());
         $secondPost = new Post;
-        $secondPost->user_id = $this->data['user']->id;
+        $secondPost->user_sequence = $this->data['user']->sequence;
         $secondPost->visible = false;
         $secondPost->save();
 

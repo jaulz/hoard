@@ -27,7 +27,7 @@ class NativeAcceptanceTest extends AcceptanceTestCase
         $this->assertEquals('[]', $this->refresh($post)->comments_ids);
 
         $comment = new Comment();
-        $comment->user_id = $this->data['user']->id;
+        $comment->user_sequence = $this->data['user']->sequence;
         $comment->post_id = $this->data['post']->id;
         $comment->save();
 
@@ -37,7 +37,7 @@ class NativeAcceptanceTest extends AcceptanceTestCase
         $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
 
         $secondComment = new Comment();
-        $secondComment->user_id = $this->data['user']->id;
+        $secondComment->user_sequence = $this->data['user']->sequence;
         $secondComment->post_id = $this->data['post']->id;
         $secondComment->save();
 

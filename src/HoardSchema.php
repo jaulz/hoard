@@ -41,16 +41,16 @@ class HoardSchema
    */
   public static function create(
     string $tableName,
-    string $groupName,
+    string $cacheTableGroup,
     \Closure $callback,
     ?string $primaryKeyName = 'id',
     ?string $primaryKeyType = 'bigInteger'
   ) {
-    $cacheTableName = static::getCacheTableName($tableName, $groupName); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
+    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
     $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName); // collect(DB::select('SELECT hoard_get_cache_primary_key_name(?) as name', [$primaryKeyName]))->first()->name;
 
     // Create cache table
-    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $groupName, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
+    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
@@ -63,7 +63,7 @@ class HoardSchema
       $table->unique($cachePrimaryKeyName);
 
       $table->hoardContext([
-        'tableName' => $tableName, 'groupName' => $groupName, 'primaryKeyName' => $primaryKeyName
+        'tableName' => $tableName, 'cacheTableGroup' => $cacheTableGroup, 'primaryKeyName' => $primaryKeyName
       ]);
 
       $callback($table);

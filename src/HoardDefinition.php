@@ -67,13 +67,15 @@ class HoardDefinition
     string $aggregationFunction,
     string $valueName,
     string|array|null $conditions = null,
+    string $primaryKeyName = null,
     string $groupName = null
   ) {
     $attributes = $this->command->getAttributes();
-    $attributes['tableName'] = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName) : $tableName;
-    $attributes['primaryKeyName'] = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $attributes['primaryKeyName']) : $attributes['primaryKeyName'];
-    $attributes['aggregationFunction'] = $aggregationFunction;
-    $attributes['valueName'] = $valueName;
+    $attributes['tableName'] = $tableName;
+    $attributes['primaryKeyName'] = $primaryKeyName ?? $attributes['primaryKeyName'] ?? null;
+    $attributes['aggregationFunction'] = $aggregationFunction ?? $attributes['aggregationFunction'] ?? null;
+    $attributes['valueName'] = $valueName ?? $attributes['valueName'] ?? null;
+    $attributes['groupName'] = $groupName ?? $attributes['groupName'] ?? null;
     $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], is_string($conditions) ? [$conditions] : ($conditions ?? []));
 
     $this->setAttributes($attributes);
@@ -117,11 +119,10 @@ class HoardDefinition
   public function via(string $foreignKeyName = null, ?string $keyName = null, string|array|null $foreignConditions = null, string $foreignPrimaryKeyName = null)
   {
     $attributes = $this->command->getAttributes();
-    $attributes['keyName'] = $keyName;
-    $attributes['foreignKeyName'] = $foreignKeyName;
+    $attributes['keyName'] = $keyName ?? $attributes['keyName'];
+    $attributes['foreignKeyName'] = $foreignKeyName ?? $attributes['foreignKeyName'];
     $attributes['foreignConditions'] = array_merge($attributes['foreignConditions'] ?? [], is_string($foreignConditions) ? [$foreignConditions] : ($foreignConditions ?? []));
-    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName;
-
+    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName ?? $attributes['foreignPrimaryKeyName'];
     $this->setAttributes($attributes);
 
     return $this;
@@ -130,12 +131,16 @@ class HoardDefinition
   /**
    * Set the key names for the scenario when the own table is referenced.
    *
-   * @param  string  $keyName
+   * @param  ?string  $keyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaOwn(?string $keyName = 'id')
+  public function viaOwn(?string $keyName = null)
   {
-    return $this->via($keyName, $keyName);
+    $attributes = $this->command->getAttributes();
+    $attributes['primaryKeyName'] = $keyName ?? $attributes['foreignPrimaryKeyName'];
+    $this->setAttributes($attributes);
+
+    return $this->via($keyName ?? $attributes['foreignPrimaryKeyName'], $keyName ?? $attributes['foreignPrimaryKeyName']);
   }
 
   /**
@@ -158,9 +163,9 @@ class HoardDefinition
    * @param  ?string  $keyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaMorph(string $morphable, string $morphableTypeValue, ?string $keyName = 'id')
+  public function viaMorph(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $morphableKeyName = 'id')
   {
-    $morphableKey = $morphable . '_' . $keyName;
+    $morphableKey = $morphable . '_' . $morphableKeyName;
     $morphableType = $morphable . '_type';
     $conditions = [];
     $conditions[$morphableType] = $morphableTypeValue;
@@ -179,11 +184,12 @@ class HoardDefinition
    * @param  string  $morphableTypeValue
    * @param  ?string  $keyName
    * @param  ?string  $foreignPrimaryKeyName
+   * @param  ?string  $morphableKeyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $foreignPrimaryKeyName = 'id')
+  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $foreignPrimaryKeyName = 'id', ?string $morphableKeyName = 'id')
   {
-    $morphableKey = $morphable . '_' . $keyName;
+    $morphableKey = $morphable . '_' . $morphableKeyName;
     $morphableType = $morphable . '_type';
     $foreignConditions = [];
 

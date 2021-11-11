@@ -52,16 +52,16 @@ class HoardServiceProvider extends ServiceProvider
         return $command->get('name') === 'hoardContext';
       });
       $foreignTableName = $this->prefix . $hoardContext->get('tableName');
-      $primaryKeyName = $hoardContext->get('primaryKeyName');
-      $groupName = $hoardContext->get('groupName');
+      $foreignPrimaryKeyName = $hoardContext->get('primaryKeyName');
+      $cacheTableGroup = $hoardContext->get('cacheTableGroup');
 
       $command = $this->addCommand(
         'hoard',
         compact(
           'foreignAggregationName',
           'foreignTableName',
-          'primaryKeyName',
-          'groupName'
+          'foreignPrimaryKeyName',
+          'cacheTableGroup'
         )
       );
 
@@ -114,20 +114,23 @@ class HoardServiceProvider extends ServiceProvider
       };
       $foreignAggregationName = $command->foreignAggregationName;
       $foreignTableName = $command->foreignTableName;
-      $foreignKeyName = $command->foreignKeyName ?? 'id';
+      $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
       $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
       $valueType = $command->valueType ?? 'text';
       $aggregationFunction = Str::upper($command->aggregationFunction) ?? '!NOT SET!';
       $valueName = $command->valueName ?? '!NOT SET!';
       $foreignConditions = $prepareConditions($command->foreignConditions ?? []);
       $conditions = $prepareConditions($command->conditions ?? []);
+      $groupName = $command->groupName;
       $tableName = $command->tableName ?? '!NOT SET!';
-      $primaryKeyName = $command->primaryKeyName;
+      $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName) : $tableName;
+      $primaryKeyName = $command->primaryKeyName ?? 'id';
+      $primaryKeyName = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName) : $primaryKeyName;
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
       $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
       $lazy = $command->lazy ?? false;
-      $groupName = $command->groupName;
-      $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $groupName);
+      $cacheTableGroup = $command->cacheTableGroup;
+      $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup);
       $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
 
       return array_filter([
