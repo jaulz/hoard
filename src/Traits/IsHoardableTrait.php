@@ -5,7 +5,7 @@ namespace Jaulz\Hoard\Traits;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Jaulz\Hoard\HoardSchema;
-use Jaulz\Hoard\Scopes\CacheScope;
+use Jaulz\Hoard\Scopes\HoardScope;
 
 trait IsHoardableTrait
 {
@@ -24,7 +24,7 @@ trait IsHoardableTrait
       $query->addSelect($tableName . '.*');
     });
 
-    static::addGlobalScope(new CacheScope());
+    static::addGlobalScope(new HoardScope());
   }
 
   /**
@@ -34,6 +34,17 @@ trait IsHoardableTrait
    */
   public function initializeIsHoardableTrait()
   {
+  }
+
+  /**
+   * Scope a query to include cache.
+   *
+   * @param  \Illuminate\Database\Eloquent\Builder  $query
+   * @return void
+   */
+  public function scopeHoard($query)
+  {
+      (new HoardScope())->apply($query, $this);
   }
 
   /**

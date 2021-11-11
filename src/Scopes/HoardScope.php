@@ -8,16 +8,15 @@ use Illuminate\Database\Eloquent\Scope;
 use Illuminate\Support\Facades\DB;
 use Jaulz\Hoard\HoardSchema;
 
-class CacheScope implements Scope {
+class HoardScope implements Scope {
   /**
    * Scope a query to include cache.
    *
    * @param  \Illuminate\Database\Eloquent\Builder  $builder
    * @param  \Illuminate\Database\Eloquent\Model  $model
    */
-    public function apply(Builder $query, Model $model)
+  public function apply(Builder $query, Model $model)
   {
-    $instance = with(new static);
     $keyName = $model->getKeyName();
     $tableName = $model->getTable();
     $cacheViewName = HoardSchema::getCacheViewName($tableName);
