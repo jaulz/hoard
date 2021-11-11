@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 use Illuminate\Support\Facades\DB;
 use Jaulz\Hoard\HoardSchema;
+use Illuminate\Support\Str;
 
 class HoardScope implements Scope {
   /**
@@ -21,13 +22,15 @@ class HoardScope implements Scope {
     $tableName = $model->getTable();
     $cacheViewName = HoardSchema::getCacheViewName($tableName);
     $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($tableName, $keyName);
+    $className = class_basename($model);
+    $alias = Str::snake($className) . '_hoard';
 
-    $query->addSelect('hoard.*')->crossJoin(DB::raw('
+    $query->addSelect($alias . '.*')->crossJoin(DB::raw('
       LATERAL (
         SELECT  *
         FROM    ' . $cacheViewName . '
         WHERE   ' . $tableName . '.' . $keyName . ' = ' . $cacheViewName . '.' . $cachePrimaryKeyName . '
-      ) hoard 
+      ) ' . $alias . ' 
     '));
 
     return $query;
