@@ -130,6 +130,7 @@ class HoardServiceProvider extends ServiceProvider
       $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
       $lazy = $command->lazy ?? false;
       $hidden = $command->hidden ?? false;
+      $manual = $command->manual ?? false;
       $cacheTableGroup = $command->cacheTableGroup;
       $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup);
       $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
@@ -153,6 +154,7 @@ class HoardServiceProvider extends ServiceProvider
               value_name VARCHAR(255) NOT NULL,
               value_type VARCHAR(255),
               conditions VARCHAR(255) NOT NULL,
+              manual BOOLEAN DEFAULT false,
               lazy BOOLEAN DEFAULT false,
               hidden BOOLEAN DEFAULT false
             );
@@ -819,7 +821,7 @@ class HoardServiceProvider extends ServiceProvider
                     WHERE 
                         hoard_triggers.table_name = TG_TABLE_NAME
                       AND 
-                        lazy = false
+                        hoard_triggers.manual = false
                   LOOP
                     table_name := trigger.table_name;
                     primary_key_name := trigger.primary_key_name;
@@ -954,8 +956,10 @@ class HoardServiceProvider extends ServiceProvider
                               )
                           )
                         AND 
-                          hoard_triggers.lazy = false
+                          hoard_triggers.manual = false
                     LOOP
+                      CONTINUE WHEN TG_OP = 'DELETE' AND trigger.lazy = true;
+
                       primary_key_name := trigger.primary_key_name;
                       foreign_table_name := trigger.foreign_table_name;
                       foreign_cache_table_name := trigger.foreign_cache_table_name;
@@ -1232,7 +1236,8 @@ class HoardServiceProvider extends ServiceProvider
               primary_key_name,
               foreign_cache_table_name,
               foreign_cache_primary_key_name,
-              hidden
+              hidden,
+              manual
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -1249,7 +1254,8 @@ class HoardServiceProvider extends ServiceProvider
               %14\$s,
               %15\$s,
               %16\$s,
-              %17\$s
+              %17\$s,
+              %18\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
@@ -1266,7 +1272,8 @@ class HoardServiceProvider extends ServiceProvider
               primary_key_name = %14\$s,
               foreign_cache_table_name = %15\$s,
               foreign_cache_primary_key_name = %16\$s,
-              hidden = %17\$s;
+              hidden = %17\$s,
+              manual = %18\$s;
           ",
           '',
           $this->quoteString($tableName),
@@ -1285,6 +1292,7 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($foreignCacheTableName),
           $this->quoteString($foreignCachePrimaryKeyName),
           $hidden ? 'true' : 'false',
+          $manual ? 'true' : 'false',
         ),
 
         $refreshConditions ? sprintf(

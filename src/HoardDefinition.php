@@ -217,9 +217,23 @@ class HoardDefinition
   }
 
   /**
-   * Set the lazyness of the cache definition.
+   * Whether this definition needs to be calculated manually and hence without triggers.
    *
-   * @param  string  $type
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function manual()
+  {
+    $attributes = $this->command->getAttributes();
+    $attributes['manual'] = true;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * If the definition is lazy it means that it will keep as it is even if the record is deleted.
+   *
    * @return \Jaulz\Hoard\HoardDefinition
    */
   public function lazy()
