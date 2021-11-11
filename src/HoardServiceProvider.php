@@ -495,18 +495,18 @@ class HoardServiceProvider extends ServiceProvider
                   conditions text;
                   foreign_conditions text;
                   
-                  last_foreign_cache_table_name text;
                   relevant boolean;
                 BEGIN
                   RAISE NOTICE 'hoard_refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
 
                   -- Collect all updates in a JSON map
                   FOR trigger IN
-                    EXECUTE format('SELECT * FROM hoard_triggers WHERE hoard_triggers.foreign_table_name = ''%%s'' ORDER BY foreign_primary_key_name', foreign_table_name)
+                    EXECUTE format('SELECT * FROM hoard_triggers WHERE hoard_triggers.foreign_table_name = ''%%s'' ORDER BY foreign_cache_table_name', foreign_table_name)
                   LOOP
                     -- Execute updates whenever the foreign cache table name changes
-                    IF foreign_cache_table_name <> trigger.foreign_cache_table_name THEN
+                    IF foreign_cache_table_name IS NOT NULL AND foreign_cache_table_name <> trigger.foreign_cache_table_name THEN
                       PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
+                      updates := '{}';
                     END IF;
 
                     table_name := trigger.table_name;
