@@ -92,7 +92,7 @@ class AcceptanceTestCase extends TestCase
 
         HoardSchema::init();
 
-        HoardSchema::create('posts', function (Blueprint $table) {
+        HoardSchema::create('posts', 'default', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
             $table->jsonb('comments_ids')->default()->nullable();
             $table->jsonb('comments_numeric_ids')->default()->nullable();
@@ -119,7 +119,7 @@ class AcceptanceTestCase extends TestCase
             ])->viaMorph('imageable', Post::class);
         });
 
-        HoardSchema::create('users', function (Blueprint $table) {
+        HoardSchema::create('users', 'default', function (Blueprint $table) {
             $table->timestampTz('copied_created_at')->nullable();
             $table->integer('comments_count')->default(0)->nullable();
             $table->integer('posts_count')->default(0)->nullable();
@@ -145,7 +145,7 @@ class AcceptanceTestCase extends TestCase
             ])->viaMorph('imageable', User::class);
         });
 
-        HoardSchema::create('taggables', function (Blueprint $table) {
+        HoardSchema::create('taggables', 'default', function (Blueprint $table) {
             $table->integer('cached_taggable_count')->default(0)->nullable();
             $table->timestamp('taggable_created_at')->nullable();
 
@@ -159,14 +159,14 @@ class AcceptanceTestCase extends TestCase
             $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Image::class);
         });
 
-        HoardSchema::create('tags', function (Blueprint $table) {
+        HoardSchema::create('tags', 'default', function (Blueprint $table) {
             $table->integer('taggables_count')->default(0)->nullable();
             $table->timestamp('first_created_at')->nullable();
             $table->timestamp('last_created_at')->nullable();
 
-            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null);
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, true);
-            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, true);
+            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null, 'default');
+            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, 'default');
+            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, 'default');
         });
     }
 

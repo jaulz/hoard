@@ -22,7 +22,7 @@ class HoardServiceProvider extends ServiceProvider
   {
     $this->publishes(
       [
-        __DIR__ . '/../database/migrations/' => database_path('migrations'),
+        __DIR__ . '/../database/migrations/' => base_path('migrations'),
       ],
       'hoard-migrations'
     );
@@ -35,16 +35,12 @@ class HoardServiceProvider extends ServiceProvider
   public function enhanceBlueprint()
   {
     Blueprint::macro('hoardContext', function (
-      string $tableName,
-      string $primaryKeyName
+      array $context
     ) {
       /** @var \Illuminate\Database\Schema\Blueprint $this */
       $this->addCommand(
         'hoardContext',
-        compact(
-          'tableName',
-          'primaryKeyName'
-        )
+        $context
       );
     });
 
@@ -57,13 +53,15 @@ class HoardServiceProvider extends ServiceProvider
       });
       $foreignTableName = $this->prefix . $hoardContext->get('tableName');
       $primaryKeyName = $hoardContext->get('primaryKeyName');
+      $groupName = $hoardContext->get('groupName');
 
       $command = $this->addCommand(
         'hoard',
         compact(
           'foreignAggregationName',
           'foreignTableName',
-          'primaryKeyName'
+          'primaryKeyName',
+          'groupName'
         )
       );
 
@@ -124,17 +122,26 @@ class HoardServiceProvider extends ServiceProvider
       $foreignConditions = $prepareConditions($command->foreignConditions ?? []);
       $conditions = $prepareConditions($command->conditions ?? []);
       $tableName = $command->tableName ?? '!NOT SET!';
-      $primaryKeyName = $command->primaryKeyName ?? '!NOT SET!';
+      $primaryKeyName = $command->primaryKeyName;
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
       $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
       $lazy = $command->lazy ?? false;
-      $cached = $command->cached ?? Str::startsWith($valueName, 'cached_');
+      $groupName = $command->groupName;
+      $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $groupName);
+      $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
 
       return array_filter([
         sprintf(
           "
             CREATE TABLE IF NOT EXISTS hoard_triggers (
               id SERIAL PRIMARY KEY,
+              foreign_table_name VARCHAR(255) NOT NULL,
+              foreign_primary_key_name VARCHAR(255) NOT NULL,
+              foreign_key_name VARCHAR(255) NOT NULL,
+              foreign_aggregation_name VARCHAR(255) NOT NULL,
+              foreign_conditions VARCHAR(255) NOT NULL,
+              foreign_cache_table_name VARCHAR(255) NOT NULL,
+              foreign_cache_primary_key_name VARCHAR(255) NOT NULL,
               table_name VARCHAR(255) NOT NULL,
               primary_key_name VARCHAR(255) NOT NULL,
               key_name VARCHAR(255) NOT NULL,
@@ -142,32 +149,39 @@ class HoardServiceProvider extends ServiceProvider
               value_name VARCHAR(255) NOT NULL,
               value_type VARCHAR(255),
               conditions VARCHAR(255) NOT NULL,
-              foreign_table_name VARCHAR(255) NOT NULL,
-              foreign_primary_key_name VARCHAR(255) NOT NULL,
-              foreign_key_name VARCHAR(255) NOT NULL,
-              foreign_aggregation_name VARCHAR(255) NOT NULL,
-              foreign_conditions VARCHAR(255) NOT NULL,
-              lazy BOOLEAN DEFAULT false,
-              cached BOOLEAN DEFAULT false
+              lazy BOOLEAN DEFAULT false
             );
           "
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_cache_table_name(table_name text)
+            CREATE OR REPLACE FUNCTION hoard_get_primary_key_name(cache_primary_key_name text)
               RETURNS text
               AS $$
                 BEGIN
-                  IF hoard_is_cache_table_name(table_name) THEN
-                    RETURN table_name;
+                  IF NOT hoard_is_cache_primary_key_name(cache_primary_key_name) THEN
+                    RETURN cache_primary_key_name;
                   END IF;
-  
-                  RETURN format('%%s%1\$s', table_name);
+
+                  RETURN SUBSTRING(cache_primary_key_name, LENGTH('%1\$s') + 1);
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$cacheTableNameSuffix
+          HoardSchema::$cachePrimaryKeyNamePrefix
+        ),
+  
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_is_cache_primary_key_name(primary_key_name text)
+              RETURNS boolean
+              AS $$
+                BEGIN
+                  RETURN POSITION('%1\$s' in primary_key_name) > 0;
+                END;
+              $$ LANGUAGE PLPGSQL;
+          ",
+          HoardSchema::$cachePrimaryKeyNamePrefix
         ),
   
         sprintf(
@@ -176,6 +190,10 @@ class HoardServiceProvider extends ServiceProvider
               RETURNS text
               AS $$
                 BEGIN
+                  IF hoard_is_cache_primary_key_name(primary_key_name) THEN
+                    RETURN primary_key_name;
+                  END IF;
+
                   RETURN format('%1\$s%%s', primary_key_name);
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -193,10 +211,11 @@ class HoardServiceProvider extends ServiceProvider
                     table_name := hoard_get_table_name(table_name);
                   END IF;
   
-                  RETURN format('%%s%1\$s', table_name);
+                  RETURN format('%1\$s%%s%2\$s', table_name);
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$cacheViewNamePrefix,
           HoardSchema::$cacheViewNameSuffix
         ),
   
@@ -205,16 +224,22 @@ class HoardServiceProvider extends ServiceProvider
             CREATE OR REPLACE FUNCTION hoard_get_table_name(cache_table_name text)
               RETURNS text
               AS $$
+                DECLARE
+                  table_name text;
                 BEGIN
                   IF hoard_is_cache_table_name(cache_table_name) THEN
-                    RETURN SUBSTRING(cache_table_name, 0, POSITION('%1\$s' in cache_table_name));
+                    table_name := SUBSTRING(cache_table_name, 1, POSITION('%2\$s' in cache_table_name) - 1);
+                    table_name := SUBSTRING(table_name, LENGTH('%1\$s') + 1);
+
+                    RETURN table_name;
                   END IF;
   
                   RETURN cache_table_name;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$cacheTableNameSuffix
+          HoardSchema::$cacheTableNamePrefix,
+          HoardSchema::$cacheTableNameDelimiter
         ),
   
         sprintf(
@@ -223,28 +248,13 @@ class HoardServiceProvider extends ServiceProvider
               RETURNS boolean
               AS $$
                 BEGIN
-                  RETURN POSITION('%1\$s' in table_name) > 0;
+                  RETURN POSITION('%1\$s' in table_name) = 1 AND POSITION('%2\$s' in table_name) > 0 AND POSITION('%3\$s' in table_name) > 0;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$cacheTableNameSuffix
-        ),
-  
-        sprintf(
-          "
-            CREATE OR REPLACE FUNCTION hoard_get_join_table_name(table_name text)
-              RETURNS text
-              AS $$
-                BEGIN
-                  IF hoard_is_cache_table_name(table_name) THEN
-                    RETURN hoard_get_table_name(table_name);
-                  END IF;
-  
-                  RETURN hoard_get_cache_table_name(table_name);
-                END;
-              $$ LANGUAGE PLPGSQL;
-          ",
-          HoardSchema::$cacheTableNameSuffix
+          HoardSchema::$cacheTableNamePrefix,
+          HoardSchema::$cacheTableNameDelimiter,
+          HoardSchema::$cacheTableNameSuffix,
         ),
 
         sprintf(
@@ -341,18 +351,29 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_join_statement(table_name text, primary_key_name text)
+            CREATE OR REPLACE FUNCTION hoard_get_join_statement(join_table_name text, primary_key_name text, alias text)
               RETURNS text
               AS $$
-                DECLARE
-                  join_table_name text;
-                BEGIN
-                  join_table_name := hoard_get_join_table_name(table_name);
-                  IF NOT hoard_exists_table(join_table_name) THEN
-                    RETURN '';
-                  END IF;
+              DECLARE
+                cache_view_name text;
+                cache_table_name text;
+                table_name text;
+              BEGIN
+                -- In case the provided table name is a cache table name we will join the principal table
+                IF hoard_is_cache_table_name(join_table_name) THEN
+                  cache_table_name := join_table_name;
+                  table_name := hoard_get_table_name(join_table_name);
 
-                  RETURN format('LEFT JOIN %%s ON %%s = %%s', join_table_name, hoard_get_cache_primary_key_name(primary_key_name), primary_key_name);
+                  RETURN format('LEFT JOIN %%s ON %%s.%%s = %%s.%%s', table_name, table_name, hoard_get_primary_key_name(primary_key_name), alias, hoard_get_cache_primary_key_name(primary_key_name));
+                END IF;
+
+                -- In case the provided table name is a principal table, we will check if there is a cache view and join that 
+                cache_view_name := hoard_get_cache_view_name(join_table_name);
+                IF NOT hoard_exists_view(cache_view_name) THEN
+                  RETURN '';
+                END IF;
+
+                RETURN format('LEFT JOIN %%s ON %%s.%%s = %%s.%%s', cache_view_name, cache_view_name, hoard_get_cache_primary_key_name(primary_key_name), alias, hoard_get_primary_key_name(primary_key_name));
                 END;
               $$ LANGUAGE PLPGSQL;
           "
@@ -360,29 +381,28 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_refresh_query(aggregation_function text, value_name text, value_type text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
+            CREATE OR REPLACE FUNCTION hoard_get_refresh_query(primary_key_name text, aggregation_function text, value_name text, value_type text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
               RETURNS text
               AS $$
                 DECLARE
                   refresh_query text;
-                  cache_view_name text;
+                  principal_table_name text;
+                  principal_primary_key_name text;
                 BEGIN
                   -- Ensure that we have any conditions
                   IF conditions = '' THEN
                     conditions := '1 = 1';
                   END IF;
 
-                  -- Check if cache view exists and use that if possible
-                  cache_view_name := hoard_get_cache_view_name(table_name);
-                  IF hoard_exists_view(cache_view_name) THEN
-                    table_name = cache_view_name;
-                  END IF;
+                  -- We always resolve to the principal table even if the table_name is a cached table (e.g. hoard_cached_users__default -> users)
+                  principal_table_name = hoard_get_table_name(table_name);
+                  principal_primary_key_name = hoard_get_primary_key_name(primary_key_name);
 
                   -- Prepare refresh query
                   CASE aggregation_function 
                     WHEN 'X' THEN
                     ELSE
-                      refresh_query := format('SELECT %%s(%%s) FROM %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, table_name, key_name, foreign_key, conditions);
+                      refresh_query := format('SELECT %%s(%%s) FROM %%s %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, hoard_get_join_statement(principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
                   END CASE;
 
                   -- Coalesce certain aggregation functions to prevent null values
@@ -422,7 +442,7 @@ class HoardServiceProvider extends ServiceProvider
                 BEGIN
                   RAISE NOTICE 'hoard_upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', table_name, primary_key_name, primary_key, updates;
 
-                  -- Concatenate update
+                  -- Concatenate updates
                   FOR key, value IN 
                     SELECT * FROM jsonb_each_text(updates)
                   LOOP
@@ -468,7 +488,7 @@ class HoardServiceProvider extends ServiceProvider
                   conditions text;
                   foreign_conditions text;
                   
-                  next_foreign_primary_key text;
+                  last_foreign_cache_table_name text;
                   relevant boolean;
                 BEGIN
                   RAISE NOTICE 'hoard_refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
@@ -479,8 +499,8 @@ class HoardServiceProvider extends ServiceProvider
                   LOOP
                     table_name := trigger.table_name;
                     primary_key_name := trigger.primary_key_name;
-                    foreign_cache_table_name := hoard_get_cache_table_name(foreign_table_name);
-                    foreign_cache_primary_key_name := hoard_get_cache_primary_key_name(primary_key_name);
+                    foreign_cache_table_name := trigger.foreign_cache_table_name;
+                    foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
                     foreign_primary_key_name := trigger.foreign_primary_key_name;
                     aggregation_function := trigger.aggregation_function;
@@ -501,21 +521,20 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Get foreign key 
-                    next_foreign_primary_key := hoard_get_row_value(foreign_row, foreign_primary_key_name);
+                    foreign_primary_key := hoard_get_row_value(foreign_row, foreign_primary_key_name);
 
                     -- Check if foreign conditions are met
-                    EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', hoard_get_table_name(foreign_table_name), foreign_primary_key_name, next_foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
+                    EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', hoard_get_table_name(foreign_table_name), foreign_primary_key_name, foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
 
                     IF relevant IS NOT NULL THEN
-                      -- Execute updates whenever the foreign primary key changes
-                      IF next_foreign_primary_key <> foreign_primary_key THEN
-                        foreign_primary_key := next_foreign_primary_key;
-
+                      -- Execute updates whenever the foreign cache table name changes
+                      IF last_foreign_cache_table_name <> foreign_cache_table_name THEN
                         PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
                       END IF;
+                      last_foreign_cache_table_name := foreign_cache_table_name;
 
                       -- Prepare refresh query
-                      refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
+                      refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
 
                       -- Append query if necessary
                       existing_refresh_query := updates ->> foreign_aggregation_name;
@@ -545,7 +564,7 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- Run updates that were not yet executed within the loop
                   IF foreign_cache_table_name IS NOT NULL AND foreign_cache_primary_key_name IS NOT NULL THEN
-                    PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, next_foreign_primary_key, updates);
+                    PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -585,6 +604,7 @@ class HoardServiceProvider extends ServiceProvider
           "
             CREATE OR REPLACE FUNCTION hoard_update(
                 table_name text,
+                primary_key_name text,
                 key_name text,
                 foreign_table_name text,
                 foreign_primary_key_name text,
@@ -662,8 +682,8 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- Prepare refresh query that can be used to get the aggregated value
-                  old_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
-                  new_refresh_query := hoard_get_refresh_query(aggregation_function, value_name, value_type, table_name, key_name, new_foreign_key, conditions);
+                  old_refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
+                  new_refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, new_foreign_key, conditions);
 
                   -- Update row if
                   -- 1. Foreign row with matching conditions is deleted
@@ -780,38 +800,29 @@ class HoardServiceProvider extends ServiceProvider
                 BEGIN
                   RAISE NOTICE '-- hoard_after_trigger START';
 
-                  -- Determine actual table name
-                  IF hoard_is_cache_table_name(TG_TABLE_NAME) THEN
-                    trigger_table_name := hoard_get_table_name(TG_TABLE_NAME);
-                    cached_trigger_table_name := true;
-                  ELSE
-                    trigger_table_name := TG_TABLE_NAME;
-                    cached_trigger_table_name := false;
-                  END IF;
-
                   -- Log
-                  RAISE NOTICE 'hoard_after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, trigger_table_name=%%, cached_trigger_table_name=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, trigger_table_name, cached_trigger_table_name, OLD::text, NEW::text;
+                  RAISE NOTICE 'hoard_after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, trigger_table_name=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, trigger_table_name, OLD::text, NEW::text;
 
                   -- If this is the first row we need to create an entry for the new row in the cache table
-                  IF TG_OP = 'INSERT' AND NOT cached_trigger_table_name THEN
-                    PERFORM hoard_refresh(trigger_table_name, row_to_json(NEW));
+                  IF TG_OP = 'INSERT' AND NOT hoard_is_cache_table_name(TG_TABLE_NAME) THEN
+                    PERFORM hoard_refresh(TG_TABLE_NAME, row_to_json(NEW));
                   END IF;
 
                   -- Get all triggers that affect OTHER tables
                   FOR trigger IN
                     SELECT * FROM hoard_triggers
                     WHERE 
-                      hoard_triggers.table_name = trigger_table_name
-                      AND hoard_triggers.cached = cached_trigger_table_name
-                      AND lazy = false
+                        hoard_triggers.table_name = TG_TABLE_NAME
+                      AND 
+                        lazy = false
                   LOOP
-                    table_name := CASE WHEN trigger.cached THEN hoard_get_cache_table_name(trigger.table_name) ELSE trigger.table_name END;
+                    table_name := trigger.table_name;
                     primary_key_name := trigger.primary_key_name;
                     foreign_table_name := trigger.foreign_table_name;
-                    foreign_cache_table_name := hoard_get_cache_table_name(foreign_table_name);
+                    foreign_cache_table_name := trigger.foreign_cache_table_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
                     foreign_primary_key_name := trigger.foreign_primary_key_name;
-                    foreign_cache_primary_key_name := hoard_get_cache_primary_key_name(primary_key_name);
+                    foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                     foreign_key_name := trigger.foreign_key_name;
                     aggregation_function := trigger.aggregation_function;
                     value_name := trigger.value_name;
@@ -830,9 +841,9 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Get foreign key and value from new record
-                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name)) USING NEW INTO new_value;
-                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name)) USING NEW INTO new_foreign_key;
-                    EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', hoard_get_join_statement(TG_TABLE_NAME, primary_key_name), conditions) USING NEW INTO new_relevant;
+                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_value;
+                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_foreign_key;
+                    EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING NEW INTO new_relevant;
 
                     -- Set new_relevant explicitly to false to allow proper checks
                     IF new_relevant IS NULL THEN
@@ -844,6 +855,7 @@ class HoardServiceProvider extends ServiceProvider
                     -- Run update
                     PERFORM hoard_update(
                       table_name,
+                      primary_key_name,
                       key_name,
                       foreign_table_name,
                       foreign_primary_key_name,
@@ -920,32 +932,31 @@ class HoardServiceProvider extends ServiceProvider
                   -- On DELETE we need to check the triggers before because otherwise the join table will be deleted and we cannot check the conditions anymore
                   IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
                     -- Get all triggers that affect OTHER tables
-                    -- NOTE: when the trigger is a cache table then we check 
                     FOR trigger IN
                       SELECT * FROM hoard_triggers 
                       WHERE 
-                        (
                           (
-                              hoard_triggers.table_name = TG_TABLE_NAME
-                            AND 
-                              hoard_triggers.cached = false
+                              (
+                                    hoard_is_cache_table_name(TG_TABLE_NAME) = true
+                                  AND 
+                                    hoard_triggers.table_name = TG_TABLE_NAME
+                              )
+                            OR
+                              (
+                                  hoard_is_cache_table_name(TG_TABLE_NAME) = false
+                                AND 
+                                  hoard_get_table_name(hoard_triggers.table_name) = hoard_get_table_name(TG_TABLE_NAME)
+                              )
                           )
-                          OR
-                          (
-                              hoard_triggers.table_name = hoard_get_table_name(TG_TABLE_NAME)
-                            AND 
-                              hoard_triggers.cached = true
-                          )
-                        )
                         AND 
                           hoard_triggers.lazy = false
                     LOOP
                       primary_key_name := trigger.primary_key_name;
                       foreign_table_name := trigger.foreign_table_name;
-                      foreign_cache_table_name := hoard_get_cache_table_name(foreign_table_name);
+                      foreign_cache_table_name := trigger.foreign_cache_table_name;
                       foreign_aggregation_name := trigger.foreign_aggregation_name;
                       foreign_primary_key_name := trigger.foreign_primary_key_name;
-                      foreign_cache_primary_key_name := hoard_get_cache_primary_key_name(primary_key_name);
+                      foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                       foreign_key_name := trigger.foreign_key_name;
                       aggregation_function := trigger.aggregation_function;
                       value_name := trigger.value_name;
@@ -964,9 +975,9 @@ class HoardServiceProvider extends ServiceProvider
                       END IF;
 
                       -- Get foreign key and value from old record
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name)) USING OLD INTO old_value;
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name)) USING OLD INTO old_foreign_key;
-                      EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', hoard_get_join_statement(TG_TABLE_NAME, primary_key_name), conditions) USING OLD INTO old_relevant;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_value;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_foreign_key;
+                      EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO old_relevant;
 
                       -- Set old_relevant explicitly to false to allow proper checks
                       IF old_relevant IS NULL THEN
@@ -976,12 +987,13 @@ class HoardServiceProvider extends ServiceProvider
                       RAISE NOTICE 'hoard_before_trigger: old (old_value=%%, old_foreign_key=%%, old_relevant=%%)', old_value, old_foreign_key, old_relevant;
 
                       -- During deletion we exclude ourself from the update conditions
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name), conditions) USING OLD INTO primary_key;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
                       conditions := format('%%s AND %%s <> %%s', conditions, primary_key_name, primary_key);
                   
                       -- Run update
                       PERFORM hoard_update(
                         TG_TABLE_NAME,
+                        primary_key_name,
                         key_name,
                         foreign_table_name,
                         foreign_primary_key_name,
@@ -1021,12 +1033,12 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_initiate(table_name text)
+            CREATE OR REPLACE FUNCTION hoard_create_triggers(table_name text)
               RETURNS void
                 AS $$
                 DECLARE
                 BEGIN
-                  RAISE NOTICE 'hoard_initiate: start (table_name=%%)', table_name;
+                  RAISE NOTICE 'hoard_create_triggers: start (table_name=%%)', table_name;
 
                   -- Create triggers for table
                   IF NOT hoard_exists_trigger(table_name, '_hoard_before_trigger') THEN
@@ -1053,16 +1065,117 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_create_triggers()
+            CREATE OR REPLACE FUNCTION hoard_create_view(_foreign_table_name text)
+              RETURNS void
+                AS $$
+                DECLARE
+                  trigger hoard_triggers%%rowtype;
+                  
+                  foreign_table_name text;
+                  foreign_cache_table_name text;
+                  foreign_aggregation_name text;
+                  foreign_primary_key_name text;
+                  foreign_cache_primary_key_name text;
+
+                  joins jsonb DEFAULT '{}';
+                  concatenated_joins text;
+                  foreign_aggregation_names jsonb DEFAULT '{}';
+                  concatenated_foreign_aggregation_names text;
+                  cache_view_name text;
+                  key text;
+                  value text;
+                BEGIN
+                  RAISE NOTICE 'hoard_create_view: start (_foreign_table_name=%%)', _foreign_table_name;
+
+                  -- Get all triggers that affect OTHER tables
+                  FOR trigger IN
+                    SELECT * FROM hoard_triggers
+                    WHERE 
+                        hoard_triggers.foreign_table_name = _foreign_table_name
+                  LOOP
+                    foreign_table_name := trigger.foreign_table_name;
+                    foreign_primary_key_name := trigger.foreign_primary_key_name;
+                    foreign_cache_table_name := trigger.foreign_cache_table_name;
+                    foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
+                    foreign_aggregation_name := trigger.foreign_aggregation_name;
+                  
+                    joins := joins || jsonb_build_object(foreign_cache_table_name, format('%%s.%%s = %%s.%%s', foreign_table_name, foreign_primary_key_name, foreign_cache_table_name, foreign_cache_primary_key_name));
+                    foreign_aggregation_names := foreign_aggregation_names || jsonb_build_object(foreign_aggregation_name, foreign_cache_table_name);
+                  END LOOP;
+
+                  -- Concatenate joins
+                  FOR key, value IN 
+                    SELECT * FROM jsonb_each_text(joins)
+                  LOOP
+                    concatenated_joins := format('%%s JOIN %%s ON %%s', concatenated_joins, key, value);
+                  END LOOP;
+
+                  -- Concatenate aggregation names
+                  FOR key, value IN 
+                    SELECT * FROM jsonb_each_text(foreign_aggregation_names)
+                  LOOP
+                    concatenated_foreign_aggregation_names := format('%%s, %%s.%%s', concatenated_foreign_aggregation_names, value, key);
+                  END LOOP;
+
+                  -- Create view
+                  IF foreign_primary_key_name IS NOT NULL THEN
+                    cache_view_name := hoard_get_cache_view_name(_foreign_table_name);
+                    EXECUTE format('CREATE VIEW %%s AS SELECT %%s %%s FROM %%s %%s', cache_view_name, hoard_get_cache_primary_key_name(foreign_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
+                  END IF;
+                END;
+              $$ LANGUAGE PLPGSQL;
+          ",
+        ),
+
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_prepare()
               RETURNS trigger
                 AS $$
                 DECLARE
                 BEGIN
-                  RAISE NOTICE 'hoard_create_triggers: start (table_name=%%, foreign_table_name=%%)', NEW.table_name, NEW.foreign_table_name;
+                  RAISE NOTICE 'hoard_prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
-                  PERFORM hoard_initiate(NEW.table_name);
-                  PERFORM hoard_initiate(NEW.foreign_table_name);
-                  PERFORM hoard_initiate(hoard_get_cache_table_name(NEW.foreign_table_name));
+                  IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
+                    EXECUTE format('DROP VIEW IF EXISTS %%s', hoard_get_cache_view_name(OLD.foreign_table_name));
+                  END IF;
+
+                  IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+                    EXECUTE format('DROP VIEW IF EXISTS %%s', hoard_get_cache_view_name(NEW.foreign_table_name));
+                  END IF;
+
+                  RETURN NEW;
+                END;
+              $$ LANGUAGE PLPGSQL;
+          ",
+        ),
+
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_initialize()
+              RETURNS trigger
+                AS $$
+                DECLARE
+                BEGIN
+                  RAISE NOTICE 'hoard_initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
+
+                  IF TG_OP = 'DELETE' THEN
+                    PERFORM hoard_create_view(OLD.foreign_table_name);
+                  END IF;
+
+                  IF TG_OP = 'INSERT' THEN
+                    PERFORM hoard_create_view(NEW.foreign_table_name);
+                  END IF;
+
+                  IF TG_OP = 'UPDATE' THEN
+                    PERFORM hoard_create_view(NEW.foreign_table_name);
+                  END IF;
+
+                  IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+                    PERFORM hoard_create_triggers(NEW.table_name);
+                    PERFORM hoard_create_triggers(NEW.foreign_table_name);
+                    PERFORM hoard_create_triggers(NEW.foreign_cache_table_name);
+                  END IF;
 
                   RETURN NEW;
                 END;
@@ -1074,11 +1187,18 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                IF NOT hoard_exists_trigger(%s, '_hoard_after_trigger') THEN
-                  CREATE TRIGGER _hoard_after_trigger
-                    AFTER INSERT OR UPDATE ON %s
+                IF NOT hoard_exists_trigger(%1\$s, '_hoard_before_trigger') THEN
+                  CREATE TRIGGER _hoard_before_trigger
+                    BEFORE INSERT OR UPDATE OR DELETE ON %2\$s
                     FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_create_triggers();
+                    EXECUTE FUNCTION hoard_prepare();
+                END IF;
+
+                IF NOT hoard_exists_trigger(%1\$s, '_hoard_after_trigger') THEN
+                  CREATE TRIGGER _hoard_after_trigger
+                    AFTER INSERT OR UPDATE OR DELETE ON %2\$s
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION hoard_initialize();
                 END IF;
               END;
             $$ LANGUAGE PLPGSQL;
@@ -1103,7 +1223,8 @@ class HoardServiceProvider extends ServiceProvider
               foreign_primary_key_name,
               lazy,
               primary_key_name,
-              cached
+              foreign_cache_table_name,
+              foreign_cache_primary_key_name
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -1118,7 +1239,8 @@ class HoardServiceProvider extends ServiceProvider
               %12\$s,
               %13\$s,
               %14\$s,
-              %15\$s
+              %15\$s,
+              %16\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
@@ -1133,7 +1255,8 @@ class HoardServiceProvider extends ServiceProvider
               foreign_primary_key_name = %12\$s,
               lazy = %13\$s,
               primary_key_name = %14\$s,
-              cached = %15\$s;
+              foreign_cache_table_name = %15\$s,
+              foreign_cache_primary_key_name = %16\$s;
           ",
           '',
           $this->quoteString($tableName),
@@ -1149,7 +1272,8 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($foreignPrimaryKeyName),
           $lazy ? 'true' : 'false',
           $this->quoteString($primaryKeyName),
-          $cached ? 'true' : 'false',
+          $this->quoteString($foreignCacheTableName),
+          $this->quoteString($foreignCachePrimaryKeyName),
         ),
 
         $refreshConditions ? sprintf(

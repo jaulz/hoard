@@ -59,7 +59,7 @@ class HoardDefinition
    * @param  string  $aggregationFunction
    * @param  string  $valueName
    * @param  ?string|array $conditions
-   * @param  ?bool $cached
+   * @param  ?string  $groupName
    * @return \Jaulz\Hoard\HoardDefinition
    */
   public function aggregate(
@@ -67,14 +67,31 @@ class HoardDefinition
     string $aggregationFunction,
     string $valueName,
     string|array|null $conditions = null,
-    bool $cached = null
+    string $groupName = null
   ) {
     $attributes = $this->command->getAttributes();
-    $attributes['tableName'] = $tableName;
+    $attributes['tableName'] = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName) : $tableName;
+    $attributes['primaryKeyName'] = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $attributes['primaryKeyName']) : $attributes['primaryKeyName'];
     $attributes['aggregationFunction'] = $aggregationFunction;
     $attributes['valueName'] = $valueName;
     $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], is_string($conditions) ? [$conditions] : ($conditions ?? []));
-    $attributes['cached'] = $cached;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * Set the group.
+   *
+   * @param  string  $name
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function group(
+    string $name
+  ) {
+    $attributes = $this->command->getAttributes();
+    $attributes['groupName'] = $name;
 
     $this->setAttributes($attributes);
 

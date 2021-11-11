@@ -5,7 +5,6 @@ namespace Jaulz\Hoard\Traits;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Jaulz\Hoard\HoardSchema;
-use Illuminate\Support\Str;
 
 trait IsHoardableTrait
 {
@@ -17,19 +16,19 @@ trait IsHoardableTrait
     $instance = with(new static);
     $keyName = $instance->getKeyName();
     $tableName = $instance->getTable();
-    $cacheTableName = HoardSchema::getCacheTableName($tableName);
-    $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($keyName);
+    $cacheViewName = HoardSchema::getCacheViewName($tableName);
+    $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($tableName, $keyName);
 
-    static::addGlobalScope('select', function (Builder $query) use ($tableName, $cacheTableName) {
+    static::addGlobalScope('select', function (Builder $query) use ($tableName) {
       $query->addSelect($tableName . '.*');
     });
 
-    static::addGlobalScope('hoard', function (Builder $query) use ($keyName, $tableName, $cacheTableName, $cachePrimaryKeyName) {
+    static::addGlobalScope('hoard', function (Builder $query) use ($keyName, $tableName, $cacheViewName, $cachePrimaryKeyName) {
       $query->addSelect('hoard.*')->crossJoin(DB::raw('
         LATERAL (
           SELECT  *
-          FROM    ' . $cacheTableName . '
-          WHERE   ' . $tableName . '.' . $keyName . ' = ' . $cacheTableName . '.' . $cachePrimaryKeyName . '
+          FROM    ' . $cacheViewName . '
+          WHERE   ' . $tableName . '.' . $keyName . ' = ' . $cacheViewName . '.' . $cachePrimaryKeyName . '
         ) hoard 
       '));
     });

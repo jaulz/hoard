@@ -10,8 +10,13 @@ use Illuminate\Support\Str;
 class HoardSchema
 {
   static public $cachePrimaryKeyNamePrefix = 'cacheable_';
-  static public $cacheTableNameSuffix = '_cache';
-  static public $cacheViewNameSuffix = '_with_cache';
+
+  static public $cacheTableNamePrefix = 'hoard_cached_';
+  static public $cacheTableNameDelimiter = '__';
+  static public $cacheTableNameSuffix = '';
+
+  static public $cacheViewNamePrefix = 'hoard_cached_';
+  static public $cacheViewNameSuffix = '';
 
   /**
    * Create all required tables, functions etc.
@@ -36,16 +41,16 @@ class HoardSchema
    */
   public static function create(
     string $tableName,
+    string $groupName,
     \Closure $callback,
     ?string $primaryKeyName = 'id',
     ?string $primaryKeyType = 'bigInteger'
   ) {
-    $cacheTableName = static::getCacheTableName($tableName); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
-    $cachePrimaryKeyName = static::getCachePrimaryKeyName($primaryKeyName); // collect(DB::select('SELECT hoard_get_cache_primary_key_name(?) as name', [$primaryKeyName]))->first()->name;
-    $cacheViewName = static::getCacheViewName($tableName); // collect(DB::select('SELECT hoard_get_cache_view_name(?) as name', [$tableName]))->first()->name;
+    $cacheTableName = static::getCacheTableName($tableName, $groupName); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
+    $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName); // collect(DB::select('SELECT hoard_get_cache_primary_key_name(?) as name', [$primaryKeyName]))->first()->name;
 
     // Create cache table
-    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
+    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $groupName, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
@@ -57,22 +62,15 @@ class HoardSchema
 
       $table->unique($cachePrimaryKeyName);
 
-      $table->hoardContext($tableName, $primaryKeyName);
+      $table->hoardContext([
+        'tableName' => $tableName, 'groupName' => $groupName, 'primaryKeyName' => $primaryKeyName
+      ]);
 
       $callback($table);
 
       $table->bigInteger('txid');
       $table->timestampTz('cached_at');
     });
-
-    // Create view that combines both
-    DB::statement(sprintf("
-      CREATE OR REPLACE VIEW %1\$s AS
-        SELECT * 
-        FROM %2\$s
-        JOIN %3\$s
-          ON %4\$s = %5\$s;
-    ", $cacheViewName, $tableName, $cacheTableName, $primaryKeyName, $cachePrimaryKeyName));
 
     // Create rule to insert into 
     /*DB::statement(sprintf("
@@ -92,18 +90,22 @@ class HoardSchema
    * Update the cache table for a given table name.
    *
    * @param  string  $tableName
+   * @param  string  $groupName
    * @param  \Closure  $callback
    * @param  ?string  $primaryKeyName
    */
   public static function table(
     string $tableName,
+    string $groupName,
     \Closure $callback,
     ?string $primaryKeyName = 'id'
   ) {
-    $cacheTableName = static::getCacheTableName($tableName);
+    $cacheTableName = static::getCacheTableName($tableName, $groupName);
 
-    return Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $primaryKeyName, $callback) {
-      $table->hoardContext($tableName, $primaryKeyName);
+    return Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $groupName, $primaryKeyName, $callback) {
+      $table->hoardContext([
+        'tableName' => $tableName, 'groupName' => $groupName, 'primaryKeyName' => $primaryKeyName
+      ]);
 
       $callback($table);
     });
@@ -113,12 +115,14 @@ class HoardSchema
    * Return the cache table name for a given table name.
    *
    * @param  string  $tableName
+   * @param  string  $groupName
    * @return string
    */
   public static function getCacheTableName(
-    string $tableName
+    string $tableName,
+    string $groupName
   ) {
-    return $tableName . self::$cacheTableNameSuffix;
+    return static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $groupName;
   }
 
   /**
@@ -130,19 +134,34 @@ class HoardSchema
   public static function getTableName(
     string $cacheTableName
   ) {
-    return Str::beforeLast($cacheTableName, self::$cacheTableNameSuffix);
+    return Str::afterLast(Str::beforeLast($cacheTableName, self::$cacheTableNameSuffix), self::$cacheTableNamePrefix);
+  }
+
+  /**
+   * Return the foreign primary key for a given key name.
+   *
+   * @param  string  $tableName
+   * @param  string  $primaryKeyName
+   * @return string
+   */
+  public static function getForeignPrimaryKeyName(
+    string $tableName,
+    string $primaryKeyName
+  ) {
+    return Str::singular($tableName) . '_' . $primaryKeyName;
   }
 
   /**
    * Return the cache primary key for a given key name.
    *
+   * @param  string  $tableName
    * @param  string  $primaryKeyName
    * @return string
    */
   public static function getCachePrimaryKeyName(
+    string $tableName,
     string $primaryKeyName
   ) {
-    // NOTE: this should be something which is non clashing
     return static::$cachePrimaryKeyNamePrefix . $primaryKeyName;
   }
 
@@ -155,18 +174,6 @@ class HoardSchema
   public static function getCacheViewName(
     string $tableName
   ) {
-    return $tableName . static::$cacheViewNameSuffix;
-  }
-
-  /**
-   * Return the cache view name for a given table name.
-   *
-   * @param  string  $tableName
-   * @return bool
-   */
-  public static function isCacheViewName(
-    string $tableName
-  ) {
-    return Str::endsWith($tableName, static::$cacheViewNameSuffix);
+    return static::$cacheViewNamePrefix . $tableName . static::$cacheViewNameSuffix;
   }
 }
