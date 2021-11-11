@@ -504,6 +504,11 @@ class HoardServiceProvider extends ServiceProvider
                   FOR trigger IN
                     EXECUTE format('SELECT * FROM hoard_triggers WHERE hoard_triggers.foreign_table_name = ''%%s'' ORDER BY foreign_primary_key_name', foreign_table_name)
                   LOOP
+                    -- Execute updates whenever the foreign cache table name changes
+                    IF foreign_cache_table_name <> trigger.foreign_cache_table_name THEN
+                      PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
+                    END IF;
+
                     table_name := trigger.table_name;
                     primary_key_name := trigger.primary_key_name;
                     foreign_cache_table_name := trigger.foreign_cache_table_name;
@@ -534,12 +539,6 @@ class HoardServiceProvider extends ServiceProvider
                     EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', hoard_get_table_name(foreign_table_name), foreign_primary_key_name, foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
 
                     IF relevant IS NOT NULL THEN
-                      -- Execute updates whenever the foreign cache table name changes
-                      IF last_foreign_cache_table_name <> foreign_cache_table_name THEN
-                        PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
-                      END IF;
-                      last_foreign_cache_table_name := foreign_cache_table_name;
-
                       -- Prepare refresh query
                       refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
 
