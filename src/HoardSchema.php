@@ -2,10 +2,12 @@
 
 namespace Jaulz\Hoard;
 
+use Illuminate\Database\Query\Expression;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
 
 class HoardSchema
 {
@@ -16,7 +18,7 @@ class HoardSchema
   static public $cacheTableNameSuffix = '';
 
   static public $cacheViewNamePrefix = 'hoard_cached_';
-  static public $cacheViewNameSuffix = '';
+  static public $cacheViewNameSuffix = '_view';
 
   /**
    * Create all required tables, functions etc.
@@ -175,5 +177,53 @@ class HoardSchema
     string $tableName
   ) {
     return static::$cacheViewNamePrefix . $tableName . static::$cacheViewNameSuffix;
+  }
+
+  /**
+   * Transform an array of conditions into a where condition as a simple string.
+   *
+   * @param  array $conditions
+   * @return string
+   */
+  public static function prepareConditions(
+    array $conditions
+  ) {
+    return collect($conditions)->mapWithKeys(function ($condition, $key) {
+      $operator = '=';
+      $value = $condition;
+
+      // In case a string is provided we just use it as it is
+      if (is_numeric($key) && is_string($condition)) {
+        return [$key, $condition];
+      }
+
+      // In case an array is provided, the second item is the operator and the third is the value
+      if (is_array($condition)) {
+        $key = $condition[0];
+        $operator = $condition[1];
+        $value = $condition[2];
+      }
+      if ($condition instanceof Collection) {
+        $key = $condition->get(0);
+        $operator = $condition->get(1);
+        $value = $condition->get(2);
+      }
+
+      // Finally either use a quoted value or as it is
+      if ($value instanceof Expression) {
+        $value = $value->getValue();
+      } else if (is_null($value)) {
+        $operator = 'IS';
+        $value = 'NULL';
+      } else {
+        $value = DB::getPdo()->quote($value);
+      }
+
+      if (!$value) {
+        return [];
+      }
+
+      return  [$key => $key . ' ' . $operator . ' ' . $value];
+    })->values()->filter()->implode(' AND ');
   }
 }

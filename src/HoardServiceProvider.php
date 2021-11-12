@@ -73,45 +73,6 @@ class HoardServiceProvider extends ServiceProvider
       Fluent $command
     ) {
       /** @var \Illuminate\Database\Schema\Grammars\PostgresGrammar $this */
-      $prepareConditions = function (array $conditions) {
-        return collect($conditions)->mapWithKeys(function ($condition, $key) {
-          $operator = '=';
-          $value = $condition;
-
-          // In case a string is provided we just use it as it is
-          if (is_numeric($key) && is_string($condition)) {
-            return [$key, $condition];
-          }
-
-          // In case an array is provided, the second item is the operator and the third is the value
-          if (is_array($condition)) {
-            $key = $condition[0];
-            $operator = $condition[1];
-            $value = $condition[2];
-          }
-          if ($condition instanceof Collection) {
-            $key = $condition->get(0);
-            $operator = $condition->get(1);
-            $value = $condition->get(2);
-          }
-
-          // Finally either use a quoted value or as it is
-          if ($value instanceof Expression) {
-            $value = $value->getValue();
-          } else if (is_null($value)) {
-            $operator = 'IS';
-            $value = 'NULL';
-          } else {
-            $value = DB::getPdo()->quote($value);
-          }
-
-          if (!$value) {
-            return [];
-          }
-
-          return  [$key => $key . ' ' . $operator . ' ' . $value];
-        })->values()->filter()->implode(' AND ');
-      };
       $foreignAggregationName = $command->foreignAggregationName;
       $foreignTableName = $command->foreignTableName;
       $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
@@ -119,15 +80,15 @@ class HoardServiceProvider extends ServiceProvider
       $valueType = $command->valueType ?? 'text';
       $aggregationFunction = Str::upper($command->aggregationFunction) ?? '!NOT SET!';
       $valueName = $command->valueName ?? '!NOT SET!';
-      $foreignConditions = $prepareConditions($command->foreignConditions ?? []);
-      $conditions = $prepareConditions($command->conditions ?? []);
+      $foreignConditions = HoardSchema::prepareConditions($command->foreignConditions ?? []);
+      $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $groupName = $command->groupName;
       $tableName = $command->tableName ?? '!NOT SET!';
       $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName) : $tableName;
       $primaryKeyName = $command->primaryKeyName ?? 'id';
       $primaryKeyName = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName) : $primaryKeyName;
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
-      $refreshConditions = $prepareConditions($command->refreshConditions ?? []);
+      $refreshConditions = HoardSchema::prepareConditions($command->refreshConditions ?? []);
       $lazy = $command->lazy ?? false;
       $hidden = $command->hidden ?? false;
       $manual = $command->manual ?? false;
@@ -1073,7 +1034,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_create_view(_foreign_table_name text)
+            CREATE OR REPLACE FUNCTION hoard_create_views(_foreign_table_name text)
               RETURNS void
                 AS $$
                 DECLARE
@@ -1093,7 +1054,7 @@ class HoardServiceProvider extends ServiceProvider
                   key text;
                   value text;
                 BEGIN
-                  RAISE NOTICE 'hoard_create_view: start (_foreign_table_name=%%)', _foreign_table_name;
+                  RAISE NOTICE 'hoard_create_views: start (_foreign_table_name=%%)', _foreign_table_name;
 
                   -- Get all visible cached fields
                   FOR trigger IN
@@ -1170,15 +1131,15 @@ class HoardServiceProvider extends ServiceProvider
                   RAISE NOTICE 'hoard_initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
                   IF TG_OP = 'DELETE' THEN
-                    PERFORM hoard_create_view(OLD.foreign_table_name);
+                    PERFORM hoard_create_views(OLD.foreign_table_name);
                   END IF;
 
                   IF TG_OP = 'INSERT' THEN
-                    PERFORM hoard_create_view(NEW.foreign_table_name);
+                    PERFORM hoard_create_views(NEW.foreign_table_name);
                   END IF;
 
                   IF TG_OP = 'UPDATE' THEN
-                    PERFORM hoard_create_view(NEW.foreign_table_name);
+                    PERFORM hoard_create_views(NEW.foreign_table_name);
                   END IF;
 
                   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
