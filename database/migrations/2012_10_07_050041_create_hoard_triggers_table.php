@@ -14,7 +14,7 @@ return new class extends Migration {
   public function up()
   {
     Schema::create('hoard_triggers', function (Blueprint $table) {
-      $table->id();
+      $table->id()->generatedAs();
       $table->string('table_name');
       $table->string('key_name');
       $table->string('aggregation_function');
