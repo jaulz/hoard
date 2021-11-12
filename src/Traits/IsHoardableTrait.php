@@ -42,9 +42,9 @@ trait IsHoardableTrait
    * @param  \Illuminate\Database\Eloquent\Builder  $query
    * @return void
    */
-  public function scopeHoard($query)
+  public function scopeHoard(\Illuminate\Database\Eloquent\Builder $query, ?string $alias = null)
   {
-      (new HoardScope())->apply($query, $this);
+      (new HoardScope($alias))->apply($query, $this);
   }
 
   /**

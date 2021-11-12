@@ -10,6 +10,13 @@ use Jaulz\Hoard\HoardSchema;
 use Illuminate\Support\Str;
 
 class HoardScope implements Scope {
+  protected ?string $alias = null;
+
+  public function __construct(?string $alias = null)
+  {
+      $this->alias = $alias;
+  }
+
   /**
    * Scope a query to include cache.
    *
@@ -23,7 +30,7 @@ class HoardScope implements Scope {
     $cacheViewName = HoardSchema::getCacheViewName($tableName);
     $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($tableName, $keyName);
     $className = class_basename($model);
-    $alias = Str::snake($className) . '_hoard_' . rand(1, 1000);
+    $alias = $this->alias ?? Str::snake($className) . '_hoard';
 
     $query->addSelect($alias . '.*')->crossJoin(DB::raw('
       LATERAL (
