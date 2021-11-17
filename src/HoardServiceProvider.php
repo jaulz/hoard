@@ -121,6 +121,20 @@ class HoardServiceProvider extends ServiceProvider
             );
           "
         ),
+
+        sprintf(
+          "
+            CREATE OR REPLACE FUNCTION hoard_array_diff(array1 anyarray, array2 anyarray)
+              RETURNS anyarray
+              AS $$
+                SELECT 
+                    COALESCE(ARRAY_AGG(element), '{}')
+                  FROM UNNEST(array1) element
+                  WHERE 
+                    element <> all(array2)
+              $$ LANGUAGE SQL IMMUTABLE;
+          "
+        ),
   
         sprintf(
           "
@@ -676,6 +690,8 @@ class HoardServiceProvider extends ServiceProvider
                             old_update := format('%%s - ''%%s''', foreign_aggregation_name, old_value);
                           ELSIF value_type = 'numeric' THEN
                             old_update := format('array_to_json(array_remove(array(select jsonb_array_elements_text(%%s)), %%s::text)::int[])', foreign_aggregation_name, old_value);
+                          ELSIF value_type = 'json' THEN
+                            old_update := format('array_to_json(hoard_array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(''%%s''))))', foreign_aggregation_name, old_value);
                           ELSE  
                             old_update := format('%%s - %%s', foreign_aggregation_name, old_value);
                           END IF;
@@ -714,6 +730,8 @@ class HoardServiceProvider extends ServiceProvider
                         IF new_value != '' THEN
                           IF value_type = 'text' THEN
                             new_update := format('%%s::jsonb || ''[\"%%s\"]''::jsonb', foreign_aggregation_name, new_value);
+                          ELSIF value_type = 'json' THEN
+                            new_update := format('%%s::jsonb || ''%%s''::jsonb', foreign_aggregation_name, new_value);
                           ELSE  
                             new_update := format('%%s::jsonb || ''[%%s]''::jsonb', foreign_aggregation_name, new_value);
                           END IF;
