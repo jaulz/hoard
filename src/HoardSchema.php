@@ -50,9 +50,10 @@ class HoardSchema
   ) {
     $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
     $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName); // collect(DB::select('SELECT hoard_get_cache_primary_key_name(?) as name', [$primaryKeyName]))->first()->name;
+    $cacheUniqueIndexName = static::getCacheUniqueIndexName($cacheTableName, $primaryKeyName, $cachePrimaryKeyName); 
 
     // Create cache table
-    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName) {
+    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
@@ -62,7 +63,7 @@ class HoardSchema
         ->constrained()
         ->cascadeOnDelete();
 
-      $table->unique($cachePrimaryKeyName);
+      $table->unique($cachePrimaryKeyName, $cacheUniqueIndexName);
 
       $table->hoardContext([
         'tableName' => $tableName, 'cacheTableGroup' => $cacheTableGroup, 'primaryKeyName' => $primaryKeyName
@@ -117,14 +118,14 @@ class HoardSchema
    * Return the cache table name for a given table name.
    *
    * @param  string  $tableName
-   * @param  string  $groupName
+   * @param  string  $cacheTableGroup
    * @return string
    */
   public static function getCacheTableName(
     string $tableName,
-    string $groupName
+    string $cacheTableGroup
   ) {
-    return static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $groupName;
+    return static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $cacheTableGroup;
   }
 
   /**
@@ -151,6 +152,34 @@ class HoardSchema
     string $primaryKeyName
   ) {
     return Str::singular($tableName) . '_' . $primaryKeyName;
+  }
+
+  /**
+   * Return the cache unique index name for a given table name and key name.
+   *
+   * @param  string  $cacheTableName
+   * @param  string  $primaryKeyName
+   * @param  string  $cachePrimaryKeyName
+   * @return string
+   */
+  public static function getCacheUniqueIndexName(
+    string $cacheTableName,
+    string $primaryKeyName,
+    string $cachePrimaryKeyName
+  ) {
+    // NOTE: max length should be 63 characters
+    $hashLength = 4;
+    $hash = substr(md5($cacheTableName), 0, $hashLength);
+    $suffix = '_' . $cachePrimaryKeyName . '_unique';
+
+    $indexName = $cacheTableName . $suffix;
+    if (strlen($indexName) <= 63) {
+      return $indexName;
+    }
+
+    $suffix = '_' . $hash . '_' . $cachePrimaryKeyName . '_unique';
+
+    return substr($cacheTableName, 0, 63 - strlen($suffix)) . $suffix;
   }
 
   /**
