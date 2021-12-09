@@ -976,7 +976,7 @@ class HoardServiceProvider extends ServiceProvider
 
                       -- During deletion we exclude ourself from the update conditions
                       EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
-                      conditions := format('%%s AND %%s <> %%s', conditions, primary_key_name, primary_key);
+                      conditions := format('%%s AND %%s <> ''%%s''', conditions, primary_key_name, primary_key);
                   
                       -- Run update
                       PERFORM hoard_update(
