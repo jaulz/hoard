@@ -938,6 +938,7 @@ class HoardServiceProvider extends ServiceProvider
                     LOOP
                       CONTINUE WHEN TG_OP = 'DELETE' AND trigger.lazy = true;
 
+                      table_name := trigger.table_name;
                       primary_key_name := trigger.primary_key_name;
                       foreign_table_name := trigger.foreign_table_name;
                       foreign_cache_table_name := trigger.foreign_cache_table_name;
@@ -951,7 +952,7 @@ class HoardServiceProvider extends ServiceProvider
                       key_name := trigger.key_name;
                       conditions := trigger.conditions;
                       foreign_conditions := trigger.foreign_conditions;
-                      RAISE NOTICE 'hoard_before_trigger: trigger (table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
+                      RAISE NOTICE 'hoard_before_trigger: trigger (TG_TABLE_NAME=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', TG_TABLE_NAME, table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
 
                       -- Ensure that we have any conditions
                       IF conditions = '' THEN
