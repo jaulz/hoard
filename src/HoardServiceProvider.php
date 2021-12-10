@@ -1274,7 +1274,7 @@ class HoardServiceProvider extends ServiceProvider
           $manual ? 'true' : 'false',
         ),
 
-        $refreshConditions ? sprintf(
+        sprintf(
           "
             DO $$
               BEGIN
@@ -1284,7 +1284,7 @@ class HoardServiceProvider extends ServiceProvider
           ",
           $this->quoteString($tableName),
           DB::getPdo()->quote($refreshConditions),
-        ) : null,
+        ),
       ]);
     });
   }
