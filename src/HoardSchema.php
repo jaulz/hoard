@@ -245,7 +245,7 @@ class HoardSchema
         $operator = $operator ?? 'IS';
         $value = 'NULL';
       } else if (is_bool($value)) {
-        $value = $value;
+        $value = $value ? 'true' : 'false';
       } else {
         $value = DB::getPdo()->quote($value);
       }
