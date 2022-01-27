@@ -346,7 +346,7 @@ class HoardServiceProvider extends ServiceProvider
                   cache_table_name := join_table_name;
                   table_name := hoard_get_table_name(join_table_name);
 
-                  RETURN format('LEFT JOIN %%s ON %%s.%%s = %%s.%%s', table_name, table_name, hoard_get_primary_key_name(primary_key_name), alias, hoard_get_cache_primary_key_name(primary_key_name));
+                  RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', table_name, table_name, hoard_get_primary_key_name(primary_key_name), alias, hoard_get_cache_primary_key_name(primary_key_name));
                 END IF;
 
                 -- In case the provided table name is a principal table, we will check if there is a cache view and join that 
@@ -355,7 +355,7 @@ class HoardServiceProvider extends ServiceProvider
                   RETURN '';
                 END IF;
 
-                RETURN format('LEFT JOIN %%s ON %%s.%%s = %%s.%%s', cache_view_name, cache_view_name, hoard_get_cache_primary_key_name(primary_key_name), alias, hoard_get_primary_key_name(primary_key_name));
+                RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, hoard_get_cache_primary_key_name(primary_key_name), alias, hoard_get_primary_key_name(primary_key_name));
                 END;
               $$ LANGUAGE PLPGSQL;
           "
@@ -384,7 +384,7 @@ class HoardServiceProvider extends ServiceProvider
                   CASE aggregation_function 
                     WHEN 'X' THEN
                     ELSE
-                      refresh_query := format('SELECT %%s(%%s) FROM %%s %%s WHERE %%s = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, hoard_get_join_statement(principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
+                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, hoard_get_join_statement(principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
                   END CASE;
 
                   -- Coalesce certain aggregation functions to prevent null values
@@ -1282,7 +1282,7 @@ class HoardServiceProvider extends ServiceProvider
               END;
             $$ LANGUAGE PLPGSQL;
           ",
-          $this->quoteString($tableName),
+          $this->quoteString(HoardSchema::getTableName($foreignTableName)),
           DB::getPdo()->quote($refreshConditions),
         ),
       ]);

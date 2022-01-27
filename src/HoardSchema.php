@@ -137,7 +137,7 @@ class HoardSchema
   public static function getTableName(
     string $cacheTableName
   ) {
-    return Str::afterLast(Str::beforeLast($cacheTableName, self::$cacheTableNameSuffix), self::$cacheTableNamePrefix);
+    return Str::afterLast(Str::beforeLast($cacheTableName, self::$cacheTableNameDelimiter), self::$cacheTableNamePrefix);
   }
 
   /**
@@ -244,6 +244,8 @@ class HoardSchema
       } else if (is_null($value)) {
         $operator = $operator ?? 'IS';
         $value = 'NULL';
+      } else if (is_bool($value)) {
+        $value = $value;
       } else {
         $value = DB::getPdo()->quote($value);
       }
@@ -252,7 +254,7 @@ class HoardSchema
         return [];
       }
 
-      return  [$key => $key . ' ' . $operator . ' ' . $value];
+      return  [$key => '"' . $key . '"' . ' ' . $operator . ' ' . $value];
     })->values()->filter()->implode(' AND ');
   }
 }
