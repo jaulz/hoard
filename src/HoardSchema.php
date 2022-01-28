@@ -27,10 +27,8 @@ class HoardSchema
    */
   public static function init()
   {
-    $statements = [
-      'CREATE SCHEMA IF NOT EXISTS ' . HoardSchema::$schema . ';'
-    ];
-    
+    $statements = [];
+
     collect($statements)->each(function ($statement) {
       DB::statement($statement);
     });
@@ -53,14 +51,14 @@ class HoardSchema
   ) {
     $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
     $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName); // collect(DB::select('SELECT hoard_get_cache_primary_key_name(?) as name', [$primaryKeyName]))->first()->name;
-    $cacheUniqueIndexName = static::getCacheUniqueIndexName($cacheTableName, $primaryKeyName, $cachePrimaryKeyName); 
+    $cacheUniqueIndexName = static::getCacheUniqueIndexName($cacheTableName, $primaryKeyName, $cachePrimaryKeyName);
 
     // Create cache table
     Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
-        $table->foreign($cachePrimaryKeyName)
+      $table->foreign($cachePrimaryKeyName)
         ->references($primaryKeyName)
         ->on($tableName)
         ->constrained()

@@ -98,6 +98,11 @@ class HoardServiceProvider extends ServiceProvider
 
       return array_filter([
         sprintf(
+          "CREATE SCHEMA IF NOT EXISTS %1\$s;",
+          HoardSchema::$schema
+        ),
+
+        sprintf(
           "
             CREATE TABLE IF NOT EXISTS %1\$s.triggers (
               id SERIAL PRIMARY KEY,
@@ -137,7 +142,7 @@ class HoardServiceProvider extends ServiceProvider
           ",
           HoardSchema::$schema
         ),
-  
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.get_primary_key_name(cache_primary_key_name text)
@@ -155,7 +160,7 @@ class HoardServiceProvider extends ServiceProvider
           HoardSchema::$schema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
-  
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.is_cache_primary_key_name(primary_key_name text)
@@ -169,7 +174,7 @@ class HoardServiceProvider extends ServiceProvider
           HoardSchema::$schema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
-  
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.get_cache_primary_key_name(primary_key_name text)
@@ -187,7 +192,7 @@ class HoardServiceProvider extends ServiceProvider
           HoardSchema::$schema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
-  
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.get_cache_view_name(table_name text)
@@ -206,7 +211,7 @@ class HoardServiceProvider extends ServiceProvider
           HoardSchema::$cacheViewNamePrefix,
           HoardSchema::$cacheViewNameSuffix
         ),
-  
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.get_table_name(cache_table_name text)
@@ -230,7 +235,7 @@ class HoardServiceProvider extends ServiceProvider
           HoardSchema::$cacheTableNamePrefix,
           HoardSchema::$cacheTableNameDelimiter
         ),
-  
+
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.is_cache_table_name(table_name text)
