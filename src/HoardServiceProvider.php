@@ -468,6 +468,7 @@ class HoardServiceProvider extends ServiceProvider
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.refresh(
+                foreign_schema_name text,
                 foreign_table_name text,
                 foreign_row json
               )
@@ -495,11 +496,11 @@ class HoardServiceProvider extends ServiceProvider
                   
                   relevant boolean;
                 BEGIN
-                  RAISE NOTICE '%1\$s.refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
+                  RAISE NOTICE '%1\$s.refresh: start (foreign_schema_name=%%, foreign_table_name=%%, foreign_row=%%)', foreign_schema_name, foreign_table_name, foreign_row;
 
                   -- Collect all updates in a JSON map
                   FOR trigger IN
-                    EXECUTE format('SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_table_name = ''%%s'' ORDER BY foreign_cache_table_name', foreign_table_name)
+                    EXECUTE format('SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_schema_name = ''%%s'' AND %1\$s.triggers.foreign_table_name = ''%%s'' ORDER BY foreign_cache_table_name', foreign_schema_name, foreign_table_name)
                   LOOP
                     -- Execute updates whenever the foreign cache table name changes
                     IF foreign_cache_table_name IS NOT NULL AND foreign_cache_table_name <> trigger.foreign_cache_table_name THEN
@@ -513,6 +514,7 @@ class HoardServiceProvider extends ServiceProvider
                     foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
                     foreign_primary_key_name := trigger.foreign_primary_key_name;
+                    foreign_schema_name := trigger.foreign_schema_name;
                     aggregation_function := trigger.aggregation_function;
                     value_name := trigger.value_name;
                     value_type := trigger.value_type;
@@ -534,7 +536,7 @@ class HoardServiceProvider extends ServiceProvider
                     foreign_primary_key := %1\$s.get_row_value(foreign_row, foreign_primary_key_name);
 
                     -- Check if foreign conditions are met
-                    EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', %1\$s.get_table_name(foreign_table_name), foreign_primary_key_name, foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
+                    EXECUTE format('SELECT true FROM %%s.%%s WHERE %%s = ''%%s'' AND %%s;', foreign_schema_name, %1\$s.get_table_name(foreign_table_name), foreign_primary_key_name, foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
 
                     IF relevant IS NOT NULL THEN
                       -- Prepare refresh query
@@ -579,6 +581,7 @@ class HoardServiceProvider extends ServiceProvider
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.refresh_all(
+                foreign_schema_name text,
                 foreign_table_name text,
                 foreign_table_conditions text DEFAULT '1 = 1'
               )
@@ -587,7 +590,7 @@ class HoardServiceProvider extends ServiceProvider
                 DECLARE
                   foreign_row record;
                 BEGIN
-                  RAISE NOTICE '%1\$s.refresh_all: start (foreign_table_name=%%, foreign_table_conditions=%%)', foreign_table_name, foreign_table_conditions;
+                  RAISE NOTICE '%1\$s.refresh_all: start (foreign_schema_name=%%, foreign_table_name=%%, foreign_table_conditions=%%)', foreign_schema_name, foreign_table_name, foreign_table_conditions;
 
                   -- Ensure that we have any conditions
                   IF foreign_table_conditions = '' THEN
@@ -596,9 +599,9 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- Run updates
                   FOR foreign_row IN
-                    EXECUTE format('SELECT * FROM %%s WHERE %%s', foreign_table_name, foreign_table_conditions)
+                    EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', foreign_schema_name, foreign_table_name, foreign_table_conditions)
                   LOOP
-                    PERFORM %1\$s.refresh(foreign_table_name, row_to_json(foreign_row));
+                    PERFORM %1\$s.refresh(foreign_schema_name, foreign_table_name, row_to_json(foreign_row));
                   END LOOP;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -789,8 +792,10 @@ class HoardServiceProvider extends ServiceProvider
                   trigger_table_name text;
                   cached_trigger_table_name boolean DEFAULT false;
 
+                  schema_name text;
                   table_name text;
                   primary_key_name text;
+                  foreign_schema_name text;
                   foreign_table_name text;
                   foreign_cache_table_name text;
                   foreign_aggregation_name text;
@@ -816,19 +821,23 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- If this is the first row we need to create an entry for the new row in the cache table
                   IF TG_OP = 'INSERT' AND NOT %1\$s.is_cache_table_name(TG_TABLE_NAME) THEN
-                    PERFORM %1\$s.refresh(TG_TABLE_NAME, row_to_json(NEW));
+                    PERFORM %1\$s.refresh(TG_TABLE_SCHEMA, TG_TABLE_NAME, row_to_json(NEW));
                   END IF;
 
                   -- Get all triggers that affect OTHER tables
                   FOR trigger IN
                     SELECT * FROM %1\$s.triggers
                     WHERE 
+                        %1\$s.triggers.schema_name = TG_TABLE_SCHEMA
+                      AND 
                         %1\$s.triggers.table_name = TG_TABLE_NAME
                       AND 
                         %1\$s.triggers.manual = false
                   LOOP
+                    schema_name := trigger.schema_name;
                     table_name := trigger.table_name;
                     primary_key_name := trigger.primary_key_name;
+                    foreign_schema_name := trigger.foreign_schema_name;
                     foreign_table_name := trigger.foreign_table_name;
                     foreign_cache_table_name := trigger.foreign_cache_table_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
@@ -841,7 +850,7 @@ class HoardServiceProvider extends ServiceProvider
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
-                    RAISE NOTICE '%1\$s.after_trigger: trigger (table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
+                    RAISE NOTICE '%1\$s.after_trigger: trigger (schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', schema_name, table_name, primary_key_name, foreign_schema_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
                     
                     -- Ensure that we have any conditions
                     IF conditions = '' THEN
@@ -1317,11 +1326,12 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                PERFORM %1\$s.refresh_all(%2\$s, %3\$s);
+                PERFORM %1\$s.refresh_all(%2\$s, %3\$s, %4\$s);
               END;
             $$ LANGUAGE PLPGSQL;
           ",
           HoardSchema::$schema,
+          $this->quoteString($foreignSchemaName),
           $this->quoteString(HoardSchema::getTableName($foreignTableName)),
           DB::getPdo()->quote($refreshConditions),
         ),

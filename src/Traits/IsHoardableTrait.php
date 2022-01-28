@@ -105,6 +105,13 @@ trait IsHoardableTrait
    */
   public function refreshHoard()
   {
-    return DB::select('SELECT ' . HoardSchema::$schema . '.refresh_all(?, ?)', [$this->getTable(), $this->getKeyName() . ' = ' . $this->getKey()]);
+    $connection = $this->getConnection();
+    $config = $connection->getConfig();
+
+    return DB::select('SELECT ' . HoardSchema::$schema . '.refresh_all(?, ?, ?)', [
+      $config['schema'] ?? 'public',
+      $this->getTable(), 
+      $this->getKeyName() . ' = ' . $this->getKey()
+    ]);
   }
 }
