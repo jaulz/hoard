@@ -74,7 +74,7 @@ class HoardServiceProvider extends ServiceProvider
     ) {
       /** @var \Illuminate\Database\Schema\Grammars\PostgresGrammar $this */
       $foreignAggregationName = $command->foreignAggregationName;
-      $foreignSchemaName = Str::contains($command->foreignTableName, '.') ? Str::before($command->foreignTableName, '.') : 'public';
+      $foreignSchemaName = Str::contains($command->foreignTableName, '.') ? Str::before($command->foreignTableName, '.') : HoardSchema::$schema;
       $foreignTableName = Str::after($command->foreignTableName, '.');
       $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
       $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
@@ -85,7 +85,7 @@ class HoardServiceProvider extends ServiceProvider
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $groupName = $command->groupName;
       $tableName = $command->tableName ?? '!NOT SET!';
-      $schemaName = $groupName ? HoardSchema::$schema : 'public';
+      $schemaName = $groupName ? HoardSchema::$cacheSchema : HoardSchema::$schema;
       $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName, false) : $tableName;
       $primaryKeyName = $command->primaryKeyName ?? 'id';
       $primaryKeyName = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName) : $primaryKeyName;
@@ -124,7 +124,7 @@ class HoardServiceProvider extends ServiceProvider
               hidden BOOLEAN DEFAULT false
             );
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -139,7 +139,7 @@ class HoardServiceProvider extends ServiceProvider
                     element <> all(array2)
               $$ LANGUAGE SQL IMMUTABLE;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -156,7 +156,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
 
@@ -170,7 +170,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
 
@@ -188,7 +188,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
 
@@ -206,7 +206,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           HoardSchema::$cacheViewNamePrefix,
           HoardSchema::$cacheViewNameSuffix
         ),
@@ -230,7 +230,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           HoardSchema::$cacheTableNamePrefix,
           HoardSchema::$cacheTableNameDelimiter
         ),
@@ -245,7 +245,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           HoardSchema::$cacheTableNamePrefix,
           HoardSchema::$cacheTableNameDelimiter,
           HoardSchema::$cacheTableNameSuffix,
@@ -266,7 +266,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -283,7 +283,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -300,7 +300,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -311,7 +311,7 @@ class HoardServiceProvider extends ServiceProvider
                 SELECT json_populate_record(record, json_build_object(key, value));
               $$ LANGUAGE SQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -322,7 +322,7 @@ class HoardServiceProvider extends ServiceProvider
                 SELECT json_populate_record(record, json_build_object(key, value), true);
               $$ LANGUAGE SQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -335,7 +335,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -348,7 +348,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -384,7 +384,7 @@ class HoardServiceProvider extends ServiceProvider
               END;
             $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -394,6 +394,7 @@ class HoardServiceProvider extends ServiceProvider
               AS $$
                 DECLARE
                   refresh_query text;
+                  principal_schema_name text;
                   principal_table_name text;
                   principal_primary_key_name text;
                 BEGIN
@@ -403,6 +404,7 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- We always resolve to the principal table even if the table_name is a cached table (e.g. cached_users__default -> users)
+                  principal_schema_name = 'public'; -- TODO: remove hard coded schema
                   principal_table_name = %1\$s.get_table_name(table_name);
                   principal_primary_key_name = %1\$s.get_primary_key_name(primary_key_name);
 
@@ -410,7 +412,7 @@ class HoardServiceProvider extends ServiceProvider
                   CASE aggregation_function 
                     WHEN 'X' THEN
                     ELSE
-                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, %1\$s.get_join_statement('public', principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
+                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, %1\$s.get_join_statement(principal_schema_name, principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
                   END CASE;
 
                   -- Coalesce certain aggregation functions to prevent null values
@@ -428,7 +430,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -467,7 +469,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -582,7 +584,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -613,7 +615,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -788,7 +790,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -922,7 +924,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1069,7 +1071,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1102,7 +1104,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1171,7 +1173,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1195,7 +1197,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1229,7 +1231,7 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1252,7 +1254,7 @@ class HoardServiceProvider extends ServiceProvider
               END;
             $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema
+          HoardSchema::$cacheSchema
         ),
 
         sprintf(
@@ -1318,7 +1320,7 @@ class HoardServiceProvider extends ServiceProvider
               schema_name = %19\$s,
               foreign_schema_name = %20\$s;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           $this->quoteString($tableName),
           $this->quoteString($keyName),
           $this->quoteString($aggregationFunction),
@@ -1348,7 +1350,7 @@ class HoardServiceProvider extends ServiceProvider
               END;
             $$ LANGUAGE PLPGSQL;
           ",
-          HoardSchema::$schema,
+          HoardSchema::$cacheSchema,
           $this->quoteString($foreignSchemaName),
           $this->quoteString(HoardSchema::getTableName($foreignTableName)),
           DB::getPdo()->quote($refreshConditions),

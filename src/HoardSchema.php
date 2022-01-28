@@ -11,11 +11,12 @@ use Illuminate\Support\Collection;
 
 class HoardSchema
 {
-  static public $schema = 'hoard';
+  static public $schema = 'public';
+  static public $cacheSchema = 'hoard';
 
   static public $cachePrimaryKeyNamePrefix = 'cacheable_';
 
-  static public $cacheTableNamePrefix = 'cached_';
+  static public $cacheTableNamePrefix = '';
   static public $cacheTableNameDelimiter = '__';
   static public $cacheTableNameSuffix = '';
 
@@ -30,7 +31,7 @@ class HoardSchema
     $statements = [
       sprintf(
         "CREATE SCHEMA IF NOT EXISTS %1\$s;",
-        HoardSchema::$schema
+        HoardSchema::$cacheSchema
       ),
     ];
 
@@ -133,7 +134,7 @@ class HoardSchema
     string $cacheTableGroup,
     bool $includeSchema = true
   ) {
-    return ($includeSchema ? HoardSchema::$schema . '.' : '') . static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $cacheTableGroup;
+    return ($includeSchema ? HoardSchema::$cacheSchema . '.' : '') . static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $cacheTableGroup;
   }
 
   /**
