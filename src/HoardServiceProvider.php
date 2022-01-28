@@ -98,11 +98,6 @@ class HoardServiceProvider extends ServiceProvider
 
       return array_filter([
         sprintf(
-          "CREATE SCHEMA IF NOT EXISTS %1\$s;",
-          HoardSchema::$schema
-        ),
-
-        sprintf(
           "
             CREATE TABLE IF NOT EXISTS %1\$s.triggers (
               id SERIAL PRIMARY KEY,
@@ -456,7 +451,7 @@ class HoardServiceProvider extends ServiceProvider
                   END LOOP;
                   
                   -- Run update if required
-                  query := format('INSERT INTO %%s (%%s %%s, txid, cached_at) VALUES (''%%s'' %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
+                  query := format('INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (''%%s'' %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
                   RAISE NOTICE '%1\$s.upsert_cache: execute (query=%%)', query;
                   EXECUTE query;
                 END;
@@ -697,17 +692,17 @@ class HoardServiceProvider extends ServiceProvider
                   IF old_foreign_key IS NOT NULL AND (operation = 'DELETE' AND old_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = true and new_relevant = false) OR (old_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
                     CASE aggregation_function 
                       WHEN 'COUNT' THEN
-                        old_query := format('UPDATE %%s SET %%s = %%s - 1 WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, old_condition);
+                        old_query := format('UPDATE %1\$s.%%s SET %%s = %%s - 1 WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, old_condition);
                       WHEN 'SUM' THEN
                         -- NOTE: the value will be added later so we don't need to calculate the difference
-                        old_query := format('UPDATE %%s SET %%s = %%s - %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, old_value, old_condition);
+                        old_query := format('UPDATE %1\$s.%%s SET %%s = %%s - %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, old_value, old_condition);
                       WHEN 'MAX' THEN
                         IF old_value IS NOT NULL THEN
-                          old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                          old_query := format('UPDATE %1\$s.%%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
                         END IF;
                       WHEN 'MIN' THEN
                         IF old_value IS NOT NULL THEN
-                          old_query := format('UPDATE %%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                          old_query := format('UPDATE %1\$s.%%s SET %%s = CASE WHEN ''%%s'' <> %%s THEN %%s ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_value, foreign_aggregation_name, foreign_aggregation_name, old_refresh_query, old_condition);
                         END IF;
                       WHEN 'JSONB_AGG' THEN
                         IF old_value IS NOT NULL THEN
@@ -721,10 +716,10 @@ class HoardServiceProvider extends ServiceProvider
                             old_update := format('%%s - %%s', foreign_aggregation_name, old_value);
                           END IF;
 
-                          old_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_update, old_condition);
+                          old_query := format('UPDATE %1\$s.%%s SET %%s = %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_update, old_condition);
                         END IF;
                       ELSE
-                        old_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_refresh_query, old_condition);
+                        old_query := format('UPDATE %1\$s.%%s SET %%s = (%%s) WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, old_refresh_query, old_condition);
                     END CASE;
 
                     IF old_query != '' THEN
@@ -739,17 +734,17 @@ class HoardServiceProvider extends ServiceProvider
                   IF new_foreign_key IS NOT NULL AND (operation = 'INSERT' AND new_relevant = true) OR (operation = 'UPDATE' AND (old_relevant = false AND new_relevant = true) OR (new_relevant = true AND (changed_value = true OR changed_foreign_key = true))) THEN
                     CASE aggregation_function 
                       WHEN 'COUNT' THEN
-                        new_query := format('UPDATE %%s SET %%s = %%s + 1 WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_condition);
+                        new_query := format('UPDATE %1\$s.%%s SET %%s = %%s + 1 WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_condition);
                       WHEN 'SUM' THEN
                         -- NOTE: the value was deducted before so we don't need to calculate the difference here
-                        new_query := format('UPDATE %%s SET %%s = %%s + %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, new_condition);
+                        new_query := format('UPDATE %1\$s.%%s SET %%s = %%s + %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, new_condition);
                       WHEN 'MAX' THEN
                         IF new_value != '' THEN
-                          new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' > %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
+                          new_query := format('UPDATE %1\$s.%%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' > %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
                         END IF;
                       WHEN 'MIN' THEN
                         IF new_value != '' THEN
-                          new_query := format('UPDATE %%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' < %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
+                          new_query := format('UPDATE %1\$s.%%s SET %%s = CASE WHEN %%s IS NULL OR ''%%s'' < %%s THEN ''%%s'' ELSE (%%s) END WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, foreign_aggregation_name, new_value, foreign_aggregation_name, new_value, foreign_aggregation_name, new_condition);
                         END IF;
                       WHEN 'JSONB_AGG' THEN
                         IF new_value != '' THEN
@@ -761,10 +756,10 @@ class HoardServiceProvider extends ServiceProvider
                             new_update := format('%%s::jsonb || ''[%%s]''::jsonb', foreign_aggregation_name, new_value);
                           END IF;
 
-                          new_query := format('UPDATE %%s SET %%s = %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, new_update, new_condition);
+                          new_query := format('UPDATE %1\$s.%%s SET %%s = %%s WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, new_update, new_condition);
                         END IF;  
                       ELSE
-                        new_query := format('UPDATE %%s SET %%s = (%%s) WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, new_refresh_query, new_condition);
+                        new_query := format('UPDATE %1\$s.%%s SET %%s = (%%s) WHERE %%s', foreign_cache_table_name, foreign_aggregation_name, new_refresh_query, new_condition);
                     END CASE;
 
                     IF new_query != '' THEN
@@ -1053,26 +1048,33 @@ class HoardServiceProvider extends ServiceProvider
               RETURNS void
                 AS $$
                 DECLARE
+                  schema text;
                 BEGIN
                   RAISE NOTICE '%1\$s.create_triggers: start (table_name=%%)', table_name;
+
+                  IF %1\$s.is_cache_table_name(table_name) THEN
+                    schema := '%1\$s';
+                  ELSE
+                    schema := 'public';
+                  END IF;
 
                   -- Create triggers for table
                   IF NOT %1\$s.exists_trigger(table_name, 'hoard_before') THEN
                     EXECUTE format('
                         CREATE TRIGGER hoard_before
-                        BEFORE INSERT OR UPDATE OR DELETE ON %%s
+                        BEFORE INSERT OR UPDATE OR DELETE ON %%s.%%s
                         FOR EACH ROW 
                         EXECUTE FUNCTION %1\$s.before_trigger()
-                      ', table_name);
+                      ', schema, table_name);
                   END IF;
 
                   IF NOT %1\$s.exists_trigger(table_name, 'hoard_after') THEN
                     EXECUTE format('
                       CREATE TRIGGER hoard_after
-                        AFTER INSERT OR UPDATE OR DELETE ON %%s
+                        AFTER INSERT OR UPDATE OR DELETE ON %%s.%%s
                         FOR EACH ROW 
                         EXECUTE FUNCTION %1\$s.after_trigger()
-                      ', table_name);
+                      ', schema, table_name);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -1126,7 +1128,7 @@ class HoardServiceProvider extends ServiceProvider
                   FOR key, value IN 
                     SELECT * FROM jsonb_each_text(joins)
                   LOOP
-                    concatenated_joins := format('%%s JOIN %%s ON %%s', concatenated_joins, key, value);
+                    concatenated_joins := format('%%s JOIN %1\$s.%%s ON %%s', concatenated_joins, key, value);
                   END LOOP;
 
                   -- Concatenate aggregation names

@@ -27,7 +27,12 @@ class HoardSchema
    */
   public static function init()
   {
-    $statements = [];
+    $statements = [
+      sprintf(
+        "CREATE SCHEMA IF NOT EXISTS %1\$s;",
+        HoardSchema::$schema
+      ),
+    ];
 
     collect($statements)->each(function ($statement) {
       DB::statement($statement);
@@ -54,7 +59,7 @@ class HoardSchema
     $cacheUniqueIndexName = static::getCacheUniqueIndexName($cacheTableName, $primaryKeyName, $cachePrimaryKeyName);
 
     // Create cache table
-    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
+    Schema::create(HoardSchema::$schema . '.' . $cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
