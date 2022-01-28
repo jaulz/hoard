@@ -99,7 +99,7 @@ class HoardServiceProvider extends ServiceProvider
       return array_filter([
         sprintf(
           "
-            CREATE TABLE IF NOT EXISTS hoard_triggers (
+            CREATE TABLE IF NOT EXISTS %1\$s.triggers (
               id SERIAL PRIMARY KEY,
               foreign_table_name VARCHAR(255) NOT NULL,
               foreign_primary_key_name VARCHAR(255) NOT NULL,
@@ -119,12 +119,13 @@ class HoardServiceProvider extends ServiceProvider
               lazy BOOLEAN DEFAULT false,
               hidden BOOLEAN DEFAULT false
             );
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_array_diff(array1 anyarray, array2 anyarray)
+            CREATE OR REPLACE FUNCTION %1\$s.array_diff(array1 anyarray, array2 anyarray)
               RETURNS anyarray
               AS $$
                 SELECT 
@@ -133,85 +134,90 @@ class HoardServiceProvider extends ServiceProvider
                   WHERE 
                     element <> all(array2)
               $$ LANGUAGE SQL IMMUTABLE;
-          "
+          ",
+          HoardSchema::$schema
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_primary_key_name(cache_primary_key_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_primary_key_name(cache_primary_key_name text)
               RETURNS text
               AS $$
                 BEGIN
-                  IF NOT hoard_is_cache_primary_key_name(cache_primary_key_name) THEN
+                  IF NOT %1\$s.is_cache_primary_key_name(cache_primary_key_name) THEN
                     RETURN cache_primary_key_name;
                   END IF;
 
-                  RETURN SUBSTRING(cache_primary_key_name, LENGTH('%1\$s') + 1);
+                  RETURN SUBSTRING(cache_primary_key_name, LENGTH('%2\$s') + 1);
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_is_cache_primary_key_name(primary_key_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.is_cache_primary_key_name(primary_key_name text)
               RETURNS boolean
               AS $$
                 BEGIN
-                  RETURN POSITION('%1\$s' in primary_key_name) > 0;
+                  RETURN POSITION('%2\$s' in primary_key_name) > 0;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_cache_primary_key_name(primary_key_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_cache_primary_key_name(primary_key_name text)
               RETURNS text
               AS $$
                 BEGIN
-                  IF hoard_is_cache_primary_key_name(primary_key_name) THEN
+                  IF %1\$s.is_cache_primary_key_name(primary_key_name) THEN
                     RETURN primary_key_name;
                   END IF;
 
-                  RETURN format('%1\$s%%s', primary_key_name);
+                  RETURN format('%2\$s%%s', primary_key_name);
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_cache_view_name(table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_cache_view_name(table_name text)
               RETURNS text
               AS $$
                 BEGIN
-                  IF hoard_is_cache_table_name(table_name) THEN
-                    table_name := hoard_get_table_name(table_name);
+                  IF %1\$s.is_cache_table_name(table_name) THEN
+                    table_name := %1\$s.get_table_name(table_name);
                   END IF;
   
-                  RETURN format('%1\$s%%s%2\$s', table_name);
+                  RETURN format('%2\$s%%s%3\$s', table_name);
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           HoardSchema::$cacheViewNamePrefix,
           HoardSchema::$cacheViewNameSuffix
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_table_name(cache_table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_table_name(cache_table_name text)
               RETURNS text
               AS $$
                 DECLARE
                   table_name text;
                 BEGIN
-                  IF hoard_is_cache_table_name(cache_table_name) THEN
-                    table_name := SUBSTRING(cache_table_name, 1, POSITION('%2\$s' in cache_table_name) - 1);
-                    table_name := SUBSTRING(table_name, LENGTH('%1\$s') + 1);
+                  IF %1\$s.is_cache_table_name(cache_table_name) THEN
+                    table_name := SUBSTRING(cache_table_name, 1, POSITION('%3\$s' in cache_table_name) - 1);
+                    table_name := SUBSTRING(table_name, LENGTH('%2\$s') + 1);
 
                     RETURN table_name;
                   END IF;
@@ -220,20 +226,22 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           HoardSchema::$cacheTableNamePrefix,
           HoardSchema::$cacheTableNameDelimiter
         ),
   
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_is_cache_table_name(table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.is_cache_table_name(table_name text)
               RETURNS boolean
               AS $$
                 BEGIN
-                  RETURN POSITION('%1\$s' in table_name) = 1 AND POSITION('%2\$s' in table_name) > 0 AND POSITION('%3\$s' in table_name) > 0;
+                  RETURN POSITION('%2\$s' in table_name) = 1 AND POSITION('%3\$s' in table_name) > 0 AND POSITION('%4\$s' in table_name) > 0;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           HoardSchema::$cacheTableNamePrefix,
           HoardSchema::$cacheTableNameDelimiter,
           HoardSchema::$cacheTableNameSuffix,
@@ -241,7 +249,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_exists_trigger(table_name text, _trigger_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.exists_trigger(table_name text, _trigger_name text)
               RETURNS bool
               AS $$
                 BEGIN
@@ -252,12 +260,13 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_exists_table(_table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.exists_table(_table_name text)
               RETURNS bool
               AS $$
                 BEGIN
@@ -268,12 +277,13 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_exists_view(_view_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.exists_view(_view_name text)
               RETURNS bool
               AS $$
                 BEGIN
@@ -284,56 +294,61 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_set_row_value(record anyelement, key text, value text)
+            CREATE OR REPLACE FUNCTION %1\$s.set_row_value(record anyelement, key text, value text)
               RETURNS anyelement
               AS $$
                 SELECT json_populate_record(record, json_build_object(key, value));
               $$ LANGUAGE SQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_set_row_value(record anyelement, key text, value jsonb)
+            CREATE OR REPLACE FUNCTION %1\$s.set_row_value(record anyelement, key text, value jsonb)
               RETURNS anyelement
               AS $$
                 SELECT json_populate_record(record, json_build_object(key, value), true);
               $$ LANGUAGE SQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_row_value(record json, key text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_row_value(record json, key text)
               RETURNS text
               AS $$
                 BEGIN
                   RETURN record ->> key;
                 END;
               $$ LANGUAGE PLPGSQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_row_value(record anyelement, key text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_row_value(record anyelement, key text)
               RETURNS text
               AS $$
                 BEGIN
                   RETURN row_to_json(record) ->> key;
                 END;
               $$ LANGUAGE PLPGSQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_join_statement(join_table_name text, primary_key_name text, alias text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_join_statement(join_table_name text, primary_key_name text, alias text)
               RETURNS text
               AS $$
               DECLARE
@@ -342,28 +357,29 @@ class HoardServiceProvider extends ServiceProvider
                 table_name text;
               BEGIN
                 -- In case the provided table name is a cache table name we will join the principal table
-                IF hoard_is_cache_table_name(join_table_name) THEN
+                IF %1\$s.is_cache_table_name(join_table_name) THEN
                   cache_table_name := join_table_name;
-                  table_name := hoard_get_table_name(join_table_name);
+                  table_name := %1\$s.get_table_name(join_table_name);
 
-                  RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', table_name, table_name, hoard_get_primary_key_name(primary_key_name), alias, hoard_get_cache_primary_key_name(primary_key_name));
+                  RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', table_name, table_name, %1\$s.get_primary_key_name(primary_key_name), alias, %1\$s.get_cache_primary_key_name(primary_key_name));
                 END IF;
 
                 -- In case the provided table name is a principal table, we will check if there is a cache view and join that 
-                cache_view_name := hoard_get_cache_view_name(join_table_name);
-                IF NOT hoard_exists_view(cache_view_name) THEN
+                cache_view_name := %1\$s.get_cache_view_name(join_table_name);
+                IF NOT %1\$s.exists_view(cache_view_name) THEN
                   RETURN '';
                 END IF;
 
-                RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, hoard_get_cache_primary_key_name(primary_key_name), alias, hoard_get_primary_key_name(primary_key_name));
-                END;
-              $$ LANGUAGE PLPGSQL;
-          "
+                RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, %1\$s.get_cache_primary_key_name(primary_key_name), alias, %1\$s.get_primary_key_name(primary_key_name));
+              END;
+            $$ LANGUAGE PLPGSQL;
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_get_refresh_query(primary_key_name text, aggregation_function text, value_name text, value_type text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
+            CREATE OR REPLACE FUNCTION %1\$s.get_refresh_query(primary_key_name text, aggregation_function text, value_name text, value_type text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
               RETURNS text
               AS $$
                 DECLARE
@@ -376,15 +392,15 @@ class HoardServiceProvider extends ServiceProvider
                     conditions := '1 = 1';
                   END IF;
 
-                  -- We always resolve to the principal table even if the table_name is a cached table (e.g. hoard_cached_users__default -> users)
-                  principal_table_name = hoard_get_table_name(table_name);
-                  principal_primary_key_name = hoard_get_primary_key_name(primary_key_name);
+                  -- We always resolve to the principal table even if the table_name is a cached table (e.g. cached_users__default -> users)
+                  principal_table_name = %1\$s.get_table_name(table_name);
+                  principal_primary_key_name = %1\$s.get_primary_key_name(primary_key_name);
 
                   -- Prepare refresh query
                   CASE aggregation_function 
                     WHEN 'X' THEN
                     ELSE
-                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, hoard_get_join_statement(principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
+                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, %1\$s.get_join_statement(principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
                   END CASE;
 
                   -- Coalesce certain aggregation functions to prevent null values
@@ -401,12 +417,13 @@ class HoardServiceProvider extends ServiceProvider
                   RETURN refresh_query;
                 END;
               $$ LANGUAGE PLPGSQL;
-          "
+          ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_upsert_cache(
+            CREATE OR REPLACE FUNCTION %1\$s.upsert_cache(
                 table_name text,
                 primary_key_name text,
                 primary_key text,
@@ -422,7 +439,7 @@ class HoardServiceProvider extends ServiceProvider
                   key text;
                   value text;
                 BEGIN
-                  RAISE NOTICE 'hoard_upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', table_name, primary_key_name, primary_key, updates;
+                  RAISE NOTICE '%1\$s.upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', table_name, primary_key_name, primary_key, updates;
 
                   -- Concatenate updates
                   FOR key, value IN 
@@ -435,23 +452,24 @@ class HoardServiceProvider extends ServiceProvider
                   
                   -- Run update if required
                   query := format('INSERT INTO %%s (%%s %%s, txid, cached_at) VALUES (''%%s'' %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
-                  RAISE NOTICE 'hoard_upsert_cache: execute (query=%%)', query;
+                  RAISE NOTICE '%1\$s.upsert_cache: execute (query=%%)', query;
                   EXECUTE query;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_refresh(
+            CREATE OR REPLACE FUNCTION %1\$s.refresh(
                 foreign_table_name text,
                 foreign_row json
               )
               RETURNS void
               AS $$
                 DECLARE
-                  trigger hoard_triggers%%rowtype;
+                  trigger %1\$s.triggers%%rowtype;
                   foreign_primary_key text;
                   updates jsonb DEFAULT '{}';
                   refresh_query text;
@@ -472,15 +490,15 @@ class HoardServiceProvider extends ServiceProvider
                   
                   relevant boolean;
                 BEGIN
-                  RAISE NOTICE 'hoard_refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
+                  RAISE NOTICE '%1\$s.refresh: start (foreign_table_name=%%, foreign_row=%%)', foreign_table_name, foreign_row;
 
                   -- Collect all updates in a JSON map
                   FOR trigger IN
-                    EXECUTE format('SELECT * FROM hoard_triggers WHERE hoard_triggers.foreign_table_name = ''%%s'' ORDER BY foreign_cache_table_name', foreign_table_name)
+                    EXECUTE format('SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_table_name = ''%%s'' ORDER BY foreign_cache_table_name', foreign_table_name)
                   LOOP
                     -- Execute updates whenever the foreign cache table name changes
                     IF foreign_cache_table_name IS NOT NULL AND foreign_cache_table_name <> trigger.foreign_cache_table_name THEN
-                      PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
+                      PERFORM %1\$s.upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
                       updates := '{}';
                     END IF;
 
@@ -508,14 +526,14 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Get foreign key 
-                    foreign_primary_key := hoard_get_row_value(foreign_row, foreign_primary_key_name);
+                    foreign_primary_key := %1\$s.get_row_value(foreign_row, foreign_primary_key_name);
 
                     -- Check if foreign conditions are met
-                    EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', hoard_get_table_name(foreign_table_name), foreign_primary_key_name, foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
+                    EXECUTE format('SELECT true FROM %%s WHERE %%s = ''%%s'' AND %%s;', %1\$s.get_table_name(foreign_table_name), foreign_primary_key_name, foreign_primary_key, foreign_conditions) USING foreign_row INTO relevant;
 
                     IF relevant IS NOT NULL THEN
                       -- Prepare refresh query
-                      refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, hoard_get_row_value(foreign_row, trigger.foreign_key_name), conditions);
+                      refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, %1\$s.get_row_value(foreign_row, trigger.foreign_key_name), conditions);
 
                       -- Append query if necessary
                       existing_refresh_query := updates ->> foreign_aggregation_name;
@@ -545,16 +563,17 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- Run updates that were not yet executed within the loop
                   IF foreign_cache_table_name IS NOT NULL AND foreign_cache_primary_key_name IS NOT NULL THEN
-                    PERFORM hoard_upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
+                    PERFORM %1\$s.upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_refresh_all(
+            CREATE OR REPLACE FUNCTION %1\$s.refresh_all(
                 foreign_table_name text,
                 foreign_table_conditions text DEFAULT '1 = 1'
               )
@@ -563,7 +582,7 @@ class HoardServiceProvider extends ServiceProvider
                 DECLARE
                   foreign_row record;
                 BEGIN
-                  RAISE NOTICE 'hoard_refresh_all: start (foreign_table_name=%%, foreign_table_conditions=%%)', foreign_table_name, foreign_table_conditions;
+                  RAISE NOTICE '%1\$s.refresh_all: start (foreign_table_name=%%, foreign_table_conditions=%%)', foreign_table_name, foreign_table_conditions;
 
                   -- Ensure that we have any conditions
                   IF foreign_table_conditions = '' THEN
@@ -574,16 +593,17 @@ class HoardServiceProvider extends ServiceProvider
                   FOR foreign_row IN
                     EXECUTE format('SELECT * FROM %%s WHERE %%s', foreign_table_name, foreign_table_conditions)
                   LOOP
-                    PERFORM hoard_refresh(foreign_table_name, row_to_json(foreign_row));
+                    PERFORM %1\$s.refresh(foreign_table_name, row_to_json(foreign_row));
                   END LOOP;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_update(
+            CREATE OR REPLACE FUNCTION %1\$s.update(
                 table_name text,
                 primary_key_name text,
                 key_name text,
@@ -627,7 +647,7 @@ class HoardServiceProvider extends ServiceProvider
                     changed_value := new_value IS DISTINCT FROM old_value;
                   END IF;
 
-                  RAISE NOTICE 'hoard_update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
+                  RAISE NOTICE '%1\$s.update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
                     table_name,
                     key_name,
                     foreign_table_name,
@@ -663,8 +683,8 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- Prepare refresh query that can be used to get the aggregated value
-                  old_refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
-                  new_refresh_query := hoard_get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, new_foreign_key, conditions);
+                  old_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
+                  new_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, new_foreign_key, conditions);
 
                   -- Update row if
                   -- 1. Foreign row with matching conditions is deleted
@@ -691,7 +711,7 @@ class HoardServiceProvider extends ServiceProvider
                           ELSIF value_type = 'numeric' THEN
                             old_update := format('array_to_json(array_remove(array(select jsonb_array_elements_text(%%s)), %%s::text)::int[])', foreign_aggregation_name, old_value);
                           ELSIF value_type = 'json' THEN
-                            old_update := format('array_to_json(hoard_array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(''%%s''))))', foreign_aggregation_name, old_value);
+                            old_update := format('array_to_json(%1\$s.array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(''%%s''))))', foreign_aggregation_name, old_value);
                           ELSE  
                             old_update := format('%%s - %%s', foreign_aggregation_name, old_value);
                           END IF;
@@ -703,7 +723,7 @@ class HoardServiceProvider extends ServiceProvider
                     END CASE;
 
                     IF old_query != '' THEN
-                      RAISE NOTICE 'hoard_update: delete or update old (old_query=%%)', old_query;
+                      RAISE NOTICE '%1\$s.update: delete or update old (old_query=%%)', old_query;
                       EXECUTE old_query;
                     END IF;
                   END IF;
@@ -743,22 +763,23 @@ class HoardServiceProvider extends ServiceProvider
                     END CASE;
 
                     IF new_query != '' THEN
-                      RAISE NOTICE 'hoard_update: create or update new (new_query=%%)', new_query;
+                      RAISE NOTICE '%1\$s.update: create or update new (new_query=%%)', new_query;
                       EXECUTE new_query;
                     END IF;
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_after_trigger()
+            CREATE OR REPLACE FUNCTION %1\$s.after_trigger()
               RETURNS trigger
               AS $$
                 DECLARE
-                  trigger hoard_triggers%%rowtype;
+                  trigger %1\$s.triggers%%rowtype;
 
                   trigger_table_name text;
                   cached_trigger_table_name boolean DEFAULT false;
@@ -783,23 +804,23 @@ class HoardServiceProvider extends ServiceProvider
                   new_condition text;
                   new_relevant boolean DEFAULT false;
                 BEGIN
-                  RAISE NOTICE '-- hoard_after_trigger START';
+                  RAISE NOTICE '-- %1\$s.after_trigger START';
 
                   -- Log
-                  RAISE NOTICE 'hoard_after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, trigger_table_name=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, trigger_table_name, OLD::text, NEW::text;
+                  RAISE NOTICE '%1\$s.after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, trigger_table_name=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, trigger_table_name, OLD::text, NEW::text;
 
                   -- If this is the first row we need to create an entry for the new row in the cache table
-                  IF TG_OP = 'INSERT' AND NOT hoard_is_cache_table_name(TG_TABLE_NAME) THEN
-                    PERFORM hoard_refresh(TG_TABLE_NAME, row_to_json(NEW));
+                  IF TG_OP = 'INSERT' AND NOT %1\$s.is_cache_table_name(TG_TABLE_NAME) THEN
+                    PERFORM %1\$s.refresh(TG_TABLE_NAME, row_to_json(NEW));
                   END IF;
 
                   -- Get all triggers that affect OTHER tables
                   FOR trigger IN
-                    SELECT * FROM hoard_triggers
+                    SELECT * FROM %1\$s.triggers
                     WHERE 
-                        hoard_triggers.table_name = TG_TABLE_NAME
+                        %1\$s.triggers.table_name = TG_TABLE_NAME
                       AND 
-                        hoard_triggers.manual = false
+                        %1\$s.triggers.manual = false
                   LOOP
                     table_name := trigger.table_name;
                     primary_key_name := trigger.primary_key_name;
@@ -815,7 +836,7 @@ class HoardServiceProvider extends ServiceProvider
                     key_name := trigger.key_name;
                     conditions := trigger.conditions;
                     foreign_conditions := trigger.foreign_conditions;
-                    RAISE NOTICE 'hoard_after_trigger: trigger (table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
+                    RAISE NOTICE '%1\$s.after_trigger: trigger (table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
                     
                     -- Ensure that we have any conditions
                     IF conditions = '' THEN
@@ -826,19 +847,19 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Get foreign key and value from new record
-                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_value;
-                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_foreign_key;
-                    EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING NEW INTO new_relevant;
+                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_value;
+                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_foreign_key;
+                    EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING NEW INTO new_relevant;
 
                     -- Set new_relevant explicitly to false to allow proper checks
                     IF new_relevant IS NULL THEN
                       new_relevant := false;
                     END IF;
 
-                    RAISE NOTICE 'hoard_after_trigger: new (new_value=%%, new_foreign_key=%%, new_relevant=%%)', new_value, new_foreign_key, new_relevant;
+                    RAISE NOTICE '%1\$s.after_trigger: new (new_value=%%, new_foreign_key=%%, new_relevant=%%)', new_value, new_foreign_key, new_relevant;
               
                     -- Run update
-                    PERFORM hoard_update(
+                    PERFORM %1\$s.update(
                       table_name,
                       primary_key_name,
                       key_name,
@@ -865,7 +886,7 @@ class HoardServiceProvider extends ServiceProvider
                     RAISE NOTICE '';
                   END LOOP;
 
-                  RAISE NOTICE '-- hoard_after_trigger END';
+                  RAISE NOTICE '-- %1\$s.after_trigger END';
               
                   IF TG_OP = 'DELETE' THEN
                     RETURN OLD;
@@ -875,15 +896,16 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_before_trigger()
+            CREATE OR REPLACE FUNCTION %1\$s.before_trigger()
               RETURNS trigger
                 AS $$
                 DECLARE
-                  trigger hoard_triggers%%rowtype;
+                  trigger %1\$s.triggers%%rowtype;
                   
                   table_name text;
                   primary_key_name text;
@@ -911,30 +933,30 @@ class HoardServiceProvider extends ServiceProvider
 
                   test text;
                 BEGIN
-                  RAISE NOTICE '-- hoard_before_trigger START';
-                  RAISE NOTICE 'hoard_before_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
+                  RAISE NOTICE '-- %1\$s.before_trigger START';
+                  RAISE NOTICE '%1\$s.before_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
 
                   -- On DELETE we need to check the triggers before because otherwise the join table will be deleted and we cannot check the conditions anymore
                   IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
                     -- Get all triggers that affect OTHER tables
                     FOR trigger IN
-                      SELECT * FROM hoard_triggers 
+                      SELECT * FROM %1\$s.triggers 
                       WHERE 
                           (
                               (
-                                    hoard_is_cache_table_name(TG_TABLE_NAME) = true
+                                    %1\$s.is_cache_table_name(TG_TABLE_NAME) = true
                                   AND 
-                                    hoard_triggers.table_name = TG_TABLE_NAME
+                                    %1\$s.triggers.table_name = TG_TABLE_NAME
                               )
                             OR
                               (
-                                  hoard_is_cache_table_name(TG_TABLE_NAME) = false
+                                  %1\$s.is_cache_table_name(TG_TABLE_NAME) = false
                                 AND 
-                                  hoard_get_table_name(hoard_triggers.table_name) = hoard_get_table_name(TG_TABLE_NAME)
+                                  %1\$s.get_table_name(%1\$s.triggers.table_name) = %1\$s.get_table_name(TG_TABLE_NAME)
                               )
                           )
                         AND 
-                          hoard_triggers.manual = false
+                          %1\$s.triggers.manual = false
                     LOOP
                       CONTINUE WHEN TG_OP = 'DELETE' AND trigger.lazy = true;
 
@@ -952,7 +974,7 @@ class HoardServiceProvider extends ServiceProvider
                       key_name := trigger.key_name;
                       conditions := trigger.conditions;
                       foreign_conditions := trigger.foreign_conditions;
-                      RAISE NOTICE 'hoard_before_trigger: trigger (TG_TABLE_NAME=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', TG_TABLE_NAME, table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
+                      RAISE NOTICE '%1\$s.before_trigger: trigger (TG_TABLE_NAME=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_name=%%, key_name=%%, conditions=%%, foreign_conditions=%%)', TG_TABLE_NAME, table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_name, key_name, conditions, foreign_conditions;
 
                       -- Ensure that we have any conditions
                       IF conditions = '' THEN
@@ -963,23 +985,23 @@ class HoardServiceProvider extends ServiceProvider
                       END IF;
 
                       -- Get foreign key and value from old record
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_value;
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_foreign_key;
-                      EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO old_relevant;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_value;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_foreign_key;
+                      EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO old_relevant;
 
                       -- Set old_relevant explicitly to false to allow proper checks
                       IF old_relevant IS NULL THEN
                         old_relevant := false;
                       END IF;
 
-                      RAISE NOTICE 'hoard_before_trigger: old (old_value=%%, old_foreign_key=%%, old_relevant=%%)', old_value, old_foreign_key, old_relevant;
+                      RAISE NOTICE '%1\$s.before_trigger: old (old_value=%%, old_foreign_key=%%, old_relevant=%%)', old_value, old_foreign_key, old_relevant;
 
                       -- During deletion we exclude ourself from the update conditions
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, hoard_get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
                       conditions := format('%%s AND %%s <> ''%%s''', conditions, primary_key_name, primary_key);
                   
                       -- Run update
-                      PERFORM hoard_update(
+                      PERFORM %1\$s.update(
                         TG_TABLE_NAME,
                         primary_key_name,
                         key_name,
@@ -1007,7 +1029,7 @@ class HoardServiceProvider extends ServiceProvider
                     END LOOP;
                   END IF;
 
-                  RAISE NOTICE '-- hoard_before_trigger END';
+                  RAISE NOTICE '-- %1\$s.before_trigger END';
               
                   IF TG_OP = 'DELETE' THEN
                     RETURN OLD;
@@ -1017,47 +1039,49 @@ class HoardServiceProvider extends ServiceProvider
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_create_triggers(table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.create_triggers(table_name text)
               RETURNS void
                 AS $$
                 DECLARE
                 BEGIN
-                  RAISE NOTICE 'hoard_create_triggers: start (table_name=%%)', table_name;
+                  RAISE NOTICE '%1\$s.create_triggers: start (table_name=%%)', table_name;
 
                   -- Create triggers for table
-                  IF NOT hoard_exists_trigger(table_name, '_hoard_before_trigger') THEN
+                  IF NOT %1\$s.exists_trigger(table_name, 'hoard_before') THEN
                     EXECUTE format('
-                        CREATE TRIGGER _hoard_before_trigger
+                        CREATE TRIGGER hoard_before
                         BEFORE INSERT OR UPDATE OR DELETE ON %%s
                         FOR EACH ROW 
-                        EXECUTE FUNCTION hoard_before_trigger()
+                        EXECUTE FUNCTION %1\$s.before_trigger()
                       ', table_name);
                   END IF;
 
-                  IF NOT hoard_exists_trigger(table_name, '_hoard_after_trigger') THEN
+                  IF NOT %1\$s.exists_trigger(table_name, 'hoard_after') THEN
                     EXECUTE format('
-                      CREATE TRIGGER _hoard_after_trigger
+                      CREATE TRIGGER hoard_after
                         AFTER INSERT OR UPDATE OR DELETE ON %%s
                         FOR EACH ROW 
-                        EXECUTE FUNCTION hoard_after_trigger()
+                        EXECUTE FUNCTION %1\$s.after_trigger()
                       ', table_name);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_create_views(_foreign_table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.create_views(_foreign_table_name text)
               RETURNS void
                 AS $$
                 DECLARE
-                  trigger hoard_triggers%%rowtype;
+                  trigger %1\$s.triggers%%rowtype;
                   
                   foreign_table_name text;
                   foreign_cache_table_name text;
@@ -1073,13 +1097,13 @@ class HoardServiceProvider extends ServiceProvider
                   key text;
                   value text;
                 BEGIN
-                  RAISE NOTICE 'hoard_create_views: start (_foreign_table_name=%%)', _foreign_table_name;
+                  RAISE NOTICE '%1\$s.create_views: start (_foreign_table_name=%%)', _foreign_table_name;
 
                   -- Get all visible cached fields
                   FOR trigger IN
-                    SELECT * FROM hoard_triggers
+                    SELECT * FROM %1\$s.triggers
                     WHERE 
-                        hoard_triggers.foreign_table_name = _foreign_table_name
+                        %1\$s.triggers.foreign_table_name = _foreign_table_name
                       AND
                         hidden = false
                   LOOP
@@ -1109,97 +1133,99 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- Create view
                   IF foreign_primary_key_name IS NOT NULL THEN
-                    cache_view_name := hoard_get_cache_view_name(_foreign_table_name);
-                    EXECUTE format('CREATE VIEW %%s AS SELECT %%s.%%s %%s FROM %%s %%s', cache_view_name, foreign_cache_table_name, hoard_get_cache_primary_key_name(foreign_cache_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
+                    cache_view_name := %1\$s.get_cache_view_name(_foreign_table_name);
+                    EXECUTE format('CREATE VIEW %%s AS SELECT %%s.%%s %%s FROM %%s %%s', cache_view_name, foreign_cache_table_name, %1\$s.get_cache_primary_key_name(foreign_cache_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_prepare()
+            CREATE OR REPLACE FUNCTION %1\$s.prepare()
               RETURNS trigger
                 AS $$
                 DECLARE
                 BEGIN
-                  RAISE NOTICE 'hoard_prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
+                  RAISE NOTICE '%1\$s.prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
                   IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
-                    EXECUTE format('DROP VIEW IF EXISTS %%s', hoard_get_cache_view_name(OLD.foreign_table_name));
+                    EXECUTE format('DROP VIEW IF EXISTS %%s', %1\$s.get_cache_view_name(OLD.foreign_table_name));
                   END IF;
 
                   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-                    EXECUTE format('DROP VIEW IF EXISTS %%s', hoard_get_cache_view_name(NEW.foreign_table_name));
+                    EXECUTE format('DROP VIEW IF EXISTS %%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
                   END IF;
 
                   RETURN NEW;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION hoard_initialize()
+            CREATE OR REPLACE FUNCTION %1\$s.initialize()
               RETURNS trigger
                 AS $$
                 DECLARE
                 BEGIN
-                  RAISE NOTICE 'hoard_initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
+                  RAISE NOTICE '%1\$s.initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
                   IF TG_OP = 'DELETE' THEN
-                    PERFORM hoard_create_views(OLD.foreign_table_name);
+                    PERFORM %1\$s.create_views(OLD.foreign_table_name);
                   END IF;
 
                   IF TG_OP = 'INSERT' THEN
-                    PERFORM hoard_create_views(NEW.foreign_table_name);
+                    PERFORM %1\$s.create_views(NEW.foreign_table_name);
                   END IF;
 
                   IF TG_OP = 'UPDATE' THEN
-                    PERFORM hoard_create_views(NEW.foreign_table_name);
+                    PERFORM %1\$s.create_views(NEW.foreign_table_name);
                   END IF;
 
                   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-                    PERFORM hoard_create_triggers(NEW.table_name);
-                    PERFORM hoard_create_triggers(NEW.foreign_table_name);
-                    PERFORM hoard_create_triggers(NEW.foreign_cache_table_name);
+                    PERFORM %1\$s.create_triggers(NEW.table_name);
+                    PERFORM %1\$s.create_triggers(NEW.foreign_table_name);
+                    PERFORM %1\$s.create_triggers(NEW.foreign_cache_table_name);
                   END IF;
 
                   RETURN NEW;
                 END;
               $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
             DO $$
               BEGIN
-                IF NOT hoard_exists_trigger(%1\$s, '_hoard_before_trigger') THEN
-                  CREATE TRIGGER _hoard_before_trigger
-                    BEFORE INSERT OR UPDATE OR DELETE ON %2\$s
+                IF NOT %1\$s.exists_trigger('triggers', 'hoard_before') THEN
+                  CREATE TRIGGER hoard_before
+                    BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
                     FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_prepare();
+                    EXECUTE FUNCTION %1\$s.prepare();
                 END IF;
 
-                IF NOT hoard_exists_trigger(%1\$s, '_hoard_after_trigger') THEN
-                  CREATE TRIGGER _hoard_after_trigger
-                    AFTER INSERT OR UPDATE OR DELETE ON %2\$s
+                IF NOT %1\$s.exists_trigger('triggers', 'hoard_after') THEN
+                  CREATE TRIGGER hoard_after
+                    AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
                     FOR EACH ROW 
-                    EXECUTE FUNCTION hoard_initialize();
+                    EXECUTE FUNCTION %1\$s.initialize();
                 END IF;
               END;
             $$ LANGUAGE PLPGSQL;
           ",
-          $this->quoteString('hoard_triggers'),
-          'hoard_triggers'
+          HoardSchema::$schema
         ),
 
         sprintf(
           "
-            INSERT INTO hoard_triggers (
+            INSERT INTO %1\$s.triggers (
               table_name, 
               key_name,
               aggregation_function, 
@@ -1254,7 +1280,7 @@ class HoardServiceProvider extends ServiceProvider
               hidden = %17\$s,
               manual = %18\$s;
           ",
-          '',
+          HoardSchema::$schema,
           $this->quoteString($tableName),
           $this->quoteString($keyName),
           $this->quoteString($aggregationFunction),
@@ -1278,10 +1304,11 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                PERFORM hoard_refresh_all(%s, %s);
+                PERFORM %1\$s.refresh_all(%2\$s, %3\$s);
               END;
             $$ LANGUAGE PLPGSQL;
           ",
+          HoardSchema::$schema,
           $this->quoteString(HoardSchema::getTableName($foreignTableName)),
           DB::getPdo()->quote($refreshConditions),
         ),

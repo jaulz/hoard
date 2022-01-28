@@ -11,13 +11,15 @@ use Illuminate\Support\Collection;
 
 class HoardSchema
 {
+  static public $schema = 'hoard';
+
   static public $cachePrimaryKeyNamePrefix = 'cacheable_';
 
-  static public $cacheTableNamePrefix = 'hoard_cached_';
+  static public $cacheTableNamePrefix = 'cached_';
   static public $cacheTableNameDelimiter = '__';
   static public $cacheTableNameSuffix = '';
 
-  static public $cacheViewNamePrefix = 'hoard_cached_';
+  static public $cacheViewNamePrefix = 'cached_';
   static public $cacheViewNameSuffix = '_view';
 
   /**
@@ -26,6 +28,7 @@ class HoardSchema
   public static function init()
   {
     $statements = [
+      'CREATE SCHEMA IF NOT EXISTS ' . HoardSchema::$schema . ';'
     ];
     
     collect($statements)->each(function ($statement) {
