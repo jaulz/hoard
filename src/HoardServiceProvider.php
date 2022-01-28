@@ -74,7 +74,8 @@ class HoardServiceProvider extends ServiceProvider
     ) {
       /** @var \Illuminate\Database\Schema\Grammars\PostgresGrammar $this */
       $foreignAggregationName = $command->foreignAggregationName;
-      $foreignTableName = $command->foreignTableName;
+      $foreignSchemaName = Str::contains($command->foreignTableName, '.') ? Str::before($command->foreignTableName, '.') : 'public';
+      $foreignTableName = Str::after($command->foreignTableName, '.');
       $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
       $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
       $valueType = $command->valueType ?? 'text';
@@ -84,7 +85,8 @@ class HoardServiceProvider extends ServiceProvider
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $groupName = $command->groupName;
       $tableName = $command->tableName ?? '!NOT SET!';
-      $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName) : $tableName;
+      $schemaName = $groupName ? HoardSchema::$schema : 'public';
+      $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName, false) : $tableName;
       $primaryKeyName = $command->primaryKeyName ?? 'id';
       $primaryKeyName = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName) : $primaryKeyName;
       $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
@@ -93,7 +95,7 @@ class HoardServiceProvider extends ServiceProvider
       $hidden = $command->hidden ?? false;
       $manual = $command->manual ?? false;
       $cacheTableGroup = $command->cacheTableGroup;
-      $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup);
+      $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup, false);
       $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
 
       return array_filter([
@@ -101,6 +103,7 @@ class HoardServiceProvider extends ServiceProvider
           "
             CREATE TABLE IF NOT EXISTS %1\$s.triggers (
               id SERIAL PRIMARY KEY,
+              foreign_schema_name VARCHAR(255) NOT NULL,
               foreign_table_name VARCHAR(255) NOT NULL,
               foreign_primary_key_name VARCHAR(255) NOT NULL,
               foreign_key_name VARCHAR(255) NOT NULL,
@@ -108,6 +111,7 @@ class HoardServiceProvider extends ServiceProvider
               foreign_conditions VARCHAR(255) NOT NULL,
               foreign_cache_table_name VARCHAR(255) NOT NULL,
               foreign_cache_primary_key_name VARCHAR(255) NOT NULL,
+              schema_name VARCHAR(255) NOT NULL,
               table_name VARCHAR(255) NOT NULL,
               primary_key_name VARCHAR(255) NOT NULL,
               key_name VARCHAR(255) NOT NULL,
@@ -249,11 +253,12 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION %1\$s.exists_trigger(table_name text, _trigger_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.exists_trigger(schema_name text, table_name text, _trigger_name text)
               RETURNS bool
               AS $$
+                DECLARE
                 BEGIN
-                  IF EXISTS(SELECT true FROM information_schema.triggers WHERE triggers.event_object_table = table_name AND trigger_name = _trigger_name) THEN
+                  IF EXISTS(SELECT true FROM information_schema.triggers WHERE trigger_schema = schema_name AND triggers.event_object_table = table_name AND trigger_name = _trigger_name) THEN
                     RETURN true;
                   ELSE
                     RETURN false;
@@ -1044,37 +1049,30 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION %1\$s.create_triggers(table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.create_triggers(schema_name text, table_name text)
               RETURNS void
                 AS $$
                 DECLARE
-                  schema text;
                 BEGIN
-                  RAISE NOTICE '%1\$s.create_triggers: start (table_name=%%)', table_name;
-
-                  IF %1\$s.is_cache_table_name(table_name) THEN
-                    schema := '%1\$s';
-                  ELSE
-                    schema := 'public';
-                  END IF;
+                  RAISE NOTICE '%1\$s.create_triggers: start (schema_name=%%, table_name=%%)', schema_name, table_name;
 
                   -- Create triggers for table
-                  IF NOT %1\$s.exists_trigger(table_name, 'hoard_before') THEN
+                  IF NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_before') THEN
                     EXECUTE format('
                         CREATE TRIGGER hoard_before
                         BEFORE INSERT OR UPDATE OR DELETE ON %%s.%%s
                         FOR EACH ROW 
                         EXECUTE FUNCTION %1\$s.before_trigger()
-                      ', schema, table_name);
+                      ', schema_name, table_name);
                   END IF;
 
-                  IF NOT %1\$s.exists_trigger(table_name, 'hoard_after') THEN
+                  IF NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_after') THEN
                     EXECUTE format('
                       CREATE TRIGGER hoard_after
                         AFTER INSERT OR UPDATE OR DELETE ON %%s.%%s
                         FOR EACH ROW 
                         EXECUTE FUNCTION %1\$s.after_trigger()
-                      ', schema, table_name);
+                      ', schema_name, table_name);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -1195,9 +1193,9 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-                    PERFORM %1\$s.create_triggers(NEW.table_name);
-                    PERFORM %1\$s.create_triggers(NEW.foreign_table_name);
-                    PERFORM %1\$s.create_triggers(NEW.foreign_cache_table_name);
+                    PERFORM %1\$s.create_triggers(NEW.schema_name, NEW.table_name);
+                    PERFORM %1\$s.create_triggers(NEW.foreign_schema_name, NEW.foreign_table_name);
+                    PERFORM %1\$s.create_triggers('hoard', NEW.foreign_cache_table_name);
                   END IF;
 
                   RETURN NEW;
@@ -1211,14 +1209,14 @@ class HoardServiceProvider extends ServiceProvider
           "
             DO $$
               BEGIN
-                IF NOT %1\$s.exists_trigger('triggers', 'hoard_before') THEN
+                IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_before') THEN
                   CREATE TRIGGER hoard_before
                     BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
                     FOR EACH ROW 
                     EXECUTE FUNCTION %1\$s.prepare();
                 END IF;
 
-                IF NOT %1\$s.exists_trigger('triggers', 'hoard_after') THEN
+                IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_after') THEN
                   CREATE TRIGGER hoard_after
                     AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
                     FOR EACH ROW 
@@ -1249,7 +1247,9 @@ class HoardServiceProvider extends ServiceProvider
               foreign_cache_table_name,
               foreign_cache_primary_key_name,
               hidden,
-              manual
+              manual,
+              schema_name,
+              foreign_schema_name
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -1267,7 +1267,9 @@ class HoardServiceProvider extends ServiceProvider
               %15\$s,
               %16\$s,
               %17\$s,
-              %18\$s
+              %18\$s,
+              %19\$s,
+              %20\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = %2\$s, 
               key_name = %3\$s,
@@ -1285,7 +1287,9 @@ class HoardServiceProvider extends ServiceProvider
               foreign_cache_table_name = %15\$s,
               foreign_cache_primary_key_name = %16\$s,
               hidden = %17\$s,
-              manual = %18\$s;
+              manual = %18\$s,
+              schema_name = %19\$s,
+              foreign_schema_name = %20\$s;
           ",
           HoardSchema::$schema,
           $this->quoteString($tableName),
@@ -1305,6 +1309,8 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($foreignCachePrimaryKeyName),
           $hidden ? 'true' : 'false',
           $manual ? 'true' : 'false',
+          $this->quoteString($schemaName),
+          $this->quoteString($foreignSchemaName),
         ),
 
         sprintf(

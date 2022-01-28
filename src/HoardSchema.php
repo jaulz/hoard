@@ -15,11 +15,11 @@ class HoardSchema
 
   static public $cachePrimaryKeyNamePrefix = 'cacheable_';
 
-  static public $cacheTableNamePrefix = 'cached_';
+  static public $cacheTableNamePrefix = '';
   static public $cacheTableNameDelimiter = '__';
   static public $cacheTableNameSuffix = '';
 
-  static public $cacheViewNamePrefix = 'cached_';
+  static public $cacheViewNamePrefix = '';
   static public $cacheViewNameSuffix = '_view';
 
   /**
@@ -54,12 +54,12 @@ class HoardSchema
     ?string $primaryKeyName = 'id',
     ?string $primaryKeyType = 'bigInteger'
   ) {
-    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup); // collect(DB::select('SELECT hoard_get_cache_table_name(?) as name', [$tableName]))->first()->name;
-    $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName); // collect(DB::select('SELECT hoard_get_cache_primary_key_name(?) as name', [$primaryKeyName]))->first()->name;
-    $cacheUniqueIndexName = static::getCacheUniqueIndexName($cacheTableName, $primaryKeyName, $cachePrimaryKeyName);
+    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup);
+    $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName);
+    $cacheUniqueIndexName = static::getCacheUniqueIndexName(static::getCacheTableName($tableName, $cacheTableGroup, false), $primaryKeyName, $cachePrimaryKeyName);
 
     // Create cache table
-    Schema::create(HoardSchema::$schema . '.' . $cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
+    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
@@ -125,13 +125,15 @@ class HoardSchema
    *
    * @param  string  $tableName
    * @param  string  $cacheTableGroup
+   * @param  bool  $includeSchema
    * @return string
    */
   public static function getCacheTableName(
     string $tableName,
-    string $cacheTableGroup
+    string $cacheTableGroup,
+    bool $includeSchema = true
   ) {
-    return static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $cacheTableGroup;
+    return ($includeSchema ? HoardSchema::$schema . '.' : '') . static::$cacheTableNamePrefix . $tableName . static::$cacheTableNameDelimiter . $cacheTableGroup;
   }
 
   /**

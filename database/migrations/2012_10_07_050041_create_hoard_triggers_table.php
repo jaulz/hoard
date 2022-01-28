@@ -27,6 +27,7 @@ return new class extends Migration {
       $table->string('foreign_key_name');
       $table->string('foreign_aggregation_name');
       $table->string('foreign_conditions');
+      $table->string('schema');
     });
   }
 
