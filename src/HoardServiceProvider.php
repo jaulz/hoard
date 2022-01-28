@@ -271,11 +271,11 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION %1\$s.exists_table(_table_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.exists_table(schema_name text, _table_name text)
               RETURNS bool
               AS $$
                 BEGIN
-                  IF EXISTS(SELECT true FROM information_schema.tables WHERE table_name = _table_name) THEN
+                  IF EXISTS(SELECT true FROM information_schema.tables WHERE table_schema = schema_name AND table_name = _table_name) THEN
                     RETURN true;
                   ELSE
                     RETURN false;
@@ -288,11 +288,11 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION %1\$s.exists_view(_view_name text)
+            CREATE OR REPLACE FUNCTION %1\$s.exists_view(schema_name text, view_name text)
               RETURNS bool
               AS $$
                 BEGIN
-                  IF EXISTS(SELECT true FROM information_schema.views WHERE table_name = _view_name) THEN
+                  IF EXISTS(SELECT true FROM information_schema.views WHERE table_schema = schema_name AND table_name = view_name) THEN
                     RETURN true;
                   ELSE
                     RETURN false;
@@ -353,7 +353,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION %1\$s.get_join_statement(join_table_name text, primary_key_name text, alias text)
+            CREATE OR REPLACE FUNCTION %1\$s.get_join_statement(join_schema_name text, join_table_name text, primary_key_name text, alias text)
               RETURNS text
               AS $$
               DECLARE
@@ -371,11 +371,16 @@ class HoardServiceProvider extends ServiceProvider
 
                 -- In case the provided table name is a principal table, we will check if there is a cache view and join that 
                 cache_view_name := %1\$s.get_cache_view_name(join_table_name);
-                IF NOT %1\$s.exists_view(cache_view_name) THEN
+                IF NOT %1\$s.exists_view('%1\$s', cache_view_name) THEN
                   RETURN '';
                 END IF;
 
-                RETURN format('LEFT JOIN %1\$s.\"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, %1\$s.get_cache_primary_key_name(primary_key_name), alias, %1\$s.get_primary_key_name(primary_key_name));
+                -- In case an record is provided we cannot use the schema
+                IF alias = 'record' THEN
+                  RETURN format('LEFT JOIN %1\$s.\"%%s\" ON %1\$s.\"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, %1\$s.get_cache_primary_key_name(primary_key_name), alias, %1\$s.get_primary_key_name(primary_key_name));
+                END IF;
+
+                RETURN format('LEFT JOIN %1\$s.\"%%s\" ON %1\$s.\"%%s\".\"%%s\" = %%s.\"%%s\".\"%%s\"', cache_view_name, cache_view_name, %1\$s.get_cache_primary_key_name(primary_key_name), join_schema_name, alias, %1\$s.get_primary_key_name(primary_key_name));
               END;
             $$ LANGUAGE PLPGSQL;
           ",
@@ -384,7 +389,7 @@ class HoardServiceProvider extends ServiceProvider
 
         sprintf(
           "
-            CREATE OR REPLACE FUNCTION %1\$s.get_refresh_query(primary_key_name text, aggregation_function text, value_name text, value_type text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
+            CREATE OR REPLACE FUNCTION %1\$s.get_refresh_query(primary_key_name text, aggregation_function text, value_name text, value_type text, schema_name text, table_name text, key_name text, foreign_key text, conditions text DEFAULT '')
               RETURNS text
               AS $$
                 DECLARE
@@ -405,7 +410,7 @@ class HoardServiceProvider extends ServiceProvider
                   CASE aggregation_function 
                     WHEN 'X' THEN
                     ELSE
-                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, %1\$s.get_join_statement(principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
+                      refresh_query := format('SELECT %%s(%%s) FROM \"%%s\" %%s WHERE \"%%s\" = ''%%s'' AND (%%s)', aggregation_function, value_name, principal_table_name, %1\$s.get_join_statement('public', principal_table_name, principal_primary_key_name, principal_table_name), key_name, foreign_key, conditions);
                   END CASE;
 
                   -- Coalesce certain aggregation functions to prevent null values
@@ -481,6 +486,7 @@ class HoardServiceProvider extends ServiceProvider
                   refresh_query text;
                   existing_refresh_query text;
 
+                  schema_name text;
                   table_name text;
                   primary_key_name text;
                   foreign_cache_table_name text;
@@ -509,6 +515,7 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     table_name := trigger.table_name;
+                    schema_name := trigger.schema_name;
                     primary_key_name := trigger.primary_key_name;
                     foreign_cache_table_name := trigger.foreign_cache_table_name;
                     foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
@@ -540,7 +547,7 @@ class HoardServiceProvider extends ServiceProvider
 
                     IF relevant IS NOT NULL THEN
                       -- Prepare refresh query
-                      refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, %1\$s.get_row_value(foreign_row, trigger.foreign_key_name), conditions);
+                      refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, schema_name, table_name, key_name, %1\$s.get_row_value(foreign_row, trigger.foreign_key_name), conditions);
 
                       -- Append query if necessary
                       existing_refresh_query := updates ->> foreign_aggregation_name;
@@ -612,9 +619,11 @@ class HoardServiceProvider extends ServiceProvider
         sprintf(
           "
             CREATE OR REPLACE FUNCTION %1\$s.update(
+                schema_name text,
                 table_name text,
                 primary_key_name text,
                 key_name text,
+                foreign_schema_name text,
                 foreign_table_name text,
                 foreign_primary_key_name text,
                 foreign_key_name text,
@@ -655,7 +664,8 @@ class HoardServiceProvider extends ServiceProvider
                     changed_value := new_value IS DISTINCT FROM old_value;
                   END IF;
 
-                  RAISE NOTICE '%1\$s.update: start (table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
+                  RAISE NOTICE '%1\$s.update: start (schema_name=%%, table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
+                    schema_name,  
                     table_name,
                     key_name,
                     foreign_table_name,
@@ -691,8 +701,8 @@ class HoardServiceProvider extends ServiceProvider
                   END IF;
 
                   -- Prepare refresh query that can be used to get the aggregated value
-                  old_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, old_foreign_key, conditions);
-                  new_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, table_name, key_name, new_foreign_key, conditions);
+                  old_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, schema_name, table_name, key_name, old_foreign_key, conditions);
+                  new_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, schema_name, table_name, key_name, new_foreign_key, conditions);
 
                   -- Update row if
                   -- 1. Foreign row with matching conditions is deleted
@@ -861,9 +871,9 @@ class HoardServiceProvider extends ServiceProvider
                     END IF;
 
                     -- Get foreign key and value from new record
-                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_value;
-                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_foreign_key;
-                    EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING NEW INTO new_relevant;
+                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_value;
+                    EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record')) USING NEW INTO new_foreign_key;
+                    EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING NEW INTO new_relevant;
 
                     -- Set new_relevant explicitly to false to allow proper checks
                     IF new_relevant IS NULL THEN
@@ -874,9 +884,11 @@ class HoardServiceProvider extends ServiceProvider
               
                     -- Run update
                     PERFORM %1\$s.update(
+                      schema_name,
                       table_name,
                       primary_key_name,
                       key_name,
+                      foreign_schema_name,
                       foreign_table_name,
                       foreign_primary_key_name,
                       foreign_key_name,
@@ -923,6 +935,7 @@ class HoardServiceProvider extends ServiceProvider
                   
                   table_name text;
                   primary_key_name text;
+                  foreign_schema_name text;
                   foreign_table_name text;
                   foreign_cache_table_name text;
                   foreign_aggregation_name text;
@@ -976,6 +989,7 @@ class HoardServiceProvider extends ServiceProvider
 
                       table_name := trigger.table_name;
                       primary_key_name := trigger.primary_key_name;
+                      foreign_schema_name := trigger.foreign_schema_name;
                       foreign_table_name := trigger.foreign_table_name;
                       foreign_cache_table_name := trigger.foreign_cache_table_name;
                       foreign_aggregation_name := trigger.foreign_aggregation_name;
@@ -999,9 +1013,9 @@ class HoardServiceProvider extends ServiceProvider
                       END IF;
 
                       -- Get foreign key and value from old record
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_value;
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_foreign_key;
-                      EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO old_relevant;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', value_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_value;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s;', key_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record')) USING OLD INTO old_foreign_key;
+                      EXECUTE format('SELECT true FROM (SELECT $1.*) record %%s WHERE %%s;', %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO old_relevant;
 
                       -- Set old_relevant explicitly to false to allow proper checks
                       IF old_relevant IS NULL THEN
@@ -1011,14 +1025,16 @@ class HoardServiceProvider extends ServiceProvider
                       RAISE NOTICE '%1\$s.before_trigger: old (old_value=%%, old_foreign_key=%%, old_relevant=%%)', old_value, old_foreign_key, old_relevant;
 
                       -- During deletion we exclude ourself from the update conditions
-                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, %1\$s.get_join_statement(TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
+                      EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
                       conditions := format('%%s AND %%s <> ''%%s''', conditions, primary_key_name, primary_key);
                   
                       -- Run update
                       PERFORM %1\$s.update(
+                        TG_TABLE_SCHEMA,
                         TG_TABLE_NAME,
                         primary_key_name,
                         key_name,
+                        foreign_schema_name,
                         foreign_table_name,
                         foreign_primary_key_name,
                         foreign_key_name,
@@ -1097,6 +1113,7 @@ class HoardServiceProvider extends ServiceProvider
                 DECLARE
                   trigger %1\$s.triggers%%rowtype;
                   
+                  foreign_schema_name text;
                   foreign_table_name text;
                   foreign_cache_table_name text;
                   foreign_aggregation_name text;
@@ -1121,13 +1138,14 @@ class HoardServiceProvider extends ServiceProvider
                       AND
                         hidden = false
                   LOOP
+                    foreign_schema_name := trigger.foreign_schema_name;
                     foreign_table_name := trigger.foreign_table_name;
                     foreign_primary_key_name := trigger.foreign_primary_key_name;
                     foreign_cache_table_name := trigger.foreign_cache_table_name;
                     foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
                     foreign_aggregation_name := trigger.foreign_aggregation_name;
                   
-                    joins := joins || jsonb_build_object(foreign_cache_table_name, format('%%s.%%s = %%s.%%s', foreign_table_name, foreign_primary_key_name, foreign_cache_table_name, foreign_cache_primary_key_name));
+                    joins := joins || jsonb_build_object(foreign_cache_table_name, format('%%s.%%s.%%s = %1\$s.%%s.%%s', foreign_schema_name, foreign_table_name, foreign_primary_key_name, foreign_cache_table_name, foreign_cache_primary_key_name));
                     foreign_aggregation_names := foreign_aggregation_names || jsonb_build_object(foreign_aggregation_name, foreign_cache_table_name);
                   END LOOP;
 

@@ -15,12 +15,12 @@ class HoardSchema
 
   static public $cachePrimaryKeyNamePrefix = 'cacheable_';
 
-  static public $cacheTableNamePrefix = '';
+  static public $cacheTableNamePrefix = 'cached_';
   static public $cacheTableNameDelimiter = '__';
   static public $cacheTableNameSuffix = '';
 
   static public $cacheViewNamePrefix = '';
-  static public $cacheViewNameSuffix = '_view';
+  static public $cacheViewNameSuffix = '';
 
   /**
    * Create all required tables, functions etc.

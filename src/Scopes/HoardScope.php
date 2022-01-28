@@ -36,7 +36,7 @@ class HoardScope implements Scope {
       LATERAL (
         SELECT  *
         FROM    ' . HoardSchema::$schema . '.' . $cacheViewName . '
-        WHERE   ' . $tableName . '.' . $keyName . ' = ' . $cacheViewName . '.' . $cachePrimaryKeyName . '
+        WHERE   public.' . $tableName . '.' . $keyName . ' = ' . $cacheViewName . '.' . $cachePrimaryKeyName . '
       ) ' . $alias . ' 
     '));
 
