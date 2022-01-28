@@ -375,7 +375,7 @@ class HoardServiceProvider extends ServiceProvider
                   RETURN '';
                 END IF;
 
-                RETURN format('LEFT JOIN \"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, %1\$s.get_cache_primary_key_name(primary_key_name), alias, %1\$s.get_primary_key_name(primary_key_name));
+                RETURN format('LEFT JOIN %1\$s.\"%%s\" ON \"%%s\".\"%%s\" = \"%%s\".\"%%s\"', cache_view_name, cache_view_name, %1\$s.get_cache_primary_key_name(primary_key_name), alias, %1\$s.get_primary_key_name(primary_key_name));
               END;
             $$ LANGUAGE PLPGSQL;
           ",
@@ -1139,7 +1139,7 @@ class HoardServiceProvider extends ServiceProvider
                   -- Create view
                   IF foreign_primary_key_name IS NOT NULL THEN
                     cache_view_name := %1\$s.get_cache_view_name(_foreign_table_name);
-                    EXECUTE format('CREATE VIEW %%s AS SELECT %%s.%%s %%s FROM %%s %%s', cache_view_name, foreign_cache_table_name, %1\$s.get_cache_primary_key_name(foreign_cache_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
+                    EXECUTE format('CREATE VIEW %1\$s.%%s AS SELECT %%s.%%s %%s FROM %%s %%s', cache_view_name, foreign_cache_table_name, %1\$s.get_cache_primary_key_name(foreign_cache_primary_key_name), concatenated_foreign_aggregation_names, _foreign_table_name, concatenated_joins);
                   END IF;
                 END;
               $$ LANGUAGE PLPGSQL;
@@ -1157,11 +1157,11 @@ class HoardServiceProvider extends ServiceProvider
                   RAISE NOTICE '%1\$s.prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
                   IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
-                    EXECUTE format('DROP VIEW IF EXISTS %%s', %1\$s.get_cache_view_name(OLD.foreign_table_name));
+                    EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_table_name));
                   END IF;
 
                   IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-                    EXECUTE format('DROP VIEW IF EXISTS %%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
+                    EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
                   END IF;
 
                   RETURN NEW;

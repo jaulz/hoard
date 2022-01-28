@@ -35,7 +35,7 @@ class HoardScope implements Scope {
     $query->addSelect($alias . '.*')->crossJoin(DB::raw('
       LATERAL (
         SELECT  *
-        FROM    ' . $cacheViewName . '
+        FROM    ' . HoardSchema::$schema . '.' . $cacheViewName . '
         WHERE   ' . $tableName . '.' . $keyName . ' = ' . $cacheViewName . '.' . $cachePrimaryKeyName . '
       ) ' . $alias . ' 
     '));
