@@ -79,12 +79,12 @@ class HoardServiceProvider extends ServiceProvider
       $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
       $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
       $valueType = $command->valueType ?? 'text';
-      $aggregationFunction = Str::upper($command->aggregationFunction) ?? '!NOT SET!';
-      $valueName = $command->valueName ?? '!NOT SET!';
+      $aggregationFunction = Str::upper($command->aggregationFunction) ?? '';
+      $valueName = $command->valueName ?? '';
       $foreignConditions = HoardSchema::prepareConditions($command->foreignConditions ?? []);
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $groupName = $command->groupName;
-      $tableName = $command->tableName ?? '!NOT SET!';
+      $tableName = $command->tableName ?? '';
       $schemaName = $groupName ? HoardSchema::$cacheSchema : HoardSchema::$schema;
       $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName, false) : $tableName;
       $primaryKeyName = $command->primaryKeyName ?? 'id';
@@ -508,7 +508,7 @@ class HoardServiceProvider extends ServiceProvider
 
                   -- Collect all updates in a JSON map
                   FOR trigger IN
-                    EXECUTE format('SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_schema_name = ''%%s'' AND %1\$s.triggers.foreign_table_name = ''%%s'' ORDER BY foreign_cache_table_name', foreign_schema_name, foreign_table_name)
+                    EXECUTE format('SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_schema_name = ''%%s'' AND %1\$s.triggers.foreign_table_name = ''%%s'' AND %1\$s.triggers.table_name <> '''' ORDER BY foreign_cache_table_name', foreign_schema_name, foreign_table_name)
                   LOOP
                     -- Execute updates whenever the foreign cache table name changes
                     IF foreign_cache_table_name IS NOT NULL AND foreign_cache_table_name <> trigger.foreign_cache_table_name THEN
@@ -1084,7 +1084,7 @@ class HoardServiceProvider extends ServiceProvider
                   RAISE NOTICE '%1\$s.create_triggers: start (schema_name=%%, table_name=%%)', schema_name, table_name;
 
                   -- Create triggers for table
-                  IF NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_before') THEN
+                  IF table_name <> '' AND NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_before') THEN
                     EXECUTE format('
                         CREATE TRIGGER hoard_before
                         BEFORE INSERT OR UPDATE OR DELETE ON %%s.%%s
@@ -1093,7 +1093,7 @@ class HoardServiceProvider extends ServiceProvider
                       ', schema_name, table_name);
                   END IF;
 
-                  IF NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_after') THEN
+                  IF table_name <> '' AND NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_after') THEN
                     EXECUTE format('
                       CREATE TRIGGER hoard_after
                         AFTER INSERT OR UPDATE OR DELETE ON %%s.%%s

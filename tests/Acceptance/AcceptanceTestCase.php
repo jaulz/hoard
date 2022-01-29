@@ -1,4 +1,5 @@
 <?php
+
 namespace Tests\Acceptance;
 
 use Carbon\Carbon;
@@ -24,7 +25,7 @@ class AcceptanceTestCase extends TestCase
     use DatabaseMigrations;
 
     protected $data = [];
-    
+
     public function setUp(): void
     {
         parent::setUp();
@@ -115,8 +116,7 @@ class AcceptanceTestCase extends TestCase
                 ['weight', '>', 5],
             ])->viaMorph('taggable', Post::class);
 
-            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id', [
-            ])->viaMorph('imageable', Post::class);
+            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id', [])->viaMorph('imageable', Post::class);
         });
 
         HoardSchema::create('users', 'default', function (Blueprint $table) {
@@ -127,6 +127,12 @@ class AcceptanceTestCase extends TestCase
             $table->integer('posts_count_conditional')->default(0)->nullable();
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
             $table->integer('images_count')->default(0)->nullable();
+            $table
+                ->double('posts_count_plus_one')
+                ->storedAs(
+                    DB::raw('posts_count + 1')
+                )
+                ->always();
 
             $table->hoard('copied_created_at')->aggregate('users', 'DISTINCT', 'created_at')->viaOwn();
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
@@ -143,6 +149,8 @@ class AcceptanceTestCase extends TestCase
             $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
                 'imageable_type' => User::class,
             ])->viaMorph('imageable', User::class, 'sequence');
+
+            $table->hoard('posts_count_plus_one')->manual();
         }, 'sequence');
 
         HoardSchema::create('taggables', 'default', function (Blueprint $table) {
@@ -165,7 +173,7 @@ class AcceptanceTestCase extends TestCase
             $table->timestamp('last_created_at')->nullable();
 
             $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null, null, 'default');
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null,null, 'default');
+            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, null, 'default');
             $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, null, 'default');
         });
     }
@@ -188,8 +196,9 @@ class AcceptanceTestCase extends TestCase
 
         $this->data = compact('user', 'post', 'tag');
     }
-    
-    protected function debug() {
+
+    protected function debug()
+    {
         DB::listen(function ($query) {
             dump([
                 $query->sql,
@@ -214,13 +223,15 @@ class AcceptanceTestCase extends TestCase
         return $queryLog;
     }
 
-    public function assertQueryLogCountEquals($count) {
+    public function assertQueryLogCountEquals($count)
+    {
         $queryLog = $this->stopQueryLog();
 
         $this->assertEquals($count, count($queryLog));
     }
 
-    public function refresh($model) {
+    public function refresh($model)
+    {
         return $model->forceRefresh();
     }
 
@@ -229,6 +240,14 @@ class AcceptanceTestCase extends TestCase
         $user = User::first();
 
         $this->assertNotEmpty($user->copied_created_at);
+    }
+
+    public function testGenerated()
+    {
+        $user = User::first();
+
+        $this->assertEquals(1, $user->posts_count);
+        $this->assertEquals(2, $user->posts_count_plus_one);
     }
 
     public function testSimpleCount()
@@ -347,7 +366,7 @@ class AcceptanceTestCase extends TestCase
 
         $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(0, User::first()->images_count);
-        
+
         // Test if we can assign an image to a Tag that doesn't update "images_count" in "tags" table
         $secondImage = new Image();
         $secondImage->source = 'https://laravel.com/img/logotype.min.svg';
@@ -368,7 +387,7 @@ class AcceptanceTestCase extends TestCase
         DB::raw('UPDATE posts_cache SET images_count WHERE id = ' . $this->data['post']->id);
 
         $post->refreshHoard();
-        
+
         $this->assertEquals(1, $this->refresh($post)->images_count);
         $this->assertEquals(1, User::first()->images_count);
 
@@ -411,7 +430,7 @@ class AcceptanceTestCase extends TestCase
         $secondTag = new Tag();
         $secondTag->title = 'Updates';
         $secondTag->save();
-        
+
         $this->startQueryLog();
         $post->tags()->attach($secondTag->id, [
             'weight' => 10,
