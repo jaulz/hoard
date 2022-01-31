@@ -2,6 +2,7 @@
 
 namespace Jaulz\Hoard\Scopes;
 
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
@@ -9,12 +10,15 @@ use Illuminate\Support\Facades\DB;
 use Jaulz\Hoard\HoardSchema;
 use Illuminate\Support\Str;
 
-class HoardScope implements Scope {
+class HoardScope implements Scope
+{
+  protected ?Closure $implementation = null;
   protected ?string $alias = null;
 
-  public function __construct(?string $alias = null)
+  public function __construct(?Closure $implementation = null, ?string $alias = null)
   {
-      $this->alias = $alias;
+    $this->implementation = $implementation;
+    $this->alias = $alias;
   }
 
   /**
@@ -25,18 +29,30 @@ class HoardScope implements Scope {
    */
   public function apply(Builder $query, Model $model)
   {
+    // Since we will use "addSelect" later on we need to ensure that we select all fields
+    $query->select('*');
+
+    // Prepare new select that will be used as a lateral cross join
     $keyName = $model->getKeyName();
     $tableName = $model->getTable();
     $cacheViewName = HoardSchema::getCacheViewName($tableName);
     $cachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($tableName, $keyName);
-    $className = class_basename($model);
-    $alias = $this->alias ?? Str::snake($className) . '_hoard';
+    $crossJoinQuery = DB::table(HoardSchema::$cacheSchema . '.' . $cacheViewName)->whereRaw(
+      HoardSchema::$schema . '.' . $tableName . '.' . $keyName . ' = ' . HoardSchema::$cacheSchema . '.' . $cacheViewName . '.' . $cachePrimaryKeyName
+    )->select('*');
 
+    // Allow custom scopes to be applied
+      $implementation = $this->implementation;
+    if ($implementation instanceof Closure) {
+      $implementation($crossJoinQuery);
+    }
+
+    // Eventually use the prepared select and extend the actual query
+    $className = class_basename($model);
+    $alias = $this->alias ?? 'cached_' . Str::snake($className);
     $query->addSelect($alias . '.*')->crossJoin(DB::raw('
       LATERAL (
-        SELECT  *
-        FROM    ' . HoardSchema::$cacheSchema . '.' . $cacheViewName . '
-        WHERE   ' . HoardSchema::$schema . '.' . $tableName . '.' . $keyName . ' = ' . HoardSchema::$cacheSchema . '.' . $cacheViewName . '.' . $cachePrimaryKeyName . '
+        ' . $crossJoinQuery->toSql() . '
       ) ' . $alias . ' 
     '));
 
