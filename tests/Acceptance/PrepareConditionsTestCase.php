@@ -44,5 +44,8 @@ class PrepareConditionsTestCase extends TestCase
         $this->assertEquals(HoardSchema::prepareConditions([
             'parent_id' => null,
           ]), '"parent_id" IS NULL');
+          $this->assertEquals(HoardSchema::prepareConditions([
+            ['parent_id', 'IS NOT', null]
+            ]), '"parent_id" IS NOT NULL');
     }
   }

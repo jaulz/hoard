@@ -227,7 +227,7 @@ class HoardSchema
     array $conditions
   ) {
     return collect($conditions)->mapWithKeys(function ($condition, $key) {
-      $operator = '=';
+      $operator = '';
       $value = $condition;
 
       // In case a string is provided we just use it as it is
@@ -251,7 +251,7 @@ class HoardSchema
       if ($value instanceof Expression) {
         $value = $value->getValue();
       } else if (is_null($value)) {
-        $operator = 'IS';
+        $operator = $operator ?: 'IS';
         $value = 'NULL';
       } else if (is_bool($value)) {
         $value = $value ? 'true' : 'false';
@@ -263,6 +263,10 @@ class HoardSchema
 
       if (!$value) {
         return [];
+      }
+
+      if (!$operator) {
+        $operator = '=';
       }
 
       return  [$key => '"' . $key . '"' . ' ' . $operator . ' ' . $value];
