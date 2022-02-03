@@ -251,10 +251,12 @@ class HoardSchema
       if ($value instanceof Expression) {
         $value = $value->getValue();
       } else if (is_null($value)) {
-        $operator = $operator ?? 'IS';
+        $operator = 'IS';
         $value = 'NULL';
       } else if (is_bool($value)) {
         $value = $value ? 'true' : 'false';
+      } else if (is_numeric($value)) {
+        $value = $value;
       } else {
         $value = DB::getPdo()->quote($value);
       }
