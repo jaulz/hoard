@@ -1341,20 +1341,6 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($schemaName),
           $this->quoteString($foreignSchemaName),
         ),
-
-        sprintf(
-          "
-            DO $$
-              BEGIN
-                PERFORM %1\$s.refresh_all(%2\$s, %3\$s, %4\$s);
-              END;
-            $$ LANGUAGE PLPGSQL;
-          ",
-          HoardSchema::$cacheSchema,
-          $this->quoteString($foreignSchemaName),
-          $this->quoteString(HoardSchema::getTableName($foreignTableName)),
-          DB::getPdo()->quote($refreshConditions),
-        ),
       ]);
     });
   }

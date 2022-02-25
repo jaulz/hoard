@@ -82,18 +82,21 @@ class HoardSchema
       $table->timestampTz('cached_at');
     });
 
-    // Create rule to insert into 
-    /*DB::statement(sprintf("
-      CREATE RULE \"_RETURN\" AS ON SELECT TO %1\$s DO INSTEAD
-          SELECT * FROM %2\$s;
-    ", $tableName, $cacheViewName));*/
-    /*DB::statement(sprintf("
-      CREATE RULE \"_RETURN\" AS ON SELECT TO %1\$s DO INSTEAD
-        SELECT * 
-        FROM %2\$s
-        JOIN %3\$s
-          ON %4\$s = %5\$s;
-    ", $tableName, $tableName, $cacheTableName, $primaryKeyName, $cachePrimaryKeyName));*/
+    // Refresh table afterwards
+    DB::raw(
+      "
+        DO $$
+          BEGIN
+            PERFORM :cache_schema.refresh_all(:schema, :table_name);
+          END;
+        $$ LANGUAGE PLPGSQL;
+      ",
+      [
+        'cache_schema' => HoardSchema::$cacheSchema,
+        'schema' => 'public',
+        'table_name' => $tableName
+      ]
+    );
   }
 
   /**
