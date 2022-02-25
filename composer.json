@@ -1,6 +1,6 @@
 {
     "name": "jaulz/hoard",
-    "description": "Hoard helps you to automatically keep cached numbers to reduce reads in your database.",
+    "description": "Hoard helps you to automatically keep cached values to reduce reads in your database.",
     "keywords": ["laravel", "eloquent", "cache", "count", "max", "min", "sum", "hoard", "remember"],
     "authors": [
         {
@@ -11,16 +11,12 @@
     ],
     "require": {
         "php": "^7.3|^8.0",
-        "hashids/hashids": "^4.0",
-        "illuminate/database": "~8.0",
-        "illuminate/support": "~8.0",
-        "hanneskod/classtools": "~1.0"
+        "laravel/framework": "^9.2"
     },
     "require-dev": {
-        "illuminate/events": "~8.0",
         "mockery/mockery": "^1.3.0",
-        "orchestra/testbench": "~6",
-        "phpunit/phpunit": "~8.0"
+        "orchestra/testbench": "^7.0",
+        "phpunit/phpunit": "^9.0"
     },
     "autoload": {
         "psr-4": {
