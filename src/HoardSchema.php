@@ -83,19 +83,19 @@ class HoardSchema
     });
 
     // Refresh table afterwards
-    DB::raw(
-      "
+    DB::statement(
+      sprintf(
+        "
         DO $$
           BEGIN
-            PERFORM :cache_schema.refresh_all(:schema, :table_name);
+            PERFORM %1\$s.refresh_all(%2\$s, %3\$s);
           END;
         $$ LANGUAGE PLPGSQL;
       ",
-      [
-        'cache_schema' => HoardSchema::$cacheSchema,
-        'schema' => 'public',
-        'table_name' => $tableName
-      ]
+        HoardSchema::$cacheSchema,
+        DB::getPdo()->quote('public'),
+        DB::getPdo()->quote($tableName)
+      )
     );
   }
 
