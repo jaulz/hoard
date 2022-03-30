@@ -653,6 +653,7 @@ class HoardServiceProvider extends ServiceProvider
                           foreign_table_name = p_foreign_table_name 
                         AND
                           foreign_aggregation_name LIKE p_foreign_aggregation_name
+                      FOR UPDATE SKIP LOCKED
                   LOOP
                     FOR log IN 
                       SELECT 
