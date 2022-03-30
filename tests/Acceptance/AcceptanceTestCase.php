@@ -22,7 +22,7 @@ use Tests\Acceptance\Models\User;
 class AcceptanceTestCase extends TestCase
 {
     use RefreshDatabase;
-    use DatabaseMigrations;
+    // use DatabaseMigrations;
 
     protected $data = [];
 
@@ -35,6 +35,7 @@ class AcceptanceTestCase extends TestCase
 
         $this->app->useDatabasePath(implode(DIRECTORY_SEPARATOR, [__DIR__, '..', '..', 'database']));
         // $this->runDatabaseMigrations();
+        $this->artisan('migrate:fresh');
         $this->migrate();
 
         $this->init();
@@ -56,7 +57,7 @@ class AcceptanceTestCase extends TestCase
             $table->string('first_name');
             $table->string('last_name');
             $table->string('slug')->nullable();
-            $table->timestamps();
+            $table->timestampsTz();
         });
 
         Schema::create('posts', function (Blueprint $table) {
@@ -65,8 +66,8 @@ class AcceptanceTestCase extends TestCase
             $table->string('slug')->nullable();
             $table->boolean('visible')->default(false);
             $table->integer('weight')->default(1);
-            $table->softDeletes();
-            $table->timestamps();
+            $table->softDeletesTz();
+            $table->timestampsTz();
         });
 
         Schema::create('comments', function (Blueprint $table) {
@@ -74,15 +75,15 @@ class AcceptanceTestCase extends TestCase
             $table->integer('user_sequence');
             $table->integer('post_id');
             $table->boolean('visible')->default(false);
-            $table->timestamps();
-            $table->softDeletes();
+            $table->timestampsTz();
+            $table->softDeletesTz();
         });
 
         Schema::create('tags', function (Blueprint $table) {
             $table->increments('id');
             $table->string('title')->nullable();
-            $table->timestamps();
-            $table->softDeletes();
+            $table->timestampsTz();
+            $table->softDeletesTz();
         });
 
         Schema::create('taggables', function (Blueprint $table) {
@@ -90,14 +91,14 @@ class AcceptanceTestCase extends TestCase
             $table->morphs('taggable');
             $table->integer('tag_id');
             $table->integer('weight')->default(0);
-            $table->timestamps();
+            $table->timestampsTz();
         });
 
         Schema::create('images', function (Blueprint $table) {
             $table->increments('id');
             $table->string('source');
             $table->morphs('imageable');
-            $table->timestamps();
+            $table->timestampsTz();
         });
 
         HoardSchema::init();
@@ -142,6 +143,7 @@ class AcceptanceTestCase extends TestCase
                     DB::raw('posts_count + 1')
                 )
                 ->always();
+            $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
 
             $table->hoard('copied_created_at')->aggregate('users', 'DISTINCT', 'created_at')->viaOwn();
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
@@ -160,6 +162,10 @@ class AcceptanceTestCase extends TestCase
             ])->viaMorph('imageable', User::class, 'sequence');
 
             $table->hoard('posts_count_plus_one')->manual();
+
+            $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', 'SUM', 'weight', [
+                ['deleted_at', 'IS', null]
+            ])->asynchronous();
         }, 'sequence');
 
         HoardSchema::create('taggables', 'default', function (Blueprint $table) {
@@ -190,8 +196,8 @@ class AcceptanceTestCase extends TestCase
     public function init()
     {
         $user = new User();
-        $user->first_name = 'Kirk';
-        $user->last_name = 'Bushell';
+        $user->first_name = 'Julian';
+        $user->last_name = 'Hundeloh';
         $user->save();
 
         $post = new Post();
@@ -249,6 +255,11 @@ class AcceptanceTestCase extends TestCase
         $user = User::first();
 
         $this->assertNotEmpty($user->copied_created_at);
+
+        $user->created_at = new Carbon('2016-01-23');
+        $user->save();
+
+        $this->assertEquals($this->refresh($user)->created_at, $this->refresh($user)->copied_created_at);
     }
 
     public function testGenerated()
@@ -258,6 +269,78 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(1, $user->posts_count);
         $this->assertEquals(2, $user->posts_count_plus_one);
     }
+
+    public function testAsynchronous()
+    {
+        $user = User::first();
+
+        $this->assertEquals(0, $user->asynchronous_posts_weight_sum);
+
+        User::processHoard();
+
+        $this->assertEquals(1, $this->refresh($user)->asynchronous_posts_weight_sum);
+
+        $post = new Post;
+        $post->user_sequence = $user->sequence;
+        $post->visible = true;
+        $post->weight = 3;
+        $post->save();
+
+        $post = new Post;
+        $post->user_sequence = $user->sequence;
+        $post->visible = true;
+        $post->weight = 5;
+        $post->save();
+
+        $this->assertEquals(1, $this->refresh($user)->asynchronous_posts_weight_sum);
+
+        $this->assertEquals(2, DB::table(HoardSchema::$cacheSchema . '.logs')
+            ->whereNull('processed_at')
+            ->get()->count());
+
+        User::processHoard();
+
+        $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
+            ->whereNull('processed_at')
+            ->get()->count());
+
+        $this->assertEquals(9, $this->refresh($user)->asynchronous_posts_weight_sum);
+
+        $post = new Post;
+        $post->user_sequence = $user->sequence;
+        $post->visible = true;
+        $post->weight = 10;
+        $post->save();
+
+        $this->assertEquals(1, DB::table(HoardSchema::$cacheSchema . '.logs')
+            ->whereNull('processed_at')
+            ->get()->count());
+
+        $user->refreshHoard();
+
+        $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
+            ->whereNull('processed_at')
+            ->get()->count());
+
+        User::processHoard();
+
+        $this->assertEquals(19, $this->refresh($user)->asynchronous_posts_weight_sum);
+
+        $post->delete();
+
+        $this->assertEquals(2, DB::table(HoardSchema::$cacheSchema . '.logs')
+            ->whereNull('processed_at')
+            ->get()->count());
+
+        $user->refreshHoard();
+
+        $this->assertEquals(9, $this->refresh($user)->asynchronous_posts_weight_sum);
+
+        $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
+            ->whereNull('processed_at')
+            ->get()->count());
+    }
+
 
     public function testSimpleCount()
     {

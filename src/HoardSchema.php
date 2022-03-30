@@ -88,7 +88,7 @@ class HoardSchema
         "
         DO $$
           BEGIN
-            PERFORM %1\$s.refresh_all(%2\$s, %3\$s);
+            PERFORM %1\$s.refresh(%2\$s, %3\$s);
           END;
         $$ LANGUAGE PLPGSQL;
       ",

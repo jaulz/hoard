@@ -217,7 +217,7 @@ class HoardDefinition
   }
 
   /**
-   * Whether this definition needs to be calculated manually and hence without triggers.
+   * If the definition is manual it means that "refresh_all" must be used to update the cached values.
    *
    * @return \Jaulz\Hoard\HoardDefinition
    */
@@ -247,15 +247,29 @@ class HoardDefinition
   }
 
   /**
-   * Set if the attribute will be hidden in cache view.
+   * If the definition is hidden it means it will be excluded in the generated cache view.
    *
-   * @param  string  $type
    * @return \Jaulz\Hoard\HoardDefinition
    */
   public function hidden()
   {
     $attributes = $this->command->getAttributes();
     $attributes['hidden'] = true;
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * If the definition is asynchronous it means that the cached value will not be updated in the same transaction.
+   *
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function asynchronous()
+  {
+    $attributes = $this->command->getAttributes();
+    $attributes['asynchronous'] = true;
 
     $this->setAttributes($attributes);
 

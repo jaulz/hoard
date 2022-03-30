@@ -13,6 +13,16 @@ class User extends Model
     use IsRefreshableTrait;
 
     /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array
+     */
+    protected $casts = [
+      'copied_created_at' => 'datetime',
+      'asynchronous_copied_created_at' => 'datetime',
+    ];
+
+    /**
      * Indicates model primary keys.
      */
     protected $primaryKey = 'sequence';

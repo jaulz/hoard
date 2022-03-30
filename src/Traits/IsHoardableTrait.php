@@ -40,15 +40,28 @@ trait IsHoardableTrait
   /**
    * Refresh cache for the model.
    *
-   * @param ?bool $native
    * @return array
    */
   public function refreshHoard()
   {
-    return DB::select('SELECT ' . HoardSchema::$cacheSchema . '.refresh_all(?, ?, ?)', [
+    return DB::select('SELECT ' . HoardSchema::$cacheSchema . '.refresh(?, ?, ?)', [
       HoardSchema::$schema,
       $this->getTable(), 
       $this->getKeyName() . ' = ' . $this->getKey()
+    ]);
+  }
+
+  /**
+   * Process logs and refresh cache for the model.
+   *
+   * @return array
+   */
+  public static function processHoard($foreignAggregationName = '%')
+  {
+    return DB::select('SELECT ' . HoardSchema::$cacheSchema . '.process(?, ?, ?)', [
+      HoardSchema::$schema,
+      (new static())->getTable(),
+      $foreignAggregationName
     ]);
   }
 }
