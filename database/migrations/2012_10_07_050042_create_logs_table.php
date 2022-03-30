@@ -32,6 +32,7 @@ return new class extends Migration {
 
       $table->timestampTz('created_at')->default(DB::raw('NOW()'));
       $table->timestampTz('processed_at')->nullable();
+      $table->timestampTz('canceled_at')->nullable();
 
       $table->index(['trigger_id', 'processed_at']);
     });

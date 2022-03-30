@@ -580,7 +580,7 @@ class HoardServiceProvider extends ServiceProvider
                   -- Clear logs table
                   UPDATE %1\$s.logs 
                     SET 
-                      processed_at = NOW() 
+                      canceled_at = NOW() 
                     WHERE 
                         trigger_id = trigger.id
                       AND
@@ -663,7 +663,7 @@ class HoardServiceProvider extends ServiceProvider
                         WHERE 
                             trigger_id = trigger.id
                           AND
-                            processed_at IS NULL
+                            (processed_at IS NULL AND canceled_at IS NULL)
                         ORDER BY 
                           created_at ASC
                     LOOP

@@ -296,12 +296,14 @@ class AcceptanceTestCase extends TestCase
 
         $this->assertEquals(2, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
+            ->whereNull('canceled_at')
             ->get()->count());
 
         User::processHoard();
 
         $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
+            ->whereNull('canceled_at')
             ->get()->count());
 
         $this->assertEquals(9, $this->refresh($user)->asynchronous_posts_weight_sum);
@@ -314,12 +316,14 @@ class AcceptanceTestCase extends TestCase
 
         $this->assertEquals(1, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
+            ->whereNull('canceled_at')
             ->get()->count());
 
         $user->refreshHoard();
 
         $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
+            ->whereNull('canceled_at')
             ->get()->count());
 
         User::processHoard();
@@ -330,6 +334,7 @@ class AcceptanceTestCase extends TestCase
 
         $this->assertEquals(2, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
+            ->whereNull('canceled_at')
             ->get()->count());
 
         $user->refreshHoard();
@@ -338,6 +343,7 @@ class AcceptanceTestCase extends TestCase
 
         $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
+            ->whereNull('canceled_at')
             ->get()->count());
     }
 
