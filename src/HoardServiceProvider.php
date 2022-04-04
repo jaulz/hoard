@@ -22,7 +22,7 @@ class HoardServiceProvider extends ServiceProvider
   {
     $this->publishes(
       [
-        __DIR__ . '/../database/migrations/' => base_path('migrations'),
+        __DIR__ . '/../database/migrations/' => base_path('database/migrations'),
       ],
       'hoard-migrations'
     );
