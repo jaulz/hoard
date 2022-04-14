@@ -1274,7 +1274,7 @@ class HoardServiceProvider extends ServiceProvider
                   FOR key, value IN 
                     SELECT * FROM jsonb_each_text(joins)
                   LOOP
-                    concatenated_joins := format('%%s JOIN %1\$s.%%s ON %%s', concatenated_joins, key, value);
+                    concatenated_joins := format('%%s LEFT JOIN %1\$s.%%s ON %%s', concatenated_joins, key, value);
                   END LOOP;
 
                   -- Concatenate aggregation names
