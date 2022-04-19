@@ -119,10 +119,10 @@ class HoardDefinition
   public function via(string $foreignKeyName = null, ?string $keyName = null, string|array|null $foreignConditions = null, string $foreignPrimaryKeyName = null)
   {
     $attributes = $this->command->getAttributes();
-    $attributes['keyName'] = $keyName ?? $attributes['keyName']?? null;
-    $attributes['foreignKeyName'] = $foreignKeyName ?? $attributes['foreignKeyName']?? null;
+    $attributes['keyName'] = $keyName ?? $attributes['keyName'] ?? null;
+    $attributes['foreignKeyName'] = $foreignKeyName ?? $attributes['foreignKeyName'] ?? null;
     $attributes['foreignConditions'] = array_merge($attributes['foreignConditions'] ?? [], is_string($foreignConditions) ? [$foreignConditions] : ($foreignConditions ?? []));
-    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName ?? $attributes['foreignPrimaryKeyName']?? null;
+    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName ?? $attributes['foreignPrimaryKeyName'] ?? null;
     $this->setAttributes($attributes);
 
     return $this;
@@ -168,7 +168,7 @@ class HoardDefinition
     $morphableKey = $morphable . '_' . $morphableKeyName;
     $morphableType = $morphable . '_type';
     $conditions = [];
-    $conditions[$morphableType] = $morphableTypeValue;
+    $conditions[$morphableType] = (new $morphableTypeValue())->getMorphClass();
 
     $attributes = $this->command->getAttributes();
     $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], $conditions);
@@ -194,7 +194,7 @@ class HoardDefinition
     $foreignConditions = [];
 
     if ($morphableTypeValue) {
-      $foreignConditions[$morphableType] = $morphableTypeValue;
+      $foreignConditions[$morphableType] = (new $morphableTypeValue())->getMorphClass();
     }
 
     return $this->via($morphableKey, $keyName, $foreignConditions, $foreignPrimaryKeyName);
