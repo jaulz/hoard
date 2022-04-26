@@ -6,7 +6,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Jaulz\Hoard\HoardSchema;
 
-return new class extends Migration {
+return new class extends Migration
+{
   /**
    * Run the migrations.
    *
@@ -19,8 +20,8 @@ return new class extends Migration {
 
       $table->unsignedBigInteger('trigger_id');
       $table->foreign('trigger_id')
-      ->references('id')->on(HoardSchema::$cacheSchema . '.triggers')
-      ->onDelete('cascade');
+        ->references('id')->on(HoardSchema::$cacheSchema . '.triggers')
+        ->cascadeOnDelete();
 
       $table->string('operation');
       $table->text('old_value')->nullable();
