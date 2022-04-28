@@ -118,8 +118,8 @@ class AcceptanceTestCase extends TestCase
             ]);
             $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes();
             $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes();
-            $table->hoard('comments_ids')->aggregate('comments', 'JSONB_AGG', 'id')->withoutSoftDeletes();
-            $table->hoard('comments_numeric_ids')->aggregate('comments',  'JSONB_AGG', 'id')->withoutSoftDeletes()->type('numeric');
+            $table->hoard('comments_ids')->aggregate('comments', 'MERGE', 'id')->withoutSoftDeletes();
+            $table->hoard('comments_numeric_ids')->aggregate('comments',  'MERGE', 'id')->withoutSoftDeletes()->type('numeric');
 
             $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id')->viaMorph('taggable', Post::class);
             $table->hoard('important_tags_count')->aggregate('taggables', 'COUNT', 'id',  [
@@ -728,7 +728,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($this->refresh($tag)->last_created_at, null);
     }
 
-    public function testJsonbAgg()
+    public function testMerge()
     {
         $tag = $this->data['tag'];
         $post = $this->data['post'];
