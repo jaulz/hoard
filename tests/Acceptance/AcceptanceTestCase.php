@@ -118,8 +118,12 @@ class AcceptanceTestCase extends TestCase
             ]);
             $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes();
             $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes();
-            $table->hoard('comments_ids')->aggregate('comments', 'MERGE', 'id')->withoutSoftDeletes();
-            $table->hoard('comments_numeric_ids')->aggregate('comments',  'MERGE', 'id')->withoutSoftDeletes()->type('numeric');
+            $table->hoard('comments_ids')->aggregate('comments', 'PUSH', 'id')->options([
+                'type' => 'text'
+            ])->withoutSoftDeletes();
+            $table->hoard('comments_numeric_ids')->aggregate('comments',  'PUSH', 'id')->withoutSoftDeletes()->options([
+                'type' => 'number'
+            ]);
 
             $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id')->viaMorph('taggable', Post::class);
             $table->hoard('important_tags_count')->aggregate('taggables', 'COUNT', 'id',  [
@@ -728,7 +732,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($this->refresh($tag)->last_created_at, null);
     }
 
-    public function testMerge()
+    public function testPush()
     {
         $tag = $this->data['tag'];
         $post = $this->data['post'];

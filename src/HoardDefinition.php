@@ -201,15 +201,15 @@ class HoardDefinition
   }
 
   /**
-   * Set the type of the aggregated value column.
+   * Set the options of the aggregated value column.
    *
    * @param  string  $type
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function type(string $type)
+  public function options(array $options)
   {
     $attributes = $this->command->getAttributes();
-    $attributes['valueType'] = $type;
+    $attributes['options'] = $options;
 
     $this->setAttributes($attributes);
 

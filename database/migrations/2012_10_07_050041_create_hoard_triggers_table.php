@@ -24,7 +24,7 @@ return new class extends Migration
       $table->string('key_name');
       $table->string('aggregation_function');
       $table->string('value_name');
-      $table->string('value_type')->nullable();
+      $table->jsonb('options')->default('[]');
       $table->string('conditions');
 
       $table->string('foreign_schema_name');

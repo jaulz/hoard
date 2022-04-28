@@ -78,7 +78,7 @@ class HoardServiceProvider extends ServiceProvider
       $foreignTableName = Str::after($command->foreignTableName, '.');
       $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
       $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
-      $valueType = $command->valueType ?? 'text';
+      $options = $command->options ?? [];
       $aggregationFunction = Str::upper($command->aggregationFunction) ?? '';
       $valueName = $command->valueName ?? '';
       $foreignConditions = HoardSchema::prepareConditions($command->foreignConditions ?? []);
@@ -137,7 +137,7 @@ class HoardServiceProvider extends ServiceProvider
               key_name,
               aggregation_function, 
               value_name,
-              value_type, 
+              options, 
               conditions,
               foreign_table_name,
               foreign_key_name, 
@@ -179,7 +179,7 @@ class HoardServiceProvider extends ServiceProvider
               key_name = %3\$s,
               aggregation_function = %4\$s,
               value_name = %5\$s, 
-              value_type = %6\$s, 
+              options = %6\$s, 
               conditions = %7\$s,
               foreign_table_name = %8\$s, 
               foreign_key_name = %9\$s,
@@ -201,7 +201,7 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($keyName),
           $this->quoteString($aggregationFunction),
           $this->quoteString($valueName),
-          $this->quoteString($valueType),
+          $this->quoteString(json_encode($options, JSON_FORCE_OBJECT)),
           DB::getPdo()->quote($conditions),
           $this->quoteString($foreignTableName),
           $this->quoteString($foreignKeyName),

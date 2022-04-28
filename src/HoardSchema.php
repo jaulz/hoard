@@ -586,7 +586,7 @@ class HoardSchema
       'primary_key_name' =>   'text',
       'key_name' =>   'text',
       'value_name' =>   'text',
-      'value_type' =>   'text',
+      'options' =>   'jsonb',
       'foreign_key' =>   'text',
       'conditions' =>   "text DEFAULT ''",
     ];
@@ -608,7 +608,7 @@ class HoardSchema
       'foreign_cache_primary_key_name' => 'text',
       'aggregation_function' => 'text',
       'value_name' => 'text',
-      'value_type' => 'text',
+      'options' => 'jsonb',
       'conditions' => 'text',
       'foreign_conditions' => 'text',
 
@@ -863,9 +863,9 @@ class HoardSchema
       ), 'PLPGSQL'),
 
       /**
-       * Merge
+       * Push
        */
-      HoardSchema::createFunction('get_merge_refresh_query', $getRefreshQueryParameters, 'text', sprintf(
+      HoardSchema::createFunction('get_push_refresh_query', $getRefreshQueryParameters, 'text', sprintf(
         <<<PLPGSQL
         BEGIN
           RETURN format(
@@ -882,7 +882,7 @@ class HoardSchema
         HoardSchema::$cacheSchema
       ), 'PLPGSQL'),
 
-      HoardSchema::createFunction('concat_merge_refresh_queries', $concatRefreshQueriesParameters, 'text', sprintf(
+      HoardSchema::createFunction('concat_push_refresh_queries', $concatRefreshQueriesParameters, 'text', sprintf(
         <<<PLPGSQL
         BEGIN
           RETURN format('((%%s) || (%%s))', existing_refresh_query, refresh_query);
@@ -891,27 +891,31 @@ class HoardSchema
         HoardSchema::$cacheSchema
       ), 'PLPGSQL'),
 
-      HoardSchema::createFunction('update_merge', $updateParameters, 'text', sprintf(
+      HoardSchema::createFunction('update_push', $updateParameters, 'text', sprintf(
         <<<PLPGSQL
         DECLARE
           new_update text;
           old_update text;
+          type text;
         BEGIN
+          type := options->>'type';
+
           IF action = 'REMOVE' THEN
             IF old_value IS NOT NULL THEN
-              IF value_type = 'text' THEN
+
+              IF type = 'text' THEN
                 old_update := format(
                   '%%s - ''%%s''', 
                   foreign_aggregation_name, 
                   old_value
                 );
-              ELSIF value_type = 'numeric' THEN
+              ELSIF type = 'number' THEN
                 old_update := format(
                   'array_to_json(array_remove(array(select jsonb_array_elements_text(%%s)), %%s::text)::int[])', 
                   foreign_aggregation_name, 
                   old_value
                 );
-              ELSIF value_type = 'json' THEN
+              ELSIF type = 'json' THEN
                 old_update := format(
                   'array_to_json(%1\$s.array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(''%%s''))))', 
                   foreign_aggregation_name, 
@@ -931,19 +935,19 @@ class HoardSchema
 
           IF action = 'ADD' THEN
             IF new_value != '' THEN
-              IF value_type = 'text' THEN
+              IF type = 'text' THEN
                 new_update := format(
                   '%%s::jsonb || ''["%%s"]''::jsonb', 
                   foreign_aggregation_name, 
                   new_value
                 );
-              ELSIF value_type = 'json' THEN
+              ELSIF type = 'json' THEN
                 new_update := format(
                   '%%s::jsonb || ''%%s''::jsonb', 
                   foreign_aggregation_name, 
                   new_value
                 );
-              ELSE  
+              ELSE
                 new_update := format(
                   '%%s::jsonb || ''[%%s]''::jsonb', 
                   foreign_aggregation_name, 
@@ -981,7 +985,7 @@ class HoardSchema
         'primary_key_name' =>   'text',
         'aggregation_function' =>   'text',
         'value_name' =>   'text',
-        'value_type' =>   'text',
+        'options' =>   'jsonb',
         'schema_name' =>   'text',
         'table_name' =>   'text',
         'key_name' =>   'text',
@@ -1010,14 +1014,14 @@ class HoardSchema
           refresh_query_function_name = lower(format('get_%%s_refresh_query', aggregation_function));
           IF %1\$s.exists_function('%1\$s', refresh_query_function_name) THEN
             EXECUTE format(
-              'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L)',
+              'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
               refresh_query_function_name,
               principal_schema_name,
               principal_table_name,
               primary_key_name,
               key_name,
               value_name,
-              value_type,
+              options,
               foreign_key,
               conditions
             ) INTO refresh_query;
@@ -1092,7 +1096,7 @@ class HoardSchema
           foreign_aggregation_name text;
           aggregation_function text;
           value_name text;
-          value_type text;
+          options jsonb;
           key_name text;
           conditions text;
           foreign_conditions text;
@@ -1125,7 +1129,7 @@ class HoardSchema
             foreign_schema_name := trigger.foreign_schema_name;
             aggregation_function := trigger.aggregation_function;
             value_name := trigger.value_name;
-            value_type := trigger.value_type;
+            options := trigger.options;
             key_name := trigger.key_name;
             conditions := trigger.conditions;
             foreign_conditions := trigger.foreign_conditions;
@@ -1159,7 +1163,7 @@ class HoardSchema
                 primary_key_name, 
                 aggregation_function, 
                 value_name, 
-                value_type, 
+                options, 
                 schema_name, 
                 table_name, 
                 key_name,
@@ -1173,16 +1177,16 @@ class HoardSchema
                 concat_query_function_name = lower(format('concat_%%s_refresh_queries', aggregation_function));
                 IF %1\$s.exists_function('%1\$s', concat_query_function_name) THEN
                   EXECUTE format(
-                    'SELECT %1\$s.%%s(%%s, %%s, %%s, %%s, %%s, %%s, ''%%s'', %%s)',
+                    'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
                     refresh_query_function_name,
-                    quote_literal(principal_schema_name),
-                    quote_literal(principal_table_name),
-                    quote_literal(primary_key_name),
-                    quote_literal(key_name),
-                    quote_literal(value_name),
-                    quote_literal(value_type),
+                    principal_schema_name,
+                    principal_table_name,
+                    primary_key_name,
+                    key_name,
+                    value_name,
+                    options,
                     foreign_key,
-                    quote_literal(conditions)
+                    conditions
                   ) INTO refresh_query;
                 ELSE
                   refresh_query := format('%%s((%%s), (%%s))', aggregation_function, existing_refresh_query, refresh_query);
@@ -1301,7 +1305,7 @@ class HoardSchema
                 trigger.foreign_cache_primary_key_name, 
                 trigger.aggregation_function, 
                 trigger.value_name, 
-                trigger.value_type, 
+                trigger.options, 
                 trigger.conditions, 
                 trigger.foreign_conditions, 
                 log.operation, 
@@ -1345,7 +1349,7 @@ class HoardSchema
         'foreign_cache_primary_key_name' => 'text',
         'aggregation_function' => 'text',
         'value_name' => 'text',
-        'value_type' => 'text',
+        'options' => 'jsonb',
         'conditions' => 'text',
         'foreign_conditions' => 'text',
 
@@ -1380,7 +1384,7 @@ class HoardSchema
             changed_value := new_value IS DISTINCT FROM old_value;
           END IF;
 
-          RAISE NOTICE '%1\$s.update: start (schema_name=%%, table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, value_type=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
+          RAISE NOTICE '%1\$s.update: start (schema_name=%%, table_name=%%, key_name=%%, foreign_table_name=%%, foreign_primary_key_name=%%, foreign_key_name=%%, foreign_aggregation_name=%%, foreign_cache_table_name=%%, foreign_cache_primary_key_name=%%, aggregation_function=%%, value_name=%%, options=%%, conditions=%%, foreign_conditions=%%, operation=%%, old_value=%%, old_foreign_key=%%, old_relevant=%%, new_value=%%, new_foreign_key=%%, new_relevant=%%, changed_foreign_key=%%, changed_value=%%)',
             schema_name,  
             table_name,
             key_name,
@@ -1392,7 +1396,7 @@ class HoardSchema
             foreign_cache_primary_key_name,
             aggregation_function,
             value_name,
-            value_type,
+            options,
             conditions,
             foreign_conditions,
 
@@ -1422,8 +1426,8 @@ class HoardSchema
           END IF;
 
           -- Prepare refresh query that can be used to get the aggregated value
-          old_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, schema_name, table_name, key_name, old_foreign_key, conditions);
-          new_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, value_type, schema_name, table_name, key_name, new_foreign_key, conditions);
+          old_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, options, schema_name, table_name, key_name, old_foreign_key, conditions);
+          new_refresh_query := %1\$s.get_refresh_query(primary_key_name, aggregation_function, value_name, options, schema_name, table_name, key_name, new_foreign_key, conditions);
 
           -- Update row if
           -- 1. Foreign row with matching conditions is deleted
@@ -1431,7 +1435,7 @@ class HoardSchema
           IF old_relevant = true AND old_foreign_key IS NOT NULL AND (operation = 'DELETE' OR (operation = 'UPDATE' AND (new_relevant = false OR (changed_value = true OR changed_foreign_key = true)))) THEN
             IF %1\$s.exists_function('%1\$s', update_function_name) THEN
               EXECUTE format(
-                'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L)',
+                'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L)',
                 update_function_name,
                 schema_name,
                 table_name,
@@ -1446,7 +1450,7 @@ class HoardSchema
                 foreign_cache_primary_key_name,
                 aggregation_function,
                 value_name,
-                value_type,
+                options,
                 conditions,
                 foreign_conditions,
 
@@ -1494,7 +1498,7 @@ class HoardSchema
                 foreign_cache_primary_key_name,
                 aggregation_function,
                 value_name,
-                value_type,
+                options,
                 conditions,
                 foreign_conditions,
 
@@ -1557,7 +1561,7 @@ class HoardSchema
           foreign_key_name text;
           aggregation_function text;
           value_name text;
-          value_type text;
+          options jsonb;
           key_name text;
           conditions text;
           foreign_conditions text;
@@ -1603,7 +1607,7 @@ class HoardSchema
             foreign_key_name := trigger.foreign_key_name;
             aggregation_function := trigger.aggregation_function;
             value_name := trigger.value_name;
-            value_type := trigger.value_type;
+            options := trigger.options;
             key_name := trigger.key_name;
             conditions := trigger.conditions;
             foreign_conditions := trigger.foreign_conditions;
@@ -1646,7 +1650,7 @@ class HoardSchema
                 foreign_cache_primary_key_name,
                 aggregation_function,
                 value_name,
-                value_type,
+                options,
                 conditions,
                 foreign_conditions,
 
@@ -1695,7 +1699,7 @@ class HoardSchema
             foreign_key_name text;
             aggregation_function text;
             value_name text;
-            value_type text;
+            options jsonb;
             key_name text;
             conditions text;
             foreign_conditions text;
@@ -1753,7 +1757,7 @@ class HoardSchema
                 foreign_key_name := trigger.foreign_key_name;
                 aggregation_function := trigger.aggregation_function;
                 value_name := trigger.value_name;
-                value_type := trigger.value_type;
+                options := trigger.options;
                 key_name := trigger.key_name;
                 conditions := trigger.conditions;
                 foreign_conditions := trigger.foreign_conditions;
@@ -1803,7 +1807,7 @@ class HoardSchema
                     foreign_cache_primary_key_name,
                     aggregation_function,
                     value_name,
-                    value_type,
+                    options,
                     conditions,
                     foreign_conditions,
 
