@@ -2,14 +2,10 @@
 
 namespace Jaulz\Hoard;
 
-use Illuminate\Database\Query\Expression;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Database\Schema\Grammars\Grammar;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\Str;
 
@@ -80,7 +76,7 @@ class HoardServiceProvider extends ServiceProvider
       $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
       $options = $command->options ?? [];
       $aggregationFunction = Str::upper($command->aggregationFunction) ?? '';
-      $valueName = $command->valueName ?? '';
+      $valueNames = $command->valueNames ?? [];
       $foreignConditions = HoardSchema::prepareConditions($command->foreignConditions ?? []);
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $groupName = $command->groupName;
@@ -136,7 +132,7 @@ class HoardServiceProvider extends ServiceProvider
               table_name, 
               key_name,
               aggregation_function, 
-              value_name,
+              value_names,
               options, 
               conditions,
               foreign_table_name,
@@ -178,7 +174,7 @@ class HoardServiceProvider extends ServiceProvider
               table_name = %2\$s, 
               key_name = %3\$s,
               aggregation_function = %4\$s,
-              value_name = %5\$s, 
+              value_names = %5\$s, 
               options = %6\$s, 
               conditions = %7\$s,
               foreign_table_name = %8\$s, 
@@ -200,7 +196,7 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($tableName),
           $this->quoteString($keyName),
           $this->quoteString($aggregationFunction),
-          $this->quoteString($valueName),
+          $this->quoteString(json_encode($valueNames)),
           $this->quoteString(json_encode($options, JSON_FORCE_OBJECT)),
           DB::getPdo()->quote($conditions),
           $this->quoteString($foreignTableName),

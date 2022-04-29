@@ -105,95 +105,119 @@ class AcceptanceTestCase extends TestCase
 
         HoardSchema::create('posts', 'default', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
-            $table->jsonb('comments_ids')->default()->nullable();
-            $table->jsonb('comments_numeric_ids')->default()->nullable();
-            $table->integer('tags_count')->default(0)->nullable();
-            $table->integer('important_tags_count')->default(0)->nullable();
-            $table->integer('images_count')->default(0)->nullable();
-            $table->timestamp('first_commented_at')->nullable();
-            $table->timestamp('last_commented_at')->nullable();
-
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id', [
                 ['deleted_at', 'IS', null]
             ]);
-            $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes();
-            $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes();
+
+            $table->jsonb('comments_ids')->default()->nullable();
             $table->hoard('comments_ids')->aggregate('comments', 'PUSH', 'id')->options([
                 'type' => 'text'
             ])->withoutSoftDeletes();
+
+            $table->jsonb('comments_numeric_ids')->default()->nullable();
             $table->hoard('comments_numeric_ids')->aggregate('comments',  'PUSH', 'id')->withoutSoftDeletes()->options([
                 'type' => 'number'
             ]);
 
+            $table->integer('tags_count')->default(0)->nullable();
             $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id')->viaMorph('taggable', Post::class);
+
+            $table->integer('important_tags_count')->default(0)->nullable();
             $table->hoard('important_tags_count')->aggregate('taggables', 'COUNT', 'id',  [
                 ['weight', '>', 5],
             ])->viaMorph('taggable', Post::class);
 
+            $table->integer('images_count')->default(0)->nullable();
             $table->hoard('images_count')->aggregate('images', 'COUNT', 'id', [])->viaMorph('imageable', Post::class);
+
+            $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes();
+            $table->timestamp('first_commented_at')->nullable();
+
+            $table->timestamp('last_commented_at')->nullable();
+            $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes();
         });
 
         HoardSchema::create('users', 'default', function (Blueprint $table) {
             $table->timestampTz('copied_created_at')->nullable();
+            $table->hoard('copied_created_at')->aggregate('users', 'COPY', 'created_at')->viaOwn();
+
             $table->integer('comments_count')->default(0)->nullable();
+            $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
+                ['deleted_at', 'IS', null]
+            ]);
+
             $table->integer('posts_count')->default(0)->nullable();
+            $table->hoard('posts_count')->aggregate('posts', 'COUNT', 'id', [
+                ['deleted_at', 'IS', null]
+            ]);
+
             $table->integer('posts_count_explicit')->default(0)->nullable();
+            $table->hoard('posts_count_explicit')->aggregate('posts', 'COUNT', 'id', [
+                ['deleted_at', 'IS', null]
+            ]);
+
             $table->integer('posts_count_conditional')->default(0)->nullable();
+            $table->hoard('posts_count_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND deleted_at IS NULL');
+
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
+            $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
+
             $table->integer('images_count')->default(0)->nullable();
+            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
+                'imageable_type' => User::class,
+            ])->viaMorph('imageable', User::class, 'sequence');
+
             $table
                 ->double('posts_count_plus_one')
                 ->storedAs(
                     DB::raw('posts_count + 1')
                 )
                 ->always();
-            $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
-
-            $table->hoard('copied_created_at')->aggregate('users', 'DISTINCT', 'created_at')->viaOwn();
-            $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
-                ['deleted_at', 'IS', null]
-            ]);
-            $table->hoard('posts_count')->aggregate('posts', 'COUNT', 'id', [
-                ['deleted_at', 'IS', null]
-            ]);
-            $table->hoard('posts_count_explicit')->aggregate('posts', 'COUNT', 'id', [
-                ['deleted_at', 'IS', null]
-            ]);
-            $table->hoard('posts_count_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND deleted_at IS NULL');
-            $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
-            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
-                'imageable_type' => User::class,
-            ])->viaMorph('imageable', User::class, 'sequence');
-
             $table->hoard('posts_count_plus_one')->manual();
 
+            $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
             $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', 'SUM', 'weight', [
                 ['deleted_at', 'IS', null]
             ])->asynchronous();
+
+            $table->jsonb('grouped_posts_count_by_weekday')->default('{}');
+            $table->hoard('grouped_posts_count_by_weekday')->aggregate('posts', 'GROUP', [
+                'extract(isodow from created_at)',
+                'id'
+            ])->withoutSoftDeletes()->options([
+                'function' => 'count',
+            ]);
+
+            $table->jsonb('grouped_posts_weight_by_weekday')->default('{}');
+            $table->hoard('grouped_posts_weight_by_weekday')->aggregate('posts', 'GROUP', [
+                'extract(isodow from created_at)',
+                'weight'
+            ])->withoutSoftDeletes()->options([
+                'function' => 'sum',
+            ]);
         }, 'sequence');
 
         HoardSchema::create('taggables', 'default', function (Blueprint $table) {
             $table->integer('cached_taggable_count')->default(0)->nullable();
-            $table->timestamp('taggable_created_at')->nullable();
-
-            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'sequence', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
-            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
-
             $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
-            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
+            $table->hoard('cached_taggable_count')->aggregate('images', 'COUNT', 'id')->viaMorphPivot('taggable', Image::class);
+            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'sequence', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
 
-            $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Image::class);
-            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Image::class);
+            $table->timestamp('taggable_created_at')->nullable();
+            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
+            $table->hoard('taggable_created_at')->aggregate('images', 'MAX', 'created_at')->viaMorphPivot('taggable', Image::class);
+            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
         });
 
         HoardSchema::create('tags', 'default', function (Blueprint $table) {
             $table->integer('taggables_count')->default(0)->nullable();
-            $table->timestamp('first_created_at')->nullable();
-            $table->timestamp('last_created_at')->nullable();
-
             $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null, null, 'default');
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, null, 'default');
+
+            $table->timestamp('first_created_at')->nullable();
             $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, null, 'default');
+
+            $table->timestamp('last_created_at')->nullable();
+            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, null, 'default');
         });
     }
 
@@ -207,6 +231,7 @@ class AcceptanceTestCase extends TestCase
         $post = new Post();
         $post->user_sequence = $user->sequence;
         $post->visible = false;
+        $post->created_at = Carbon::parse('2022-04-26 14:50:00+02');
         $post->save();
 
         $tag = new Tag();
@@ -254,7 +279,7 @@ class AcceptanceTestCase extends TestCase
         return $model->forceRefresh();
     }
 
-    public function testDistinct()
+    public function testCopy()
     {
         $user = User::first();
 
@@ -323,7 +348,7 @@ class AcceptanceTestCase extends TestCase
             ->whereNull('canceled_at')
             ->get()->count());
 
-        $user->refreshHoard();
+        User::processHoard();
 
         $this->assertEquals(0, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
@@ -341,7 +366,7 @@ class AcceptanceTestCase extends TestCase
             ->whereNull('canceled_at')
             ->get()->count());
 
-        $user->refreshHoard();
+        User::processHoard();
 
         $this->assertEquals(9, $this->refresh($user)->asynchronous_posts_weight_sum);
 
@@ -772,5 +797,78 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals('[]', $this->refresh($post)->comments_ids);
         $this->assertEquals('[]', $this->refresh($post)->comments_numeric_ids);
         $this->assertEquals(0, $this->refresh($this->data['post'])->comments_count);
+    }
+
+    public function testGroup()
+    {
+        $user = $this->data['user'];
+
+        $mondayPost = new Post();
+        $mondayPost->user_sequence = $user->sequence;
+        $mondayPost->visible = false;
+        $mondayPost->created_at = Carbon::parse('2022-04-25 14:50:00+02');
+        $mondayPost->weight = 5;
+        $mondayPost->save();
+
+        $tuesdayPost = new Post();
+        $tuesdayPost->user_sequence = $user->sequence;
+        $tuesdayPost->visible = false;
+        $tuesdayPost->created_at = Carbon::parse('2022-04-26 14:50:00+02');
+        $mondayPost->weight = 3;
+        $tuesdayPost->save();
+
+        $fridayPost = new Post();
+        $fridayPost->user_sequence = $user->sequence;
+        $fridayPost->visible = false;
+        $fridayPost->created_at = Carbon::parse('2022-04-29 14:50:00+02');
+        $mondayPost->weight = 7;
+        $fridayPost->save();
+
+        $saturdayPost = new Post();
+        $saturdayPost->user_sequence = $user->sequence;
+        $saturdayPost->visible = false;
+        $saturdayPost->created_at = Carbon::parse('2022-04-30 14:50:00+02');
+        $mondayPost->weight = 8;
+        $saturdayPost->save();
+
+        $this->assertEquals([
+            '1' => 1,
+            '2' => 2,
+            '5' => 1,
+            '6' => 1,
+        ], $this->refresh($user)->grouped_posts_count_by_weekday);
+        $this->assertEquals([
+            '1' => 1,
+            '2' => 2,
+            '5' => 1,
+            '6' => 1,
+        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+
+        $user->refreshHoard();
+
+        $this->assertEquals([
+            '1' => 1,
+            '2' => 2,
+            '5' => 1,
+            '6' => 1,
+        ], $this->refresh($user)->grouped_posts_count_by_weekday);
+
+        $tuesdayPost->delete();
+
+        $this->assertEquals([
+            '1' => 1,
+            '2' => 1,
+            '5' => 1,
+            '6' => 1,
+        ], $this->refresh($user)->grouped_posts_count_by_weekday);
+
+        $mondayPost->delete();
+
+        $this->assertEquals([
+            '1' => 0,
+            '2' => 1,
+            '5' => 1,
+            '6' => 1,
+        ], $this->refresh($user)->grouped_posts_count_by_weekday);
     }
 }

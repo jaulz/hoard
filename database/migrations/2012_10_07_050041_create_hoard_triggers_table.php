@@ -23,7 +23,7 @@ return new class extends Migration
       $table->string('primary_key_name');
       $table->string('key_name');
       $table->string('aggregation_function');
-      $table->string('value_name');
+      $table->jsonb('value_names');
       $table->jsonb('options')->default('[]');
       $table->string('conditions');
 

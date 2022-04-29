@@ -65,16 +65,16 @@ class HoardDefinition
   public function aggregate(
     string $tableName,
     string $aggregationFunction,
-    string $valueName,
+    string|array $valueNames,
     string|array|null $conditions = null,
     string $primaryKeyName = null,
     string $groupName = null
   ) {
     $attributes = $this->command->getAttributes();
     $attributes['tableName'] = $tableName;
-    $attributes['primaryKeyName'] = $primaryKeyName ?? $attributes['primaryKeyName'] ?? null;
-    $attributes['aggregationFunction'] = $aggregationFunction ?? $attributes['aggregationFunction'] ?? null;
-    $attributes['valueName'] = $valueName ?? $attributes['valueName'] ?? null;
+    $attributes['primaryKeyName'] = $primaryKeyName;
+    $attributes['aggregationFunction'] = $aggregationFunction;
+    $attributes['valueNames'] = (is_array($valueNames) ? $valueNames : [$valueNames]) ?? null;
     $attributes['groupName'] = $groupName ?? $attributes['groupName'] ?? null;
     $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], is_string($conditions) ? [$conditions] : ($conditions ?? []));
 

@@ -24,10 +24,10 @@ return new class extends Migration
         ->cascadeOnDelete();
 
       $table->string('operation');
-      $table->text('old_value')->nullable();
+      $table->jsonb('old_values')->nullable();
       $table->text('old_foreign_key')->nullable();
       $table->boolean('old_relevant');
-      $table->text('new_value')->nullable();
+      $table->jsonb('new_values')->nullable();
       $table->text('new_foreign_key')->nullable();
       $table->boolean('new_relevant');
 
