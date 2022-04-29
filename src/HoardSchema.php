@@ -436,15 +436,21 @@ class HoardSchema
       PLPGSQL), 'PLPGSQL'),
 
       HoardSchema::createFunction('jsonb_array_to_text_array', [
-        'records' =>  'jsonb'
+        'items' =>  'jsonb'
       ], 'text[]', sprintf(<<<SQL
-        SELECT ARRAY(SELECT jsonb_array_elements_text(records))
+        SELECT array(SELECT jsonb_array_elements_text(items))
       SQL), 'SQL', 'IMMUTABLE PARALLEL SAFE STRICT'),
 
       HoardSchema::createFunction('row_values_to_json', [
         'element' =>  'anyelement'
       ], 'jsonb', sprintf(<<<SQL
-        SELECT JSON_AGG(base.value) FROM JSON_EACH(ROW_TO_JSON(element)) base
+        SELECT json_agg(base.value) FROM json_each(row_to_json(element)) base
+      SQL), 'SQL', 'IMMUTABLE PARALLEL SAFE STRICT'),
+
+      HoardSchema::createFunction('jsonb_object_to_value_array', [
+        'items' =>  'jsonb'
+      ], 'jsonb', sprintf(<<<SQL
+        SELECT jsonb_agg(base.value) FROM jsonb_each(items) base
       SQL), 'SQL', 'IMMUTABLE PARALLEL SAFE STRICT'),
     ];
   }
@@ -704,7 +710,7 @@ class HoardSchema
             RETURN format(
               '%%s - %%s', 
               foreign_aggregation_name, 
-              old_values->>'value_0'
+              old_values->>0
             );
           END IF;
 
@@ -712,7 +718,7 @@ class HoardSchema
             RETURN format(
               '%%s + %%s', 
               foreign_aggregation_name, 
-              new_values->>'value_0'
+              new_values->>0
             );
           END IF;
 
@@ -790,10 +796,10 @@ class HoardSchema
         <<<PLPGSQL
         BEGIN
           IF action = 'REMOVE' THEN
-            IF old_values->>'value_0' IS NOT NULL THEN
+            IF old_values->>0 IS NOT NULL THEN
               RETURN format(
                 'CASE WHEN %%L <> %%s THEN %%s ELSE (%%s) END',
-                old_values->>'value_0', 
+                old_values->>0, 
                 foreign_aggregation_name, 
                 foreign_aggregation_name, 
                 old_refresh_query
@@ -802,13 +808,13 @@ class HoardSchema
           END IF;
 
           IF action = 'ADD' THEN
-            IF new_values->>'value_0' != '' THEN
+            IF new_values->>0 != '' THEN
               RETURN format(
                 'CASE WHEN %%I IS NULL OR %%L > %%I THEN %%L ELSE (%%I) END', 
                 foreign_aggregation_name, 
-                new_values->>'value_0', 
+                new_values->>0, 
                 foreign_aggregation_name, 
-                new_values->>'value_0', 
+                new_values->>0, 
                 foreign_aggregation_name
               );
             END IF;
@@ -836,10 +842,10 @@ class HoardSchema
         <<<PLPGSQL
         BEGIN
           IF action = 'REMOVE' THEN
-            IF old_values->>'value_0' IS NOT NULL THEN
+            IF old_values->>0 IS NOT NULL THEN
               RETURN format(
                 'CASE WHEN %%L <> %%I THEN %%I ELSE (%%s) END', 
-                old_values->>'value_0', 
+                old_values->>0, 
                 foreign_aggregation_name, 
                 foreign_aggregation_name,
                 old_refresh_query
@@ -848,13 +854,13 @@ class HoardSchema
           END IF;
 
           IF action = 'ADD' THEN
-            IF new_values->>'value_0' != '' THEN
+            IF new_values->>0 != '' THEN
               RETURN format(
                 'CASE WHEN %%I IS NULL OR %%L < %%I THEN %%L ELSE (%%s) END', 
                 foreign_aggregation_name, 
-                new_values->>'value_0', 
+                new_values->>0, 
                 foreign_aggregation_name, 
-                new_values->>'value_0', 
+                new_values->>0, 
                 foreign_aggregation_name
               );
             END IF;
@@ -954,54 +960,54 @@ class HoardSchema
           type := options->>'type';
 
           IF action = 'REMOVE' THEN
-            IF old_values->>'value_0' IS NOT NULL THEN
+            IF old_values->>0 IS NOT NULL THEN
               IF type = 'text' THEN
                 RETURN format(
                   '%%s - %%L', 
                   foreign_aggregation_name, 
-                  old_values->>'value_0'
+                  old_values->>0
                 );
               ELSIF type = 'number' THEN
                 RETURN format(
                   'array_to_json(array_remove(array(select jsonb_array_elements_text(%%s)), %%s::text)::int[])', 
                   foreign_aggregation_name, 
-                  old_values->>'value_0'
+                  old_values->>0
                 );
               ELSIF type = 'json' THEN
                 RETURN format(
                   'array_to_json(%1\$s.array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(''%%s''))))', 
                   foreign_aggregation_name, 
-                  old_values->>'value_0'
+                  old_values->>0
                 );
               ELSE  
                 RETURN format(
                   '%%s - %%s', 
                   foreign_aggregation_name, 
-                  old_values->>'value_0'
+                  old_values->>0
                 );
               END IF;
             END IF;
           END IF;
 
           IF action = 'ADD' THEN
-            IF new_values->>'value_0' != '' THEN
+            IF new_values->>0 != '' THEN
               IF type = 'text' THEN
                 RETURN format(
                   '%%s::jsonb || ''["%%s"]''::jsonb', 
                   foreign_aggregation_name, 
-                  new_values->>'value_0'
+                  new_values->>0
                 );
               ELSIF type = 'json' THEN
                 RETURN format(
                   '%%s::jsonb || ''%%s''::jsonb', 
                   foreign_aggregation_name, 
-                  new_values->>'value_0'
+                  new_values->>0
                 );
               ELSE
                 RETURN format(
                   '%%s::jsonb || ''[%%s]''::jsonb', 
                   foreign_aggregation_name, 
-                  new_values->>'value_0'
+                  new_values->>0
                 );
               END IF;
             END IF;  
@@ -1074,32 +1080,49 @@ class HoardSchema
 
       HoardSchema::createFunction('update_group', $updateParameters, 'text', sprintf(
         <<<PLPGSQL
+        DECLARE
+          sub_value text;
+          add_value text;
         BEGIN
           IF options->>'function' IS NULL THEN
             RAISE EXCEPTION '"function" key is missing in options.';
           END IF;
           
           IF action = 'REMOVE' THEN
+            -- Determine which value we need to subtract
+            IF lower(options->>'function') = 'sum' THEN
+              sub_value := old_values->>1;
+            ELSE
+              sub_value := 1;
+            END IF;
+
             RETURN format(
               'JSONB_SET(%%I, (''{'' || (%%s) || ''}'')::text[], (COALESCE(%%I->>''%%s'', %%L)::int - %%s)::text::jsonb)', 
               foreign_aggregation_name,
-              old_values->>'value_0',
+              old_values->>0,
               foreign_aggregation_name,
-              old_values->>'value_0',
+              old_values->>0,
               0,
-              1
+              sub_value
             );
           END IF;
 
           IF action = 'ADD' THEN
+            -- Determine which value we need to add
+            IF lower(options->>'function') = 'sum' THEN
+              add_value := new_values->>1;
+            ELSE
+              add_value := 1;
+            END IF;
+
             RETURN format(
               'JSONB_SET(%%I, (''{'' || (%%s) || ''}'')::text[], (COALESCE(%%I->>''%%s'', %%L)::int + %%s)::text::jsonb)', 
               foreign_aggregation_name,
-              new_values->>'value_0',
+              new_values->>0,
               foreign_aggregation_name,
-              new_values->>'value_0',
+              new_values->>0,
               0,
-              1
+              add_value
             );
           END IF;
 
@@ -1522,6 +1545,7 @@ class HoardSchema
 
           key text;
           value text;
+          index int DEFAULT 0;
         BEGIN
           update_function_name = lower(format('update_%%s', aggregation_function));
 
@@ -1529,12 +1553,14 @@ class HoardSchema
           IF new_foreign_key <> '' THEN
             changed_foreign_key := new_foreign_key IS DISTINCT FROM old_foreign_key;
 
-            FOR key, value IN
-              SELECT * FROM jsonb_each_text(new_values)
+            FOR value IN
+              SELECT * FROM jsonb_array_elements(new_values)
             LOOP
-              IF value IS DISTINCT FROM old_values->>key THEN
+              IF value IS DISTINCT FROM old_values->>index THEN
                 changed_value := true;
               END IF;
+
+              index := index + 1;
             END LOOP;
           END IF;
 
@@ -1772,7 +1798,7 @@ class HoardSchema
 
             -- Get foreign key and value from new record
             EXECUTE format(
-              'SELECT row_to_json(base.*) FROM (SELECT %%s FROM (SELECT $1.*) record %%s) AS base', 
+              'SELECT %1\$s.jsonb_object_to_value_array((SELECT row_to_json(values.*) FROM (SELECT %%s FROM (SELECT $1.*) record %%s) AS values)::jsonb)', 
               %1\$s.value_names_to_columns(value_names), 
               %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record')) 
               USING NEW 
@@ -1940,7 +1966,7 @@ class HoardSchema
 
                 -- Get foreign key and value from old record
                 EXECUTE format(
-                  'SELECT row_to_json(base.*) FROM (SELECT %%s FROM (SELECT $1.*) record %%s) AS base', 
+                  'SELECT %1\$s.jsonb_object_to_value_array((SELECT row_to_json(values.*) FROM (SELECT %%s FROM (SELECT $1.*) record %%s) AS values)::jsonb)', 
                   %1\$s.value_names_to_columns(value_names), 
                   %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record')) 
                   USING OLD 

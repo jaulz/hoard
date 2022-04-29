@@ -814,21 +814,21 @@ class AcceptanceTestCase extends TestCase
         $tuesdayPost->user_sequence = $user->sequence;
         $tuesdayPost->visible = false;
         $tuesdayPost->created_at = Carbon::parse('2022-04-26 14:50:00+02');
-        $mondayPost->weight = 3;
+        $tuesdayPost->weight = 3;
         $tuesdayPost->save();
 
         $fridayPost = new Post();
         $fridayPost->user_sequence = $user->sequence;
         $fridayPost->visible = false;
         $fridayPost->created_at = Carbon::parse('2022-04-29 14:50:00+02');
-        $mondayPost->weight = 7;
+        $fridayPost->weight = 7;
         $fridayPost->save();
 
         $saturdayPost = new Post();
         $saturdayPost->user_sequence = $user->sequence;
         $saturdayPost->visible = false;
         $saturdayPost->created_at = Carbon::parse('2022-04-30 14:50:00+02');
-        $mondayPost->weight = 8;
+        $saturdayPost->weight = 8;
         $saturdayPost->save();
 
         $this->assertEquals([
@@ -838,10 +838,10 @@ class AcceptanceTestCase extends TestCase
             '6' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
         $this->assertEquals([
-            '1' => 1,
-            '2' => 2,
-            '5' => 1,
-            '6' => 1,
+            '1' => 5,
+            '2' => 4,
+            '5' => 7,
+            '6' => 8,
         ], $this->refresh($user)->grouped_posts_weight_by_weekday);
 
         $user->refreshHoard();
@@ -853,6 +853,13 @@ class AcceptanceTestCase extends TestCase
             '6' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
 
+        $this->assertEquals([
+            '1' => 5,
+            '2' => 4,
+            '5' => 7,
+            '6' => 8,
+        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+
         $tuesdayPost->delete();
 
         $this->assertEquals([
@@ -862,6 +869,13 @@ class AcceptanceTestCase extends TestCase
             '6' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
 
+        $this->assertEquals([
+            '1' => 5,
+            '2' => 1,
+            '5' => 7,
+            '6' => 8,
+        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+
         $mondayPost->delete();
 
         $this->assertEquals([
@@ -870,5 +884,12 @@ class AcceptanceTestCase extends TestCase
             '5' => 1,
             '6' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
+
+        $this->assertEquals([
+            '1' => 0,
+            '2' => 1,
+            '5' => 7,
+            '6' => 8,
+        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
     }
 }
