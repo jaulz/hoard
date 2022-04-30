@@ -860,6 +860,24 @@ class AcceptanceTestCase extends TestCase
             '6' => 8,
         ], $this->refresh($user)->grouped_posts_weight_by_weekday);
 
+        $tuesdayPost->created_at = $mondayPost->created_at;
+        $tuesdayPost->weight = 10;
+        $tuesdayPost->save();
+
+        $this->assertEquals([
+            '1' => 2,
+            '2' => 1,
+            '5' => 1,
+            '6' => 1,
+        ], $this->refresh($user)->grouped_posts_count_by_weekday);
+
+        $this->assertEquals([
+            '1' => 15,
+            '2' => 1,
+            '5' => 7,
+            '6' => 8,
+        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+
         $tuesdayPost->delete();
 
         $this->assertEquals([
