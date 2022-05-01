@@ -1025,8 +1025,8 @@ class HoardSchema
       HoardSchema::createFunction('get_group_refresh_query', $getRefreshQueryParameters, 'text', sprintf(
         <<<PLPGSQL
         BEGIN
-          IF options->>'function' IS NULL THEN
-            RAISE EXCEPTION '"function" key is missing in options.';
+          IF options->>'aggregation_function' IS NULL THEN
+            RAISE EXCEPTION '"aggregation_function" key is missing in options.';
           END IF;
 
           RETURN format(
@@ -1046,7 +1046,7 @@ class HoardSchema
               ''{}''::jsonb
             )',
             value_names->>0,
-            options->>'function',
+            options->>'aggregation_function',
             value_names->>1,
             table_name,
             %1\$s.get_join_statement(schema_name, table_name, primary_key_name, table_name),
@@ -1081,52 +1081,73 @@ class HoardSchema
       HoardSchema::createFunction('update_group', $updateParameters, 'text', sprintf(
         <<<PLPGSQL
         DECLARE
-          sub_value text;
-          add_value text;
+          next_value text;
+          update text;
+          deep_foreign_aggregation_name text;
+          update_function_name text;
         BEGIN
-          IF options->>'function' IS NULL THEN
-            RAISE EXCEPTION '"function" key is missing in options.';
+          IF options->>'aggregation_function' IS NULL THEN
+            RAISE EXCEPTION '"aggregation_function" key is missing in options.';
           END IF;
-          
-          IF action = 'REMOVE' THEN
-            -- Determine which value we need to subtract
-            IF lower(options->>'function') = 'sum' THEN
-              sub_value := old_values->>1;
-            ELSE
-              sub_value := 1;
-            END IF;
 
-            RETURN format(
-              'JSONB_SET(%%I, (''{'' || (%%s) || ''}'')::text[], (COALESCE(%%I->>''%%s'', %%L)::int - %%s)::text::jsonb)', 
-              foreign_aggregation_name,
-              old_values->>0,
-              foreign_aggregation_name,
-              old_values->>0,
-              0,
-              sub_value
-            );
+          -- Next value depends on action
+          IF action = 'REMOVE' THEN
+            next_value := old_values->>0;
           END IF;
 
           IF action = 'ADD' THEN
-            -- Determine which value we need to add
-            IF lower(options->>'function') = 'sum' THEN
-              add_value := new_values->>1;
-            ELSE
-              add_value := 1;
-            END IF;
-
-            RETURN format(
-              'JSONB_SET(%%I, (''{'' || (%%s) || ''}'')::text[], (COALESCE(%%I->>''%%s'', %%L)::int + %%s)::text::jsonb)', 
-              foreign_aggregation_name,
-              new_values->>0,
-              foreign_aggregation_name,
-              new_values->>0,
-              0,
-              add_value
-            );
+            next_value := new_values->>0;
           END IF;
 
-          RETURN '';
+          -- Use existing update_* functions to get the update statement
+          deep_foreign_aggregation_name := format(
+            'COALESCE(%%I->>''%%s'', %%L)::int',
+            foreign_aggregation_name,
+            next_value,
+            0
+          );
+          update_function_name := lower(format('update_%%s', options->>'aggregation_function'));
+          EXECUTE format(
+            'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L)',
+            update_function_name,
+            schema_name,
+            table_name,
+            primary_key_name,
+            key_name,
+            foreign_schema_name,
+            foreign_table_name,
+            foreign_primary_key_name,
+            foreign_key_name,
+            deep_foreign_aggregation_name,
+            foreign_cache_table_name,
+            foreign_cache_primary_key_name,
+            aggregation_function,
+            value_names,
+            options,
+            conditions,
+            foreign_conditions,
+
+            operation,
+            (format('[%%s]', old_values->>1))::jsonb,
+            old_foreign_key,
+            old_relevant,
+            old_condition,
+            old_refresh_query,
+            (format('[%%s]', new_values->>1))::jsonb,
+            new_foreign_key,
+            new_relevant,
+            new_condition,
+            new_refresh_query,
+            
+            action
+          ) INTO update;
+
+          RETURN format(
+            'JSONB_SET(%%I, (''{'' || (%%s) || ''}'')::text[], (%%s)::text::jsonb)', 
+            foreign_aggregation_name,
+            next_value,
+            update
+          );
         END;
       PLPGSQL,
         HoardSchema::$cacheSchema

@@ -185,7 +185,7 @@ class AcceptanceTestCase extends TestCase
                 'extract(isodow from created_at)',
                 'id'
             ])->withoutSoftDeletes()->options([
-                'function' => 'count',
+                'aggregation_function' => 'count',
             ]);
 
             $table->jsonb('grouped_posts_weight_by_weekday')->default('{}');
@@ -193,7 +193,7 @@ class AcceptanceTestCase extends TestCase
                 'extract(isodow from created_at)',
                 'weight'
             ])->withoutSoftDeletes()->options([
-                'function' => 'sum',
+                'aggregation_function' => 'sum',
             ]);
         }, 'sequence');
 
