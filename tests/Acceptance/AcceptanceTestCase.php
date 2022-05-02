@@ -65,7 +65,7 @@ class AcceptanceTestCase extends TestCase
             $table->integer('user_sequence')->nullable();
             $table->string('slug')->nullable();
             $table->boolean('visible')->default(false);
-            $table->integer('weight')->default(1);
+            $table->float('weight')->default(1);
             $table->softDeletesTz();
             $table->timestampsTz();
         });
@@ -188,12 +188,13 @@ class AcceptanceTestCase extends TestCase
                 'aggregation_function' => 'count',
             ]);
 
-            $table->jsonb('grouped_posts_weight_by_weekday')->default('{}');
-            $table->hoard('grouped_posts_weight_by_weekday')->aggregate('posts', 'GROUP', [
+            $table->jsonb('grouped_posts_weight_by_workingday')->default('{}');
+            $table->hoard('grouped_posts_weight_by_workingday')->aggregate('posts', 'GROUP', [
                 'extract(isodow from created_at)',
                 'weight'
             ])->withoutSoftDeletes()->options([
                 'aggregation_function' => 'sum',
+                'condition' => 'key::int >= 1 AND key::int <= 5'
             ]);
         }, 'sequence');
 
@@ -814,7 +815,7 @@ class AcceptanceTestCase extends TestCase
         $tuesdayPost->user_sequence = $user->sequence;
         $tuesdayPost->visible = false;
         $tuesdayPost->created_at = Carbon::parse('2022-04-26 14:50:00+02');
-        $tuesdayPost->weight = 3;
+        $tuesdayPost->weight = 3.5;
         $tuesdayPost->save();
 
         $fridayPost = new Post();
@@ -839,10 +840,9 @@ class AcceptanceTestCase extends TestCase
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
         $this->assertEquals([
             '1' => 5,
-            '2' => 4,
+            '2' => 4.5,
             '5' => 7,
-            '6' => 8,
-        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+        ], $this->refresh($user)->grouped_posts_weight_by_workingday);
 
         $user->refreshHoard();
 
@@ -855,10 +855,9 @@ class AcceptanceTestCase extends TestCase
 
         $this->assertEquals([
             '1' => 5,
-            '2' => 4,
+            '2' => 4.5,
             '5' => 7,
-            '6' => 8,
-        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+        ], $this->refresh($user)->grouped_posts_weight_by_workingday);
 
         $tuesdayPost->created_at = $mondayPost->created_at;
         $tuesdayPost->weight = 10;
@@ -875,8 +874,7 @@ class AcceptanceTestCase extends TestCase
             '1' => 15,
             '2' => 1,
             '5' => 7,
-            '6' => 8,
-        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+        ], $this->refresh($user)->grouped_posts_weight_by_workingday);
 
         $tuesdayPost->delete();
 
@@ -891,8 +889,7 @@ class AcceptanceTestCase extends TestCase
             '1' => 5,
             '2' => 1,
             '5' => 7,
-            '6' => 8,
-        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+        ], $this->refresh($user)->grouped_posts_weight_by_workingday);
 
         $mondayPost->delete();
 
@@ -907,7 +904,6 @@ class AcceptanceTestCase extends TestCase
             '1' => 0,
             '2' => 1,
             '5' => 7,
-            '6' => 8,
-        ], $this->refresh($user)->grouped_posts_weight_by_weekday);
+        ], $this->refresh($user)->grouped_posts_weight_by_workingday);
     }
 }

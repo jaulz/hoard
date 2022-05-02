@@ -21,7 +21,7 @@ class User extends Model
       'copied_created_at' => 'datetime',
       'asynchronous_copied_created_at' => 'datetime',
       'grouped_posts_count_by_weekday' => 'json',
-      'grouped_posts_weight_by_weekday' => 'json'
+      'grouped_posts_weight_by_workingday' => 'json'
     ];
 
     /**
