@@ -111,7 +111,7 @@ class AcceptanceTestCase extends TestCase
 
             $table->jsonb('comments_ids')->default()->nullable();
             $table->hoard('comments_ids')->aggregate('comments', 'PUSH', 'id')->options([
-                'type' => 'text'
+                'type' => 'string'
             ])->withoutSoftDeletes();
 
             $table->jsonb('comments_numeric_ids')->default()->nullable();

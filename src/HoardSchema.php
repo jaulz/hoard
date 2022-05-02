@@ -1045,7 +1045,7 @@ class HoardSchema
 
           IF p_action = 'REMOVE' THEN
             IF p_old_values->>0 IS NOT NULL THEN
-              IF type = 'text' THEN
+              IF type = 'string' THEN
                 RETURN format(
                   '%%s - %%L', 
                   p_foreign_aggregation_name, 
@@ -1075,7 +1075,7 @@ class HoardSchema
 
           IF p_action = 'ADD' THEN
             IF p_new_values->>0 != '' THEN
-              IF type = 'text' THEN
+              IF type = 'string' THEN
                 RETURN format(
                   '%%s::jsonb || ''["%%s"]''::jsonb', 
                   p_foreign_aggregation_name, 
