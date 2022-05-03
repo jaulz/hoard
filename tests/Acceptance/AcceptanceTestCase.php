@@ -182,7 +182,7 @@ class AcceptanceTestCase extends TestCase
 
             $table->jsonb('grouped_posts_count_by_weekday')->default('{}');
             $table->hoard('grouped_posts_count_by_weekday')->aggregate('posts', 'GROUP', [
-                'extract(isodow from created_at)',
+                "extract(isodow from created_at) || '_suffix'",
                 'id'
             ])->withoutSoftDeletes()->options([
                 'aggregation_function' => 'count',
@@ -833,10 +833,10 @@ class AcceptanceTestCase extends TestCase
         $saturdayPost->save();
 
         $this->assertEquals([
-            '1' => 1,
-            '2' => 2,
-            '5' => 1,
-            '6' => 1,
+            '1_suffix' => 1,
+            '2_suffix' => 2,
+            '5_suffix' => 1,
+            '6_suffix' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
         $this->assertEquals([
             '1' => 5,
@@ -847,10 +847,10 @@ class AcceptanceTestCase extends TestCase
         $user->refreshHoard();
 
         $this->assertEquals([
-            '1' => 1,
-            '2' => 2,
-            '5' => 1,
-            '6' => 1,
+            '1_suffix' => 1,
+            '2_suffix' => 2,
+            '5_suffix' => 1,
+            '6_suffix' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
 
         $this->assertEquals([
@@ -864,10 +864,10 @@ class AcceptanceTestCase extends TestCase
         $tuesdayPost->save();
 
         $this->assertEquals([
-            '1' => 2,
-            '2' => 1,
-            '5' => 1,
-            '6' => 1,
+            '1_suffix' => 2,
+            '2_suffix' => 1,
+            '5_suffix' => 1,
+            '6_suffix' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
 
         $this->assertEquals([
@@ -879,10 +879,10 @@ class AcceptanceTestCase extends TestCase
         $tuesdayPost->delete();
 
         $this->assertEquals([
-            '1' => 1,
-            '2' => 1,
-            '5' => 1,
-            '6' => 1,
+            '1_suffix' => 1,
+            '2_suffix' => 1,
+            '5_suffix' => 1,
+            '6_suffix' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
 
         $this->assertEquals([
@@ -894,10 +894,10 @@ class AcceptanceTestCase extends TestCase
         $mondayPost->delete();
 
         $this->assertEquals([
-            '1' => 0,
-            '2' => 1,
-            '5' => 1,
-            '6' => 1,
+            '1_suffix' => 0,
+            '2_suffix' => 1,
+            '5_suffix' => 1,
+            '6_suffix' => 1,
         ], $this->refresh($user)->grouped_posts_count_by_weekday);
 
         $this->assertEquals([

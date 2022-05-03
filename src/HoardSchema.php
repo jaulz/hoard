@@ -1227,7 +1227,7 @@ class HoardSchema
           ) INTO update;
 
           RETURN format(
-            '%1\$s.filter_jsonb_object(jsonb_set(%%I, (''{'' || (%%s) || ''}'')::text[], (%%s)::text::jsonb), %%L)', 
+            '%1\$s.filter_jsonb_object(jsonb_set(%%I, (''{'' || (%%L) || ''}'')::text[], (%%s)::text::jsonb), %%L)', 
             p_foreign_aggregation_name,
             value,
             update,
