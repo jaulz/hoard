@@ -1171,10 +1171,16 @@ class HoardSchema
         DECLARE
           value text;
           update text;
+          old_value_names jsonb;
+          new_value_names jsonb;
         BEGIN
           IF p_options->>'aggregation_function' IS NULL THEN
             RAISE EXCEPTION '"aggregation_function" key is missing in options.';
           END IF;
+
+          -- Reduce value names to the second one which is the actual value we need to consider for the update
+          old_value_names := (format('[%%I]', COALESCE(p_old_values->>1, '')))::jsonb;
+          new_value_names := (format('[%%I]', COALESCE(p_new_values->>1, '')))::jsonb;
 
           -- Value depends on action
           IF p_action = 'REMOVE' THEN
@@ -1212,12 +1218,12 @@ class HoardSchema
             p_foreign_conditions,
 
             p_operation,
-            (format('[%%s]', p_old_values->>1))::jsonb,
+            old_value_names,
             p_old_foreign_key,
             p_old_relevant,
             p_old_condition,
             p_old_refresh_query,
-            (format('[%%s]', p_new_values->>1))::jsonb,
+            new_value_names,
             p_new_foreign_key,
             p_new_relevant,
             p_new_condition,
