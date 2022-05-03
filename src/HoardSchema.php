@@ -1179,8 +1179,8 @@ class HoardSchema
           END IF;
 
           -- Reduce value names to the second one which is the actual value we need to consider for the update
-          old_value_names := (format('[%%I]', COALESCE(p_old_values->>1, '')))::jsonb;
-          new_value_names := (format('[%%I]', COALESCE(p_new_values->>1, '')))::jsonb;
+          old_value_names := (format('["%%s"]', COALESCE(p_old_values->>1, '')))::jsonb;
+          new_value_names := (format('["%%s"]', COALESCE(p_new_values->>1, '')))::jsonb;
 
           -- Value depends on action
           IF p_action = 'REMOVE' THEN
