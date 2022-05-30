@@ -103,25 +103,41 @@ class HoardSchema
    * Update the cache table for a given table name.
    *
    * @param  string  $tableName
-   * @param  string  $groupName
+   * @param  string  $cacheTableGroup
    * @param  \Closure  $callback
    * @param  ?string  $primaryKeyName
    */
   public static function table(
     string $tableName,
-    string $groupName,
+    string $cacheTableGroup,
     \Closure $callback,
     ?string $primaryKeyName = 'id'
   ) {
-    $cacheTableName = static::getCacheTableName($tableName, $groupName);
+    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup);
 
-    return Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $groupName, $primaryKeyName, $callback) {
+    return Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $primaryKeyName, $callback) {
       $table->hoardContext([
-        'tableName' => $tableName, 'groupName' => $groupName, 'primaryKeyName' => $primaryKeyName
+        'tableName' => $tableName, 'cacheTableGroup' => $cacheTableGroup, 'primaryKeyName' => $primaryKeyName
       ]);
 
       $callback($table);
     });
+
+    // Refresh table afterwards
+    DB::statement(
+      sprintf(
+        "
+        DO $$
+          BEGIN
+            PERFORM %1\$s.refresh(%2\$s, %3\$s);
+          END;
+        $$ LANGUAGE PLPGSQL;
+      ",
+        HoardSchema::$cacheSchema,
+        DB::getPdo()->quote('public'),
+        DB::getPdo()->quote($tableName)
+      )
+    );
   }
 
   /**
@@ -2322,7 +2338,11 @@ class HoardSchema
               EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
             END IF;
 
-            RETURN NEW;
+            IF TG_OP = 'DELETE' THEN
+              RETURN OLD;
+            ELSE
+              RETURN NEW;
+            END IF;
           END;
         PLPGSQL,
         HoardSchema::$cacheSchema,
@@ -2351,7 +2371,11 @@ class HoardSchema
                 PERFORM %1\$s.create_triggers('hoard', NEW.foreign_cache_table_name);
               END IF;
 
-              RETURN NEW;
+              IF TG_OP = 'DELETE' THEN
+                RETURN OLD;
+              ELSE
+                RETURN NEW;
+              END IF;
             END;
           PLPGSQL,
         HoardSchema::$cacheSchema,
