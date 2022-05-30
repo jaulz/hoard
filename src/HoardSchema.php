@@ -2332,10 +2332,12 @@ class HoardSchema
 
             IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
               EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_table_name));
+              RAISE NOTICE 'hoard.prepare: dropped view (cache_view_name=%)', hoard.get_cache_view_name(OLD.foreign_table_name);
             END IF;
 
             IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
               EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
+              RAISE NOTICE 'hoard.prepare: dropped view (cache_view_name=%)', hoard.get_cache_view_name(NEW.foreign_table_name);
             END IF;
 
             IF TG_OP = 'DELETE' THEN
