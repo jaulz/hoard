@@ -115,7 +115,7 @@ class HoardSchema
   ) {
     $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup);
 
-    return Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $primaryKeyName, $callback) {
+    Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $primaryKeyName, $callback) {
       $table->hoardContext([
         'tableName' => $tableName, 'cacheTableGroup' => $cacheTableGroup, 'primaryKeyName' => $primaryKeyName
       ]);
