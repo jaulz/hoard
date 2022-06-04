@@ -101,14 +101,17 @@ class HoardDefinition
   }
 
   /**
-   * Set the key names:
-   * $keyName is related to the table that is the basis for the cache calculation (i.e. where the COUNT or MAX is applied to).
-   * $foreignKeyName is related to the table where the cache will be stored.
+   * Set the key names where $foreignKeyName is referring to the table where the cache will be stored and 
+   * $keyName is referring to the table that is the basis for the cache calculation (e.g. where the COUNT 
+   * or MAX is applied to) and $keyName is referring to the table where the cache
+   * will be stored.
    * 
    * These are the typical use cases:
-   * - The name of the key in the table is different (e.g. name, or code) and then you would need to call "->via('country_code', 'code')".
-   * - For polymorphic relations where you cache something into the pivot table and hence another condition must be applied 
-   *  (i.e. the type of the polymorphism) and then you would need to call "->via('id', 'commentable_id', [ 'commentable_type' => Post::class ]])
+   * - The name of the key in the table is different (e.g. name, or code) and then you would need to call 
+   *   "->via('country_code', 'code')".
+   * - For polymorphic relations where you cache something into the pivot table and hence another condition 
+   *   must be applied (i.e. the type of the polymorphism) and then you would need to call 
+   *   "->via('id', 'commentable_id', [ 'commentable_type' => Post::class ]])".
    *
    * @param  string  $foreignKeyName
    * @param  ?string  $keyName

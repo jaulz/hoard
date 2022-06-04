@@ -12,12 +12,14 @@ use Illuminate\Support\Str;
 
 class HoardScope implements Scope
 {
-  protected ?Closure $implementation = null;
+  protected ?Closure $apply = null;
+  protected ?Closure $applyCrossJoin = null;
   protected ?string $alias = null;
 
-  public function __construct(?Closure $implementation = null, ?string $alias = null)
+  public function __construct(?Closure $apply = null, ?Closure $applyCrossJoin = null, ?string $alias = null)
   {
-    $this->implementation = $implementation;
+    $this->apply = $apply;
+    $this->applyCrossJoin = $applyCrossJoin;
     $this->alias = $alias;
   }
 
@@ -29,8 +31,11 @@ class HoardScope implements Scope
    */
   public function apply(Builder $query, Model $model)
   {
-    // Since we will use "addSelect" later on we need to ensure that we select all fields
-    $query->select('*');
+    // Allow custom scopes to be applied, e.g. "$query->select('*')" if necessary
+    $apply = $this->apply;
+    if ($apply instanceof Closure) {
+      $apply($query);
+    }
 
     // Prepare new select that will be used as a lateral cross join
     $keyName = $model->getKeyName();
@@ -42,9 +47,9 @@ class HoardScope implements Scope
     )->select('*');
 
     // Allow custom scopes to be applied
-      $implementation = $this->implementation;
-    if ($implementation instanceof Closure) {
-      $implementation($crossJoinQuery);
+    $applyCrossJoin = $this->applyCrossJoin;
+    if ($applyCrossJoin instanceof Closure) {
+      $applyCrossJoin($crossJoinQuery);
     }
 
     // Eventually use the prepared select and extend the actual query
