@@ -24,23 +24,6 @@ class HoardSchema
   static public $cacheViewNameSuffix = '';
 
   /**
-   * Create all required tables, functions etc.
-   */
-  public static function init()
-  {
-    $statements = [
-      sprintf(
-        "CREATE SCHEMA IF NOT EXISTS %1\$s;",
-        HoardSchema::$cacheSchema
-      ),
-    ];
-
-    collect($statements)->each(function ($statement) {
-      DB::statement($statement);
-    });
-  }
-
-  /**
    * Create the cache table for a given table name.
    *
    * @param  string  $tableName
@@ -1467,7 +1450,7 @@ class HoardSchema
                 IF %1\$s.exists_function('%1\$s', concat_query_function_name) THEN
                   EXECUTE format(
                     'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
-                    refresh_query_function_name,
+                    concat_query_function_name,
                     principal_schema_name,
                     principal_table_name,
                     primary_key_name,

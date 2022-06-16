@@ -101,8 +101,6 @@ class AcceptanceTestCase extends TestCase
             $table->timestampsTz();
         });
 
-        HoardSchema::init();
-
         HoardSchema::create('posts', 'default', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
             $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id', [
