@@ -1,6 +1,7 @@
 <?php
 namespace Tests\Acceptance\Models;
 
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Jaulz\Hoard\Traits\IsHoardableTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -15,6 +16,8 @@ class Comment extends Model
     {
         parent::boot();
 
-        static::addGlobalScope(new HoardScope());
+        static::addGlobalScope(new HoardScope(function (Builder $builder) {
+            $builder->select('*');
+        }));
     }
 }

@@ -277,7 +277,7 @@ class AcceptanceTestCase extends TestCase
 
     public function refresh($model)
     {
-        return $model->forceRefresh();
+        return $model->query()->find($model->{$model->getKeyName()});
     }
 
     public function testCopy()

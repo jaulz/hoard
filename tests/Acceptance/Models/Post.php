@@ -2,23 +2,24 @@
 
 namespace Tests\Acceptance\Models;
 
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Jaulz\Hoard\Traits\IsHoardableTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Jaulz\Hoard\Scopes\HoardScope;
-use Tests\Acceptance\Models\Traits\IsRefreshableTrait;
 
 class Post extends Model
 {
     use IsHoardableTrait;
-    use IsRefreshableTrait;
     use SoftDeletes;
 
     public static function boot()
     {
         parent::boot();
 
-        static::addGlobalScope(new HoardScope());
+        static::addGlobalScope(new HoardScope(function (Builder $builder) {
+            $builder->select('*');
+        }));
     }
 
     public function user()

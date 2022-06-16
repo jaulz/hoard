@@ -2,15 +2,14 @@
 
 namespace Tests\Acceptance\Models;
 
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Jaulz\Hoard\Scopes\HoardScope;
 use Jaulz\Hoard\Traits\IsHoardableTrait;
-use Tests\Acceptance\Models\Traits\IsRefreshableTrait;
 
 class User extends Model
 {
     use IsHoardableTrait;
-    use IsRefreshableTrait;
 
     /**
      * The attributes that should be cast to native types.
@@ -33,7 +32,9 @@ class User extends Model
     {
         parent::boot();
 
-        static::addGlobalScope(new HoardScope());
+        static::addGlobalScope(new HoardScope(function (Builder $builder) {
+            $builder->select('*');
+        }));
     }
 
     public function posts()

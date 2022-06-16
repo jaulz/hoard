@@ -12,7 +12,7 @@ return new class extends Migration
    */
   public function up()
   {
-    DB::statement('CREATE SCHEMA hoard;');
+    DB::statement('CREATE SCHEMA IF NOT EXISTS hoard;');
   }
 
   /**
@@ -22,6 +22,6 @@ return new class extends Migration
    */
   public function down()
   {
-    DB::statement('DROP SCHEMA hoard CASCADE;');
+    DB::statement('DROP SCHEMA IF EXISTS hoard CASCADE;');
   }
 };
