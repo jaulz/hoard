@@ -1449,16 +1449,10 @@ class HoardSchema
                 concat_query_function_name = lower(format('concat_%%s_refresh_queries', aggregation_function));
                 IF %1\$s.exists_function('%1\$s', concat_query_function_name) THEN
                   EXECUTE format(
-                    'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
+                    'SELECT %1\$s.%%s(%%L, %%L)',
                     concat_query_function_name,
-                    schema_name,
-                    table_name,
-                    primary_key_name,
-                    key_name,
-                    value_names,
-                    options,
-                    foreign_primary_key,
-                    conditions
+                    existing_refresh_query,
+                    refresh_query
                   ) INTO refresh_query;
                 ELSE
                   refresh_query := format('%%s((%%s), (%%s))', aggregation_function, existing_refresh_query, refresh_query);

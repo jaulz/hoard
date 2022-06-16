@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Jaulz\Hoard\Enums\HoardAggregationFunctionEnum;
 use Jaulz\Hoard\HoardSchema;
 use Jaulz\Hoard\HoardServiceProvider;
 use Orchestra\Testbench\Concerns\CreatesApplication;
@@ -103,36 +104,44 @@ class AcceptanceTestCase extends TestCase
 
         HoardSchema::create('posts', 'default', function (Blueprint $table) {
             $table->integer('comments_count')->default(0)->nullable();
-            $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id', [
+            $table->hoard('comments_count')->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id', [
                 ['deleted_at', 'IS', null]
             ]);
 
             $table->jsonb('comments_ids')->default()->nullable();
-            $table->hoard('comments_ids')->aggregate('comments', 'PUSH', 'id')->options([
+            $table->hoard('comments_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
                 'type' => 'string'
             ])->withoutSoftDeletes();
 
             $table->jsonb('comments_numeric_ids')->default()->nullable();
-            $table->hoard('comments_numeric_ids')->aggregate('comments',  'PUSH', 'id')->withoutSoftDeletes()->options([
+            $table->hoard('comments_numeric_ids')->aggregate('comments',  HoardAggregationFunctionEnum::push(), 'id')->withoutSoftDeletes()->options([
                 'type' => 'number'
             ]);
 
+            $table->jsonb('comments_duplicate_ids')->default()->nullable();
+            $table->hoard('comments_duplicate_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
+                'type' => 'string'
+            ])->withoutSoftDeletes();
+            $table->hoard('comments_duplicate_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
+                'type' => 'string'
+            ])->withoutSoftDeletes();
+
             $table->integer('tags_count')->default(0)->nullable();
-            $table->hoard('tags_count')->aggregate('taggables', 'COUNT', 'id')->viaMorph('taggable', Post::class);
+            $table->hoard('tags_count')->aggregate('taggables', HoardAggregationFunctionEnum::count(), 'id')->viaMorph('taggable', Post::class);
 
             $table->integer('important_tags_count')->default(0)->nullable();
-            $table->hoard('important_tags_count')->aggregate('taggables', 'COUNT', 'id',  [
+            $table->hoard('important_tags_count')->aggregate('taggables', HoardAggregationFunctionEnum::count(), 'id',  [
                 ['weight', '>', 5],
             ])->viaMorph('taggable', Post::class);
 
             $table->integer('images_count')->default(0)->nullable();
-            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id', [])->viaMorph('imageable', Post::class);
+            $table->hoard('images_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id', [])->viaMorph('imageable', Post::class);
 
-            $table->hoard('last_commented_at')->aggregate('comments', 'MAX', 'created_at')->withoutSoftDeletes();
+            $table->hoard('last_commented_at')->aggregate('comments', HoardAggregationFunctionEnum::max(), 'created_at')->withoutSoftDeletes();
             $table->timestamp('first_commented_at')->nullable();
 
             $table->timestamp('last_commented_at')->nullable();
-            $table->hoard('first_commented_at')->aggregate('comments', 'MIN', 'created_at')->withoutSoftDeletes();
+            $table->hoard('first_commented_at')->aggregate('comments', HoardAggregationFunctionEnum::min(), 'created_at')->withoutSoftDeletes();
         });
 
         HoardSchema::create('users', 'default', function (Blueprint $table) {
@@ -140,28 +149,28 @@ class AcceptanceTestCase extends TestCase
             $table->hoard('copied_created_at')->aggregate('users', 'COPY', 'created_at')->viaOwn();
 
             $table->integer('comments_count')->default(0)->nullable();
-            $table->hoard('comments_count')->aggregate('comments', 'COUNT', 'id',  [
+            $table->hoard('comments_count')->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id',  [
                 ['deleted_at', 'IS', null]
             ]);
 
             $table->integer('posts_count')->default(0)->nullable();
-            $table->hoard('posts_count')->aggregate('posts', 'COUNT', 'id', [
+            $table->hoard('posts_count')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id', [
                 ['deleted_at', 'IS', null]
             ]);
 
             $table->integer('posts_count_explicit')->default(0)->nullable();
-            $table->hoard('posts_count_explicit')->aggregate('posts', 'COUNT', 'id', [
+            $table->hoard('posts_count_explicit')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id', [
                 ['deleted_at', 'IS', null]
             ]);
 
             $table->integer('posts_count_conditional')->default(0)->nullable();
-            $table->hoard('posts_count_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND deleted_at IS NULL');
+            $table->hoard('posts_count_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  'visible = true AND deleted_at IS NULL');
 
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
-            $table->hoard('posts_count_complex_conditional')->aggregate('posts', 'COUNT', 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
+            $table->hoard('posts_count_complex_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
 
             $table->integer('images_count')->default(0)->nullable();
-            $table->hoard('images_count')->aggregate('images', 'COUNT', 'id',  [
+            $table->hoard('images_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id',  [
                 'imageable_type' => User::class,
             ])->viaMorph('imageable', User::class, 'sequence');
 
@@ -174,12 +183,12 @@ class AcceptanceTestCase extends TestCase
             $table->hoard('posts_count_plus_one')->manual();
 
             $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
-            $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', 'SUM', 'weight', [
+            $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', HoardAggregationFunctionEnum::sum(), 'weight', [
                 ['deleted_at', 'IS', null]
             ])->asynchronous();
 
             $table->jsonb('grouped_posts_count_by_weekday')->default('{}');
-            $table->hoard('grouped_posts_count_by_weekday')->aggregate('posts', 'GROUP', [
+            $table->hoard('grouped_posts_count_by_weekday')->aggregate('posts', HoardAggregationFunctionEnum::group(), [
                 "extract(isodow from created_at) || '_suffix'",
                 'id'
             ])->withoutSoftDeletes()->options([
@@ -187,7 +196,7 @@ class AcceptanceTestCase extends TestCase
             ]);
 
             $table->jsonb('grouped_posts_weight_by_workingday')->default('{}');
-            $table->hoard('grouped_posts_weight_by_workingday')->aggregate('posts', 'GROUP', [
+            $table->hoard('grouped_posts_weight_by_workingday')->aggregate('posts', HoardAggregationFunctionEnum::group(), [
                 'extract(isodow from created_at)',
                 'weight'
             ])->withoutSoftDeletes()->options([
@@ -198,25 +207,25 @@ class AcceptanceTestCase extends TestCase
 
         HoardSchema::create('taggables', 'default', function (Blueprint $table) {
             $table->integer('cached_taggable_count')->default(0)->nullable();
-            $table->hoard('cached_taggable_count')->aggregate('posts', 'COUNT', 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
-            $table->hoard('cached_taggable_count')->aggregate('images', 'COUNT', 'id')->viaMorphPivot('taggable', Image::class);
-            $table->hoard('cached_taggable_count')->aggregate('users', 'COUNT', 'sequence', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
+            $table->hoard('cached_taggable_count')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
+            $table->hoard('cached_taggable_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id')->viaMorphPivot('taggable', Image::class);
+            $table->hoard('cached_taggable_count')->aggregate('users', HoardAggregationFunctionEnum::count(), 'sequence', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
 
             $table->timestamp('taggable_created_at')->nullable();
-            $table->hoard('taggable_created_at')->aggregate('users', 'MAX', 'created_at', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
-            $table->hoard('taggable_created_at')->aggregate('images', 'MAX', 'created_at')->viaMorphPivot('taggable', Image::class);
-            $table->hoard('taggable_created_at')->aggregate('posts', 'MAX', 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
+            $table->hoard('taggable_created_at')->aggregate('users', HoardAggregationFunctionEnum::max(), 'created_at', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
+            $table->hoard('taggable_created_at')->aggregate('images', HoardAggregationFunctionEnum::max(), 'created_at')->viaMorphPivot('taggable', Image::class);
+            $table->hoard('taggable_created_at')->aggregate('posts', HoardAggregationFunctionEnum::max(), 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
         });
 
         HoardSchema::create('tags', 'default', function (Blueprint $table) {
             $table->integer('taggables_count')->default(0)->nullable();
-            $table->hoard('taggables_count')->aggregate('taggables', 'SUM', 'cached_taggable_count', null, null, 'default');
+            $table->hoard('taggables_count')->aggregate('taggables', HoardAggregationFunctionEnum::sum(), 'cached_taggable_count', null, null, 'default');
 
             $table->timestamp('first_created_at')->nullable();
-            $table->hoard('first_created_at')->aggregate('taggables', 'MIN', 'taggable_created_at', null, null, 'default');
+            $table->hoard('first_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::min(), 'taggable_created_at', null, null, 'default');
 
             $table->timestamp('last_created_at')->nullable();
-            $table->hoard('last_created_at')->aggregate('taggables', 'MAX', 'taggable_created_at', null, null, 'default');
+            $table->hoard('last_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::max(), 'taggable_created_at', null, null, 'default');
         });
     }
 
@@ -771,6 +780,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(1, $this->refresh($post)->comments_count);
         $this->assertEquals('["1"]', $this->refresh($post)->comments_ids);
         $this->assertEquals('[1]', $this->refresh($post)->comments_numeric_ids);
+        $this->assertEquals('["1", "1"]', $this->refresh($post)->comments_duplicate_ids);
         $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
 
         $secondComment = new Comment();
@@ -781,6 +791,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(2, $this->refresh($post)->comments_count);
         $this->assertEquals('["1", "2"]', $this->refresh($post)->comments_ids);
         $this->assertEquals('[1, 2]', $this->refresh($post)->comments_numeric_ids);
+        $this->assertEquals('["1", "1", "2", "2"]', $this->refresh($post)->comments_duplicate_ids);
         $this->assertEquals(2, $this->refresh($this->data['post'])->comments_count);
 
         $comment->delete();
@@ -788,6 +799,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(1, $this->refresh($post)->comments_count);
         $this->assertEquals('["2"]', $this->refresh($post)->comments_ids);
         $this->assertEquals('[2]', $this->refresh($post)->comments_numeric_ids);
+        $this->assertEquals('["2", "2"]', $this->refresh($post)->comments_duplicate_ids);
         $this->assertEquals(1, $this->refresh($this->data['post'])->comments_count);
 
         $secondComment->delete();
@@ -795,6 +807,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(0, $this->refresh($post)->comments_count);
         $this->assertEquals('[]', $this->refresh($post)->comments_ids);
         $this->assertEquals('[]', $this->refresh($post)->comments_numeric_ids);
+        $this->assertEquals('[]', $this->refresh($post)->comments_duplicate_ids);
         $this->assertEquals(0, $this->refresh($this->data['post'])->comments_count);
     }
 
