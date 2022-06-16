@@ -1457,7 +1457,7 @@ class HoardSchema
                     key_name,
                     value_names,
                     options,
-                    foreign_key,
+                    foreign_primary_key,
                     conditions
                   ) INTO refresh_query;
                 ELSE
