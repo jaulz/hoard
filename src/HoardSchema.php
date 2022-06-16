@@ -1451,8 +1451,8 @@ class HoardSchema
                   EXECUTE format(
                     'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
                     concat_query_function_name,
-                    principal_schema_name,
-                    principal_table_name,
+                    schema_name,
+                    table_name,
                     primary_key_name,
                     key_name,
                     value_names,
