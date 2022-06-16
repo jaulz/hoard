@@ -11,7 +11,8 @@
     ],
     "require": {
         "php": "^7.3|^8.0",
-        "laravel/framework": "^9.2"
+        "laravel/framework": "^9.2",
+        "spatie/enum": "^3.13"
     },
     "require-dev": {
         "mockery/mockery": "^1.3.0",
