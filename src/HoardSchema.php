@@ -1058,7 +1058,7 @@ class HoardSchema
                 );
               ELSIF type = 'json' THEN
                 RETURN format(
-                  'array_to_json(%1\$s.array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(''%%s''))))', 
+                  'array_to_json(%1\$s.array_diff(array(select jsonb_array_elements_text(%%s)), array(select jsonb_array_elements_text(%%L))))', 
                   p_foreign_aggregation_name, 
                   p_old_values->>0
                 );
@@ -1082,7 +1082,7 @@ class HoardSchema
                 );
               ELSIF type = 'json' THEN
                 RETURN format(
-                  '%%s::jsonb || ''%%s''::jsonb', 
+                  '%%s::jsonb || %%L::jsonb', 
                   p_foreign_aggregation_name, 
                   p_new_values->>0
                 );
@@ -1203,7 +1203,7 @@ class HoardSchema
 
             -- Adjust foreign_aggregation_name and pass the deep path instead
             format(
-              'coalesce(%%I->>''%%s'', %%L)::float',
+              'coalesce(%%I->>%%L, %%L)::float',
               p_foreign_aggregation_name,
               value,
               0
@@ -1340,7 +1340,7 @@ class HoardSchema
           END LOOP;
           
           -- Run update if required
-          query := format('INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (''%%s'' %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
+          query := format('INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (%%L %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
           RAISE NOTICE '%1\$s.upsert_cache: execute (query=%%)', query;
           EXECUTE query;
         END;
@@ -1380,7 +1380,7 @@ class HoardSchema
           -- Collect all updates in a JSON map
           FOR trigger IN
             EXECUTE format(
-              'SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_schema_name = ''%%s'' AND %1\$s.triggers.foreign_table_name = ''%%s'' AND %1\$s.triggers.table_name <> '''' ORDER BY foreign_cache_table_name', 
+              'SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_schema_name = %%L AND %1\$s.triggers.foreign_table_name = %%L AND %1\$s.triggers.table_name <> '''' ORDER BY foreign_cache_table_name', 
               p_foreign_schema_name, 
               p_foreign_table_name
             )
@@ -1421,7 +1421,7 @@ class HoardSchema
 
             -- Check if foreign conditions are met
             EXECUTE format(
-              'SELECT true FROM %%s.%%s WHERE %%s = ''%%s'' AND %%s;',
+              'SELECT true FROM %%s.%%s WHERE %%s = %%L AND %%s;',
               p_foreign_schema_name, 
               %1\$s.get_table_name(p_foreign_table_name), 
               foreign_primary_key_name, 
@@ -1727,11 +1727,11 @@ class HoardSchema
 
           -- Prepare conditions
           IF p_foreign_table_name = p_foreign_cache_table_name THEN
-            old_condition := format('%%s = ''%%s'' AND ( %%s )', p_foreign_key_name, p_old_foreign_key, p_foreign_conditions);
-            new_condition := format('%%s = ''%%s'' AND ( %%s )', p_foreign_key_name, p_new_foreign_key, p_foreign_conditions);
+            old_condition := format('%%s = %%L AND ( %%s )', p_foreign_key_name, p_old_foreign_key, p_foreign_conditions);
+            new_condition := format('%%s = %%L AND ( %%s )', p_foreign_key_name, p_new_foreign_key, p_foreign_conditions);
           ELSE 
             old_condition := format(
-              '%%s IN (SELECT %%s FROM %%s WHERE %%s = ''%%s'' AND ( %%s ))', 
+              '%%s IN (SELECT %%s FROM %%s WHERE %%s = %%L AND ( %%s ))', 
               p_foreign_cache_primary_key_name, 
               p_foreign_primary_key_name, 
               p_foreign_table_name, 
@@ -1740,7 +1740,7 @@ class HoardSchema
               p_foreign_conditions
             );
             new_condition := format(
-              '%%s IN (SELECT %%s FROM %%s WHERE %%s = ''%%s'' AND ( %%s ))', 
+              '%%s IN (SELECT %%s FROM %%s WHERE %%s = %%L AND ( %%s ))', 
               p_foreign_cache_primary_key_name, 
               p_foreign_primary_key_name, 
               p_foreign_table_name, 
@@ -2218,7 +2218,7 @@ class HoardSchema
 
                 -- During deletion we exclude ourself from the update conditions
                 EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
-                conditions := format('%%s AND %%s <> ''%%s''', conditions, primary_key_name, primary_key);
+                conditions := format('%%s AND %%s <> %%L', conditions, primary_key_name, primary_key);
             
                 -- Run update if required
                 IF asynchronous = false THEN
