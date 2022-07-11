@@ -222,12 +222,16 @@ class HoardSchema
   /**
    * Transform an array of conditions into a where condition as a simple string.
    *
-   * @param  array $conditions
+   * @param  array|Expression $conditions
    * @return string
    */
   public static function prepareConditions(
-    array $conditions
+    array|Expression $conditions
   ) {
+    if ($conditions instanceof Expression) {
+      return $conditions->getValue();
+    }
+
     return collect($conditions)->mapWithKeys(function ($condition, $key) {
       $operator = '';
       $value = $condition;
