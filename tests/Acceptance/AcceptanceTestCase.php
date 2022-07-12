@@ -22,8 +22,8 @@ use Tests\Acceptance\Models\User;
 
 class AcceptanceTestCase extends TestCase
 {
+    use DatabaseMigrations;
     use RefreshDatabase;
-    // use DatabaseMigrations;
 
     protected $data = [];
 
@@ -164,10 +164,10 @@ class AcceptanceTestCase extends TestCase
             ]);
 
             $table->integer('posts_count_conditional')->default(0)->nullable();
-            $table->hoard('posts_count_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  'visible = true AND deleted_at IS NULL');
+            $table->hoard('posts_count_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "deleted_at" IS NULL');
 
             $table->integer('posts_count_complex_conditional')->default(0)->nullable();
-            $table->hoard('posts_count_complex_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  'visible = true AND weight > 5 AND deleted_at IS NULL');
+            $table->hoard('posts_count_complex_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "weight" > 5 AND "deleted_at" IS NULL');
 
             $table->integer('images_count')->default(0)->nullable();
             $table->hoard('images_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id',  [
@@ -189,7 +189,7 @@ class AcceptanceTestCase extends TestCase
 
             $table->jsonb('grouped_posts_count_by_weekday')->default('{}');
             $table->hoard('grouped_posts_count_by_weekday')->aggregate('posts', HoardAggregationFunctionEnum::group(), [
-                "extract(isodow from created_at) || '_suffix'",
+                'extract(isodow from "created_at") || \'_suffix\'',
                 'id'
             ])->withoutSoftDeletes()->options([
                 'aggregation_function' => 'count',
@@ -197,11 +197,11 @@ class AcceptanceTestCase extends TestCase
 
             $table->jsonb('grouped_posts_weight_by_workingday')->default('{}');
             $table->hoard('grouped_posts_weight_by_workingday')->aggregate('posts', HoardAggregationFunctionEnum::group(), [
-                'extract(isodow from created_at)',
+                'extract(isodow from "created_at")',
                 'weight'
             ])->withoutSoftDeletes()->options([
                 'aggregation_function' => 'sum',
-                'condition' => 'key::int >= 1 AND key::int <= 5'
+                'condition' => '"key"::int >= 1 AND "key"::int <= 5'
             ]);
         }, 'sequence');
 
@@ -368,7 +368,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(19, $this->refresh($user)->asynchronous_posts_weight_sum);
 
         $post->delete();
-
+        
         $this->assertEquals(2, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
             ->whereNull('canceled_at')

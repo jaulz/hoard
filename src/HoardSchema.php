@@ -442,6 +442,30 @@ class HoardSchema
         END;
       PLPGSQL), 'PLPGSQL'),
 
+      HoardSchema::createFunction('exists_table_column', [
+        'p_schema_name' =>  'text', 'p_table_name' =>  'text', 'p_column_name' =>  'text'
+      ], 'bool', sprintf(<<<PLPGSQL
+        DECLARE
+        BEGIN
+          IF EXISTS(
+            SELECT 
+                true 
+              FROM information_schema.columns 
+              WHERE 
+                  table_schema = p_schema_name 
+                AND 
+                  table_name = p_table_name
+                AND 
+                  column_name = p_column_name
+            ) 
+          THEN
+            RETURN true;
+          ELSE
+            RETURN false;
+          END IF;
+        END;
+      PLPGSQL), 'PLPGSQL'),
+
       HoardSchema::createFunction('set_row_value', [
         'p_element' =>  'anyelement', 'p_key' =>  'text', 'p_value' => 'text'
       ], 'anyelement', sprintf(<<<SQL
@@ -1982,7 +2006,15 @@ class HoardSchema
           RAISE NOTICE '-- %1\$s.after_trigger START';
 
           -- Log
-          RAISE NOTICE '%1\$s.after_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, trigger_table_name=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, trigger_table_name, OLD::text, NEW::text;
+          RAISE NOTICE '
+            %1\$s.after_trigger: start (
+              TG_OP=%%, 
+              TG_TABLE_NAME=%%, 
+              trigger_table_name=%%, 
+              OLD=%%, 
+              NEW=%%, 
+              TG_ARGV=%%
+            )', TG_OP, TG_TABLE_NAME, trigger_table_name, OLD::text, NEW::text, TG_ARGV::text;
 
           -- If this is the first row we need to create an entry for the new row in the cache table
           IF TG_OP = 'INSERT' AND NOT %1\$s.is_cache_table_name(TG_TABLE_NAME) THEN
@@ -1998,6 +2030,8 @@ class HoardSchema
                 %1\$s.triggers.table_name = TG_TABLE_NAME
               AND 
                 %1\$s.triggers.manual = false
+              AND 
+                (TG_ARGV[0] IS NULL OR %1\$s.triggers.id = TG_ARGV[0]::bigint)
           LOOP
             trigger_id := trigger.id;
             schema_name := trigger.schema_name;
@@ -2138,8 +2172,14 @@ class HoardSchema
             asynchronous boolean;
             processed_at timestamp with time zone DEFAULT null; 
           BEGIN
-            RAISE NOTICE '-- %1\$s.before_trigger START';
-            RAISE NOTICE '%1\$s.before_trigger: start (TG_OP=%%, TG_TABLE_NAME=%%, OLD=%%, NEW=%%)', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text;
+            RAISE NOTICE '
+              %1\$s.before_trigger: start (
+                TG_OP=%%, 
+                TG_TABLE_NAME=%%, 
+                OLD=%%, 
+                NEW=%%, 
+                TG_ARGV=%%
+              )', TG_OP, TG_TABLE_NAME, OLD::text, NEW::text, TG_ARGV::text;
 
             -- On DELETE we need to check the triggers before because otherwise the join table will be deleted and we cannot check the conditions anymore
             IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
@@ -2162,6 +2202,8 @@ class HoardSchema
                     )
                   AND 
                     %1\$s.triggers.manual = false
+                  AND 
+                    (TG_ARGV[0] IS NULL OR %1\$s.triggers.id = TG_ARGV[0]::bigint)
               LOOP
                 CONTINUE WHEN TG_OP = 'DELETE' AND trigger.lazy = true;
 
@@ -2276,30 +2318,108 @@ class HoardSchema
       ), 'PLPGSQL'),
 
       HoardSchema::createFunction('create_triggers', [
-        'schema_name' => 'text',
-        'table_name' => 'text',
+        'p_trigger_name' => 'text',
+        'p_schema_name' => 'text',
+        'p_table_name' => 'text',
+        'p_dependency_names' => 'jsonb',
       ], 'void', sprintf(
         <<<PLPGSQL
+          DECLARE
+            before_trigger_name text;
+            after_trigger_name text;
+            column_names text[];
+            column_name text;
+            valid_column_names text[] DEFAULT '{}';
           BEGIN
-            RAISE NOTICE '%1\$s.create_triggers: start (schema_name=%%, table_name=%%)', schema_name, table_name;
+            RAISE NOTICE '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%)', p_trigger_name, p_schema_name, p_table_name, p_dependency_names;
 
-            -- Create triggers for table
-            IF table_name <> '' AND NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_before') THEN
-              EXECUTE format('
-                  CREATE TRIGGER hoard_before
-                  BEFORE INSERT OR UPDATE OR DELETE ON %%s.%%s
-                  FOR EACH ROW 
-                  EXECUTE FUNCTION %1\$s.before_trigger()
-                ', schema_name, table_name);
+            -- Concatenate trigger names
+            before_trigger_name := 'hoard_before_update_' || p_trigger_name;
+            after_trigger_name := 'hoard_after_update_' || p_trigger_name;
+
+            -- Get column names and check if the table contains this column
+            column_names := array(SELECT jsonb_array_elements_text(p_dependency_names));
+            FOREACH column_name IN ARRAY column_names LOOP
+              IF %1\$s.exists_table_column(p_schema_name, p_table_name, column_name) THEN
+                valid_column_names := valid_column_names || column_name::text;
+              END IF;
+            END LOOP;
+
+            -- If none of the columns match the table, we don't need any update trigger
+            IF cardinality(valid_column_names) > 0 THEN
+              IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, before_trigger_name) THEN
+                EXECUTE format('
+                  CREATE TRIGGER %%s
+                    BEFORE UPDATE OF %%s
+                    ON %%s.%%s
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION %1\$s.before_trigger(%%L)
+                  ', before_trigger_name, array_to_string(valid_column_names, ','), p_schema_name, p_table_name, p_trigger_name);
+              END IF;
+
+              IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, after_trigger_name) THEN
+                EXECUTE format('
+                  CREATE TRIGGER %%s
+                    AFTER UPDATE OF %%s
+                    ON %%s.%%s
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION %1\$s.after_trigger(%%L)
+                  ', after_trigger_name, array_to_string(valid_column_names, ','), p_schema_name, p_table_name, p_trigger_name);
+              END IF;
             END IF;
 
-            IF table_name <> '' AND NOT %1\$s.exists_trigger(schema_name, table_name, 'hoard_after') THEN
+            -- Create create/delete triggers for table
+            IF p_table_name <> '' THEN
+              IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, 'hoard_before_create_or_delete') THEN
+                EXECUTE format('
+                  CREATE TRIGGER hoard_before_create_or_delete
+                    BEFORE INSERT OR DELETE 
+                    ON %%s.%%s
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION %1\$s.before_trigger()
+                  ', p_schema_name, p_table_name);
+              END IF;
+
+              IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, 'hoard_after_create_or_delete') THEN
+                EXECUTE format('
+                  CREATE TRIGGER hoard_after_create_or_delete
+                    AFTER INSERT OR DELETE 
+                    ON %%s.%%s
+                    FOR EACH ROW 
+                    EXECUTE FUNCTION %1\$s.after_trigger()
+                  ', p_schema_name, p_table_name);
+              END IF;
+            END IF;
+          END;
+          PLPGSQL,
+        HoardSchema::$cacheSchema,
+      ), 'PLPGSQL'),
+
+      HoardSchema::createFunction('drop_triggers', [
+        'p_trigger_name' => 'text',
+        'p_schema_name' => 'text',
+        'p_table_name' => 'text',
+      ], 'void', sprintf(
+        <<<PLPGSQL
+          DECLARE
+            before_trigger_name text;
+            after_trigger_name text;
+          BEGIN
+            RAISE NOTICE '%1\$s.drop_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%)', p_trigger_name, p_schema_name, p_table_name;
+
+            -- Concatenate trigger names
+            before_trigger_name := 'hoard_before_' || p_trigger_name;
+            after_trigger_name := 'hoard_after_' || p_trigger_name;
+
+            -- Drop triggers for table
+            IF p_table_name <> '' THEN
               EXECUTE format('
-                CREATE TRIGGER hoard_after
-                  AFTER INSERT OR UPDATE OR DELETE ON %%s.%%s
-                  FOR EACH ROW 
-                  EXECUTE FUNCTION %1\$s.after_trigger()
-                ', schema_name, table_name);
+                  DROP TRIGGER IF EXISTS %%s ON %%s.%%s
+                ', before_trigger_name, p_schema_name, p_table_name);
+
+              EXECUTE format('
+                  DROP TRIGGER IF EXISTS %%s ON %%s.%%s
+                ', after_trigger_name, p_schema_name, p_table_name);
             END IF;
           END;
           PLPGSQL,
@@ -2348,10 +2468,16 @@ class HoardSchema
                 PERFORM %1\$s.create_views(NEW.foreign_table_name);
               END IF;
 
+              IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN
+                PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.schema_name, NEW.table_name);
+                PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name);
+                PERFORM %1\$s.drop_triggers(NEW.id::text, '%1\$s', NEW.foreign_cache_table_name);
+              END IF;
+
               IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-                PERFORM %1\$s.create_triggers(NEW.schema_name, NEW.table_name);
-                PERFORM %1\$s.create_triggers(NEW.foreign_schema_name, NEW.foreign_table_name);
-                PERFORM %1\$s.create_triggers('hoard', NEW.foreign_cache_table_name);
+                PERFORM %1\$s.create_triggers(NEW.id::text, NEW.schema_name, NEW.table_name, NEW.dependency_names);
+                PERFORM %1\$s.create_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name, NEW.dependency_names);
+                PERFORM %1\$s.create_triggers(NEW.id::text, '%1\$s', NEW.foreign_cache_table_name, NEW.dependency_names);
               END IF;
 
               IF TG_OP = 'DELETE' THEN

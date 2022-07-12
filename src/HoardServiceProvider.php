@@ -95,6 +95,24 @@ class HoardServiceProvider extends ServiceProvider
       $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup, false);
       $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
 
+      // Extract dependencies from key, values and conditions
+      // [^\\\\]((\")|('))(?(2)([^\"]|\\\")*|([^']|\\')*)[^\\\\]\\1|([a-zA-Z_$][a-zA-Z_$0-9]*)
+      preg_match_all("/'[^']*'|\b([a-zA-Z_$][a-zA-Z_$0-9]*)\b/m", 
+        implode(' ', [$keyName, ...$valueNames, $conditions])
+      , $matches);
+      $dependencyNames = collect([...$matches[1]])
+      ->map(fn($dependencyName) => Str::lower($dependencyName))
+      ->unique()
+      ->filter(fn ($dependencyName) => !in_array($dependencyName, [
+        'is',
+        'not',
+        'null',
+        'true',
+        'false'
+      ]))
+      ->filter()
+      ->values()->all();
+
       return array_filter([
         ...HoardSchema::createGenericHelperFunctions(),
         ...HoardSchema::createSpecificHelperFunctions(),
@@ -148,7 +166,8 @@ class HoardServiceProvider extends ServiceProvider
               manual,
               schema_name,
               foreign_schema_name,
-              asynchronous
+              asynchronous,
+              dependency_names
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -169,7 +188,8 @@ class HoardServiceProvider extends ServiceProvider
               %18\$s,
               %19\$s,
               %20\$s,
-              %21\$s
+              %21\$s,
+              convert_from(decode(%22\$s, 'base64'), 'utf8')::jsonb
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = EXCLUDED.table_name, 
               key_name = EXCLUDED.key_name, 
@@ -190,7 +210,8 @@ class HoardServiceProvider extends ServiceProvider
               manual = EXCLUDED.manual, 
               schema_name = EXCLUDED.schema_name, 
               foreign_schema_name = EXCLUDED.foreign_schema_name, 
-              asynchronous = EXCLUDED.asynchronous;
+              asynchronous = EXCLUDED.asynchronous, 
+              dependency_names = EXCLUDED.dependency_names;
           ",
           HoardSchema::$cacheSchema,
           $this->quoteString($tableName),
@@ -213,6 +234,7 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($schemaName),
           $this->quoteString($foreignSchemaName),
           $asynchronous ? 'true' : 'false',
+          $this->quoteString(base64_encode(json_encode($dependencyNames))),
         ),
       ]);
     });
