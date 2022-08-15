@@ -28,7 +28,7 @@ return new class extends Migration
       $table->jsonb('value_names');
       $table->jsonb('options')->default('[]');
       $table->string('conditions');
-      $table->jsonb('dependency_names');
+      $table->jsonb('dependency_names')->default('[]');
 
       $table->string('foreign_schema_name');
       $table->string('foreign_table_name');

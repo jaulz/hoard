@@ -108,7 +108,7 @@ class AcceptanceTestCase extends TestCase
                 ['deleted_at', 'IS', null]
             ]);
 
-            $table->jsonb('comments_ids')->default()->nullable();
+            $table->array('comments_ids')->default()->nullable();
             $table->hoard('comments_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
                 'type' => 'string'
             ])->withoutSoftDeletes();
