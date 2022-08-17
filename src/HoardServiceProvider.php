@@ -113,37 +113,7 @@ class HoardServiceProvider extends ServiceProvider
       ->filter()
       ->values()->all();
 
-      return array_filter([
-        ...HoardSchema::createGenericHelperFunctions(),
-        ...HoardSchema::createSpecificHelperFunctions(),
-        ...HoardSchema::createAggregationFunctions(),
-        ...HoardSchema::createRefreshFunctions(),
-        ...HoardSchema::createProcessFunctions(),
-        ...HoardSchema::createUpdateFunctions(),
-        ...HoardSchema::createViewFunctions(),
-        ...HoardSchema::createTriggerFunctions(),
-
-        HoardSchema::execute(sprintf(
-          <<<PLPGSQL
-            BEGIN
-              IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_before') THEN
-                CREATE TRIGGER hoard_before
-                  BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
-                  FOR EACH ROW 
-                  EXECUTE FUNCTION %1\$s.prepare();
-              END IF;
-  
-              IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_after') THEN
-                CREATE TRIGGER hoard_after
-                  AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
-                  FOR EACH ROW 
-                  EXECUTE FUNCTION %1\$s.initialize();
-              END IF;
-            END;
-            PLPGSQL,
-          HoardSchema::$cacheSchema
-        )),
-
+      return [
         sprintf(
           "
             INSERT INTO %1\$s.triggers (
@@ -236,7 +206,7 @@ class HoardServiceProvider extends ServiceProvider
           $asynchronous ? 'true' : 'false',
           $this->quoteString(base64_encode(json_encode($dependencyNames))),
         ),
-      ]);
+      ];
     });
   }
 }

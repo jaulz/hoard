@@ -108,17 +108,17 @@ class AcceptanceTestCase extends TestCase
                 ['deleted_at', 'IS', null]
             ]);
 
-            $table->array('comments_ids')->default()->nullable();
+            $table->jsonb('comments_ids')->default('[]')->nullable();
             $table->hoard('comments_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
                 'type' => 'string'
             ])->withoutSoftDeletes();
 
-            $table->jsonb('comments_numeric_ids')->default()->nullable();
+            $table->jsonb('comments_numeric_ids')->default('[]')->nullable();
             $table->hoard('comments_numeric_ids')->aggregate('comments',  HoardAggregationFunctionEnum::push(), 'id')->withoutSoftDeletes()->options([
                 'type' => 'number'
             ]);
 
-            $table->jsonb('comments_duplicate_ids')->default()->nullable();
+            $table->jsonb('comments_duplicate_ids')->default('[]')->nullable();
             $table->hoard('comments_duplicate_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
                 'type' => 'string'
             ])->withoutSoftDeletes();

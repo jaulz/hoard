@@ -68,7 +68,44 @@ return new class extends Migration
       $table->index(['trigger_id', 'processed_at']);
     });
 
-    DB::statement('ALTER TABLE ' . HoardSchema::$cacheSchema . '.logs' . ' SET UNLOGGED;');
+    array_map(function (string $statement) {
+      DB::statement($statement);
+    }, [
+      // Make logs table more performant
+      sprintf('ALTER TABLE %1$s.logs' . ' SET UNLOGGED;', HoardSchema::$cacheSchema),
+
+      // Create required functions
+      ...HoardSchema::createGenericHelperFunctions(),
+      ...HoardSchema::createSpecificHelperFunctions(),
+      ...HoardSchema::createAggregationFunctions(),
+      ...HoardSchema::createRefreshFunctions(),
+      ...HoardSchema::createProcessFunctions(),
+      ...HoardSchema::createUpdateFunctions(),
+      ...HoardSchema::createViewFunctions(),
+      ...HoardSchema::createTriggerFunctions(),
+
+      // Create triggers on "triggers" table
+      HoardSchema::execute(sprintf(
+        <<<PLPGSQL
+          BEGIN
+            IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_before') THEN
+              CREATE TRIGGER hoard_before
+                BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
+                FOR EACH ROW 
+                EXECUTE FUNCTION %1\$s.prepare();
+            END IF;
+
+            IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_after') THEN
+              CREATE TRIGGER hoard_after
+                AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
+                FOR EACH ROW 
+                EXECUTE FUNCTION %1\$s.initialize();
+            END IF;
+          END;
+          PLPGSQL,
+        HoardSchema::$cacheSchema
+      )),
+    ]);
   }
 
   /**

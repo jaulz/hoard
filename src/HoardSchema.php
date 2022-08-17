@@ -289,11 +289,7 @@ class HoardSchema
   public static function execute(string $body, string $language = 'PLPGSQL')
   {
     return sprintf(
-      "
-        DO $$
-          %1\$s
-        $$ LANGUAGE %2\$s;
-      ",
+      "DO $$ %1\$s $$ LANGUAGE %2\$s;",
       $body,
       $language,
     );
