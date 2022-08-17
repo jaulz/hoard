@@ -2323,9 +2323,8 @@ class HoardSchema
           DECLARE
             before_trigger_name text;
             after_trigger_name text;
-            column_names text[];
             column_name text;
-            valid_column_names text[] DEFAULT '{}';
+            column_names jsonb DEFAULT '[]';
           BEGIN
             RAISE DEBUG '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%)', p_trigger_name, p_schema_name, p_table_name, p_dependency_names;
 
@@ -2334,15 +2333,15 @@ class HoardSchema
             after_trigger_name := 'hoard_after_update_' || p_trigger_name;
 
             -- Get column names and check if the table contains this column
-            column_names := array(SELECT jsonb_array_elements_text(p_dependency_names));
-            FOREACH column_name IN ARRAY column_names LOOP
+            -- TODO: check if we can remove this and move it completely to "prepare" hook
+            FOREACH column_name IN ARRAY array(SELECT jsonb_array_elements_text(p_dependency_names)) LOOP
               IF %1\$s.exists_table_column(p_schema_name, p_table_name, column_name) THEN
-                valid_column_names := valid_column_names || column_name::text;
+                column_names := column_names || format('["%%I"]', column_name::text)::jsonb;
               END IF;
             END LOOP;
 
             -- If none of the columns match the table, we don't need any update trigger
-            IF cardinality(valid_column_names) > 0 THEN
+            IF jsonb_array_length(column_names) > 0 THEN
               IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, before_trigger_name) THEN
                 EXECUTE format('
                   CREATE TRIGGER %%s
@@ -2350,7 +2349,7 @@ class HoardSchema
                     ON %%s.%%s
                     FOR EACH ROW 
                     EXECUTE FUNCTION %1\$s.before_trigger(%%L)
-                  ', before_trigger_name, array_to_string(valid_column_names, ','), p_schema_name, p_table_name, p_trigger_name);
+                  ', before_trigger_name, array_to_string(array(SELECT jsonb_array_elements_text(column_names)), ','), p_schema_name, p_table_name, p_trigger_name);
               END IF;
 
               IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, after_trigger_name) THEN
@@ -2360,7 +2359,7 @@ class HoardSchema
                     ON %%s.%%s
                     FOR EACH ROW 
                     EXECUTE FUNCTION %1\$s.after_trigger(%%L)
-                  ', after_trigger_name, array_to_string(valid_column_names, ','), p_schema_name, p_table_name, p_trigger_name);
+                  ', after_trigger_name, array_to_string(array(SELECT jsonb_array_elements_text(column_names)), ','), p_schema_name, p_table_name, p_trigger_name);
               END IF;
             END IF;
 
@@ -2424,6 +2423,9 @@ class HoardSchema
 
       HoardSchema::createFunction('prepare', [], 'trigger', sprintf(
         <<<PLPGSQL
+          DECLARE
+            dependency_name text;
+            valid_dependency_names jsonb DEFAULT '[]';
           BEGIN
             RAISE DEBUG '%1\$s.prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
@@ -2435,6 +2437,15 @@ class HoardSchema
             IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
               EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
               RAISE DEBUG 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_table_name);
+            
+              -- Reduce dependency names to only valid ones
+              FOREACH dependency_name IN ARRAY array(SELECT jsonb_array_elements_text(NEW.dependency_names)) LOOP
+                IF %1\$s.exists_table_column(NEW.schema_name, NEW.table_name, dependency_name) THEN
+                  valid_dependency_names := valid_dependency_names || format('["%%s"]', dependency_name::text)::jsonb;
+                END IF;
+              END LOOP;
+              
+              NEW.dependency_names = valid_dependency_names;
             END IF;
 
             IF TG_OP = 'DELETE' THEN
