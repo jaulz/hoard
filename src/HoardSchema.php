@@ -1510,23 +1510,27 @@ class HoardSchema
         HoardSchema::$cacheSchema,
       ), 'PLPGSQL'),
 
-      HoardSchema::createFunction('refresh', ['foreign_schema_name' => 'text', 'foreign_table_name' => 'text', 'foreign_table_conditions' => "text DEFAULT '1 = 1'"], 'void', sprintf(
+      HoardSchema::createFunction('refresh', ['p_foreign_schema_name' => 'text', 'p_foreign_table_name' => 'text', 'p_foreign_table_conditions' => "text DEFAULT '1 = 1'"], 'void', sprintf(
         <<<PLPGSQL
         DECLARE
           foreign_row record;
         BEGIN
-          RAISE DEBUG '%1\$s.refresh: start (foreign_schema_name=%%, foreign_table_name=%%, foreign_table_conditions=%%)', foreign_schema_name, foreign_table_name, foreign_table_conditions;
+          RAISE DEBUG 
+            '%1\$s.refresh: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%)', 
+            p_foreign_schema_name, 
+            p_foreign_table_name, 
+            p_foreign_table_conditions;
 
           -- Ensure that we have any conditions
-          IF foreign_table_conditions = '' THEN
-            foreign_table_conditions := '1 = 1';
+          IF p_foreign_table_conditions = '' THEN
+            p_foreign_table_conditions := '1 = 1';
           END IF;
 
           -- Run updates
           FOR foreign_row IN
-            EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', foreign_schema_name, foreign_table_name, foreign_table_conditions)
+            EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_schema_name, p_foreign_table_name, p_foreign_table_conditions)
           LOOP
-            PERFORM %1\$s.refresh_row(foreign_schema_name, foreign_table_name, row_to_json(foreign_row));
+            PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, row_to_json(foreign_row));
           END LOOP;
         END;
       PLPGSQL,
