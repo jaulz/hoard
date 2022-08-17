@@ -38,12 +38,13 @@ class HoardSchema
     ?string $primaryKeyName = 'id',
     ?string $primaryKeyType = 'bigInteger'
   ) {
-    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup);
+    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup, false);
+    $cacheTableNameWithSchema = static::getCacheTableName($tableName, $cacheTableGroup);
     $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName);
     $cacheUniqueIndexName = static::getCacheUniqueIndexName(static::getCacheTableName($tableName, $cacheTableGroup, false), $primaryKeyName, $cachePrimaryKeyName);
 
     // Create cache table
-    Schema::create($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
+    Schema::create($cacheTableNameWithSchema, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
       $table
         ->{$primaryKeyType}($cachePrimaryKeyName);
 
@@ -71,13 +72,14 @@ class HoardSchema
         "
         DO $$
           BEGIN
-            PERFORM %1\$s.refresh(%2\$s, %3\$s);
+            PERFORM %1\$s.refresh(%2\$s, %3\$s, %4\$s);
           END;
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
         DB::getPdo()->quote('public'),
-        DB::getPdo()->quote($tableName)
+        DB::getPdo()->quote($tableName),
+        DB::getPdo()->quote($cacheTableName)
       )
     );
   }
@@ -1372,7 +1374,12 @@ class HoardSchema
         HoardSchema::$cacheSchema,
       ), 'PLPGSQL'),
 
-      HoardSchema::createFunction('refresh_row', ['p_foreign_schema_name' => 'text', 'p_foreign_table_name' => 'text', 'p_foreign_row' => 'json'], 'void', sprintf(
+      HoardSchema::createFunction('refresh_row', [
+        'p_foreign_schema_name' => 'text', 
+        'p_foreign_table_name' => 'text', 
+        'p_foreign_row' => 'json',
+        'p_foreign_cache_table_name' => 'text DEFAULT NULL',  
+      ], 'void', sprintf(
         <<<PLPGSQL
         DECLARE
           trigger %1\$s.triggers%%rowtype;
@@ -1399,12 +1406,27 @@ class HoardSchema
           
           relevant boolean;
         BEGIN
-          RAISE DEBUG '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%)', p_foreign_schema_name, p_foreign_table_name, p_foreign_row;
+          RAISE DEBUG 
+            '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_foreign_cache_table_name=%%)', 
+            p_foreign_schema_name, 
+            p_foreign_table_name, 
+            p_foreign_row,
+            p_foreign_cache_table_name;
 
           -- Collect all updates in a JSON map
           FOR trigger IN
             EXECUTE format(
-              'SELECT * FROM %1\$s.triggers WHERE %1\$s.triggers.foreign_schema_name = %%L AND %1\$s.triggers.foreign_table_name = %%L AND %1\$s.triggers.table_name <> '''' ORDER BY foreign_cache_table_name', 
+              'SELECT 
+                  * 
+                FROM 
+                  %1\$s.triggers 
+                WHERE 
+                    %1\$s.triggers.foreign_schema_name = %%L 
+                  AND 
+                    %1\$s.triggers.foreign_table_name = %%L 
+                  AND 
+                    %1\$s.triggers.table_name <> '''' 
+                ORDER BY foreign_cache_table_name', 
               p_foreign_schema_name, 
               p_foreign_table_name
             )
@@ -1414,6 +1436,9 @@ class HoardSchema
               PERFORM %1\$s.upsert_cache(foreign_cache_table_name, foreign_cache_primary_key_name, foreign_primary_key, updates);
               updates := '{}';
             END IF;
+
+            -- Ignore tables that do not fit the condition
+            CONTINUE WHEN p_foreign_cache_table_name IS NOT NULL AND foreign_cache_table_name <> p_foreign_cache_table_name;
 
             table_name := trigger.table_name;
             schema_name := trigger.schema_name;
@@ -1510,16 +1535,22 @@ class HoardSchema
         HoardSchema::$cacheSchema,
       ), 'PLPGSQL'),
 
-      HoardSchema::createFunction('refresh', ['p_foreign_schema_name' => 'text', 'p_foreign_table_name' => 'text', 'p_foreign_table_conditions' => "text DEFAULT '1 = 1'"], 'void', sprintf(
+      HoardSchema::createFunction('refresh', [
+        'p_foreign_schema_name' => 'text', 
+        'p_foreign_table_name' => 'text', 
+        'p_foreign_cache_table_name' => 'text DEFAULT NULL', 
+        'p_foreign_table_conditions' => "text DEFAULT '1 = 1'",
+      ], 'void', sprintf(
         <<<PLPGSQL
         DECLARE
           foreign_row record;
         BEGIN
           RAISE DEBUG 
-            '%1\$s.refresh: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%)', 
+            '%1\$s.refresh: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_foreign_cache_table_name=%%)', 
             p_foreign_schema_name, 
             p_foreign_table_name, 
-            p_foreign_table_conditions;
+            p_foreign_table_conditions, 
+            p_foreign_cache_table_name;
 
           -- Ensure that we have any conditions
           IF p_foreign_table_conditions = '' THEN
@@ -1530,7 +1561,7 @@ class HoardSchema
           FOR foreign_row IN
             EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_schema_name, p_foreign_table_name, p_foreign_table_conditions)
           LOOP
-            PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, row_to_json(foreign_row));
+            PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, row_to_json(foreign_row), p_foreign_cache_table_name);
           END LOOP;
         END;
       PLPGSQL,
