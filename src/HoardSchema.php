@@ -72,14 +72,14 @@ class HoardSchema
         "
         DO $$
           BEGIN
-            PERFORM %1\$s.refresh(%2\$s, %3\$s, %4\$s);
+            PERFORM %1\$s.refresh(%2\$s, %3\$s);
           END;
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
         DB::getPdo()->quote('public'),
         DB::getPdo()->quote($tableName),
-        DB::getPdo()->quote($cacheTableName),
+        // DB::getPdo()->quote($cacheTableName),
       )
     );
   }
