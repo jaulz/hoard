@@ -1352,7 +1352,7 @@ class HoardSchema
           key text;
           value text;
         BEGIN
-          RAISE NOTICE '%1\$s.upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', table_name, primary_key_name, primary_key, updates;
+          RAISE DEBUG '%1\$s.upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', table_name, primary_key_name, primary_key, updates;
 
           -- Concatenate updates
           FOR key, value IN 
@@ -1365,7 +1365,7 @@ class HoardSchema
           
           -- Run update if required
           query := format('INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (%%L %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
-          RAISE NOTICE '%1\$s.upsert_cache: execute (query=%%)', query;
+          RAISE DEBUG '%1\$s.upsert_cache: execute (query=%%)', query;
           EXECUTE query;
         END;
       PLPGSQL,
@@ -1399,7 +1399,7 @@ class HoardSchema
           
           relevant boolean;
         BEGIN
-          RAISE NOTICE '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%)', p_foreign_schema_name, p_foreign_table_name, p_foreign_row;
+          RAISE DEBUG '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%)', p_foreign_schema_name, p_foreign_table_name, p_foreign_row;
 
           -- Collect all updates in a JSON map
           FOR trigger IN
@@ -1515,7 +1515,7 @@ class HoardSchema
         DECLARE
           foreign_row record;
         BEGIN
-          RAISE NOTICE '%1\$s.refresh: start (foreign_schema_name=%%, foreign_table_name=%%, foreign_table_conditions=%%)', foreign_schema_name, foreign_table_name, foreign_table_conditions;
+          RAISE DEBUG '%1\$s.refresh: start (foreign_schema_name=%%, foreign_table_name=%%, foreign_table_conditions=%%)', foreign_schema_name, foreign_table_name, foreign_table_conditions;
 
           -- Ensure that we have any conditions
           IF foreign_table_conditions = '' THEN
@@ -1554,7 +1554,7 @@ class HoardSchema
           log %1\$s.logs%%rowtype;
           logs %1\$s.logs[];
         BEGIN
-          RAISE NOTICE '%1\$s.process: start (p_foreign_schema_name=%%, p_foreign_table_name=%%)', p_foreign_schema_name, p_foreign_table_name;
+          RAISE DEBUG '%1\$s.process: start (p_foreign_schema_name=%%, p_foreign_table_name=%%)', p_foreign_schema_name, p_foreign_table_name;
 
           -- Set global variable for the transaction (can be read via current_setting('hoard.processing')::bool)
           SET hoard.processing = 'true';
@@ -1692,7 +1692,7 @@ class HoardSchema
             END LOOP;
           END IF;
 
-          RAISE NOTICE '
+          RAISE DEBUG '
             %1\$s.update: start (
               p_schema_name=%%, 
               p_table_name=%%, 
@@ -1862,7 +1862,7 @@ class HoardSchema
             ) INTO old_update;
 
             IF old_update != '' THEN
-              RAISE NOTICE '%1\$s.update: delete or update old (old_update=%%)', old_update;
+              RAISE DEBUG '%1\$s.update: delete or update old (old_update=%%)', old_update;
 
               EXECUTE format(
                 'UPDATE %1\$s.%%s SET %%s = (%%s) WHERE %%s', 
@@ -1938,7 +1938,7 @@ class HoardSchema
             ) INTO new_update;
 
             IF new_update != '' THEN
-              RAISE NOTICE '%1\$s.update: create or update new (new_update=%%)', new_update;
+              RAISE DEBUG '%1\$s.update: create or update new (new_update=%%)', new_update;
 
               EXECUTE format(
                 'UPDATE %1\$s.%%s SET %%s = (%%s) WHERE %%s', 
@@ -1999,10 +1999,10 @@ class HoardSchema
           asynchronous boolean;
           processed_at timestamp with time zone DEFAULT null; 
         BEGIN
-          RAISE NOTICE '-- %1\$s.after_trigger START';
+          RAISE DEBUG '-- %1\$s.after_trigger START';
 
           -- Log
-          RAISE NOTICE '
+          RAISE DEBUG '
             %1\$s.after_trigger: start (
               TG_OP=%%, 
               TG_TABLE_NAME=%%, 
@@ -2047,7 +2047,7 @@ class HoardSchema
             conditions := trigger.conditions;
             foreign_conditions := trigger.foreign_conditions;
             asynchronous := trigger.asynchronous;
-            RAISE NOTICE '%1\$s.after_trigger: trigger (schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', schema_name, table_name, primary_key_name, foreign_schema_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_names, key_name, conditions, foreign_conditions, asynchronous;
+            RAISE DEBUG '%1\$s.after_trigger: trigger (schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', schema_name, table_name, primary_key_name, foreign_schema_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_names, key_name, conditions, foreign_conditions, asynchronous;
             
             -- Reset processed time
             processed_at := NULL;
@@ -2081,7 +2081,7 @@ class HoardSchema
               new_relevant := false;
             END IF;
 
-            RAISE NOTICE '%1\$s.after_trigger: new (new_values=%%, new_foreign_key=%%, new_relevant=%%)', new_values, new_foreign_key, new_relevant;
+            RAISE DEBUG '%1\$s.after_trigger: new (new_values=%%, new_foreign_key=%%, new_relevant=%%)', new_values, new_foreign_key, new_relevant;
       
             -- Run update if required
             IF asynchronous = false THEN
@@ -2113,16 +2113,16 @@ class HoardSchema
               );
               processed_at := NOW();
             ELSE
-              RAISE NOTICE '%1\$s.after_trigger: skip update because of asynchronous mode';
+              RAISE DEBUG '%1\$s.after_trigger: skip update because of asynchronous mode';
             END IF;
-            RAISE NOTICE '';
+            RAISE DEBUG '';
 
             -- Store update in logs
             EXECUTE format('INSERT INTO %1\$s.logs (trigger_id, operation, old_relevant, new_values, new_foreign_key, new_relevant, processed_at) VALUES($1, $2, false, $3, $4, $5, $6)') 
               USING trigger_id, TG_OP, new_values, new_foreign_key, new_relevant, processed_at;
           END LOOP;
 
-          RAISE NOTICE '-- %1\$s.after_trigger END';
+          RAISE DEBUG '-- %1\$s.after_trigger END';
       
           IF TG_OP = 'DELETE' THEN
             RETURN OLD;
@@ -2168,7 +2168,7 @@ class HoardSchema
             asynchronous boolean;
             processed_at timestamp with time zone DEFAULT null; 
           BEGIN
-            RAISE NOTICE '
+            RAISE DEBUG '
               %1\$s.before_trigger: start (
                 TG_OP=%%, 
                 TG_TABLE_NAME=%%, 
@@ -2220,7 +2220,7 @@ class HoardSchema
                 conditions := trigger.conditions;
                 foreign_conditions := trigger.foreign_conditions;
                 asynchronous := trigger.asynchronous;
-                RAISE NOTICE '%1\$s.before_trigger: trigger (TG_TABLE_NAME=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', TG_TABLE_NAME, table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_names, key_name, conditions, foreign_conditions, asynchronous;
+                RAISE DEBUG '%1\$s.before_trigger: trigger (TG_TABLE_NAME=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, foreign_cache_table_name=%%, foreign_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', TG_TABLE_NAME, table_name, primary_key_name, foreign_table_name, foreign_cache_table_name, foreign_aggregation_name, foreign_key_name, aggregation_function, value_names, key_name, conditions, foreign_conditions, asynchronous;
 
                 -- Reset processed time
                 processed_at := NULL;
@@ -2256,7 +2256,7 @@ class HoardSchema
                   old_relevant := false;
                 END IF;
 
-                RAISE NOTICE '%1\$s.before_trigger: old (old_values=%%, old_foreign_key=%%, old_relevant=%%)', old_values, old_foreign_key, old_relevant;
+                RAISE DEBUG '%1\$s.before_trigger: old (old_values=%%, old_foreign_key=%%, old_relevant=%%)', old_values, old_foreign_key, old_relevant;
 
                 -- During deletion we exclude ourself from the update conditions
                 EXECUTE format('SELECT %%s FROM (SELECT $1.*) record %%s WHERE %%s;', primary_key_name, %1\$s.get_join_statement(TG_TABLE_SCHEMA, TG_TABLE_NAME, primary_key_name, 'record'), conditions) USING OLD INTO primary_key;
@@ -2292,16 +2292,16 @@ class HoardSchema
                   );
                   processed_at := NOW();
                 ELSE
-                  RAISE NOTICE '%1\$s.before_trigger: skip update because of asynchronous mode';
+                  RAISE DEBUG '%1\$s.before_trigger: skip update because of asynchronous mode';
                 END IF;
-                RAISE NOTICE '';
+                RAISE DEBUG '';
 
                 -- Store update in logs
                 EXECUTE format('INSERT INTO %1\$s.logs (trigger_id, operation, new_relevant, old_values, old_foreign_key, old_relevant, processed_at) VALUES($1, $2, false, $3, $4, $5, $6)') USING trigger_id, TG_OP, old_values, old_foreign_key, old_relevant, processed_at;
               END LOOP;
             END IF;
 
-            RAISE NOTICE '-- %1\$s.before_trigger END';
+            RAISE DEBUG '-- %1\$s.before_trigger END';
         
             IF TG_OP = 'DELETE' THEN
               RETURN OLD;
@@ -2327,7 +2327,7 @@ class HoardSchema
             column_name text;
             valid_column_names text[] DEFAULT '{}';
           BEGIN
-            RAISE NOTICE '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%)', p_trigger_name, p_schema_name, p_table_name, p_dependency_names;
+            RAISE DEBUG '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%)', p_trigger_name, p_schema_name, p_table_name, p_dependency_names;
 
             -- Concatenate trigger names
             before_trigger_name := 'hoard_before_update_' || p_trigger_name;
@@ -2401,7 +2401,7 @@ class HoardSchema
             before_trigger_name text;
             after_trigger_name text;
           BEGIN
-            RAISE NOTICE '%1\$s.drop_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%)', p_trigger_name, p_schema_name, p_table_name;
+            RAISE DEBUG '%1\$s.drop_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%)', p_trigger_name, p_schema_name, p_table_name;
 
             -- Concatenate trigger names
             before_trigger_name := 'hoard_before_' || p_trigger_name;
@@ -2425,16 +2425,16 @@ class HoardSchema
       HoardSchema::createFunction('prepare', [], 'trigger', sprintf(
         <<<PLPGSQL
           BEGIN
-            RAISE NOTICE '%1\$s.prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
+            RAISE DEBUG '%1\$s.prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
             IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
               EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_table_name));
-              RAISE NOTICE 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_table_name);
+              RAISE DEBUG 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_table_name);
             END IF;
 
             IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
               EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_table_name));
-              RAISE NOTICE 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_table_name);
+              RAISE DEBUG 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_table_name);
             END IF;
 
             IF TG_OP = 'DELETE' THEN
@@ -2450,7 +2450,7 @@ class HoardSchema
       HoardSchema::createFunction('initialize', [], 'trigger', sprintf(
         <<<PLPGSQL
             BEGIN
-              RAISE NOTICE '%1\$s.initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
+              RAISE DEBUG '%1\$s.initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', TG_OP, OLD, NEW;
 
               IF TG_OP = 'DELETE' THEN
                 PERFORM %1\$s.create_views(OLD.foreign_table_name);
@@ -2519,7 +2519,7 @@ class HoardSchema
               key text;
               value text;
             BEGIN
-              RAISE NOTICE '%1\$s.create_views: start (p_foreign_table_name=%%)', p_foreign_table_name;
+              RAISE DEBUG '%1\$s.create_views: start (p_foreign_table_name=%%)', p_foreign_table_name;
 
               -- Get all visible cached fields
               FOR trigger IN
