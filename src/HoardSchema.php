@@ -43,6 +43,9 @@ class HoardSchema
     $cachePrimaryKeyName = static::getCachePrimaryKeyName($tableName, $primaryKeyName);
     $cacheUniqueIndexName = static::getCacheUniqueIndexName(static::getCacheTableName($tableName, $cacheTableGroup, false), $primaryKeyName, $cachePrimaryKeyName);
 
+    // Turn off JIT
+    DB::unprepared('SET jit TO off;');
+
     // Create cache table
     Schema::create($cacheTableNameWithSchema, function (Blueprint $table) use ($tableName, $cacheTableGroup, $callback, $primaryKeyName, $primaryKeyType, $cachePrimaryKeyName, $cacheUniqueIndexName) {
       $table
@@ -72,14 +75,14 @@ class HoardSchema
         "
         DO $$
           BEGIN
-            PERFORM %1\$s.refresh(%2\$s, %3\$s);
+            PERFORM %1\$s.refresh(%2\$s, %3\$s, %4\$s);
           END;
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
         DB::getPdo()->quote('public'),
         DB::getPdo()->quote($tableName),
-        // DB::getPdo()->quote($cacheTableName),
+        DB::getPdo()->quote($cacheTableName),
       )
     );
   }
@@ -99,6 +102,9 @@ class HoardSchema
     ?string $primaryKeyName = 'id'
   ) {
     $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup);
+
+    // Turn off JIT
+    DB::unprepared('SET jit TO off;');
 
     Schema::table($cacheTableName, function (Blueprint $table) use ($tableName, $cacheTableGroup, $primaryKeyName, $callback) {
       $table->hoardContext([
@@ -1377,7 +1383,7 @@ class HoardSchema
       HoardSchema::createFunction('refresh_row', [
         'p_foreign_schema_name' => 'text', 
         'p_foreign_table_name' => 'text', 
-        'p_foreign_row' => 'json',
+        'p_foreign_row' => 'jsonb',
         'p_foreign_cache_table_name' => 'text DEFAULT NULL',  
       ], 'void', sprintf(
         <<<PLPGSQL
@@ -1561,7 +1567,7 @@ class HoardSchema
           FOR foreign_row IN
             EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_schema_name, p_foreign_table_name, p_foreign_table_conditions)
           LOOP
-            PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, row_to_json(foreign_row), p_foreign_cache_table_name);
+            PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, to_jsonb(foreign_row), p_foreign_cache_table_name);
           END LOOP;
         END;
       PLPGSQL,
@@ -2049,7 +2055,7 @@ class HoardSchema
 
           -- If this is the first row we need to create an entry for the new row in the cache table
           IF TG_OP = 'INSERT' AND NOT %1\$s.is_cache_table_name(TG_TABLE_NAME) THEN
-            PERFORM %1\$s.refresh_row(TG_TABLE_SCHEMA, TG_TABLE_NAME, row_to_json(NEW));
+            PERFORM %1\$s.refresh_row(TG_TABLE_SCHEMA, TG_TABLE_NAME, to_jsonb(NEW));
           END IF;
 
           -- Get all triggers that affect OTHER tables
