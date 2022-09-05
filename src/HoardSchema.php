@@ -2603,16 +2603,15 @@ class HoardSchema
               FOR key, value IN 
                 SELECT * FROM jsonb_each_text(foreign_aggregation_names)
               LOOP
-                concatenated_foreign_aggregation_names := format('%%s, %%s.%%s', concatenated_foreign_aggregation_names, value, key);
+                concatenated_foreign_aggregation_names := format('%%s, %1\$s.%%s.%%s', concatenated_foreign_aggregation_names, value, key);
               END LOOP;
 
               -- Create view
               IF foreign_primary_key_name IS NOT NULL THEN
                 cache_view_name := %1\$s.get_cache_view_name(p_foreign_table_name);
                 EXECUTE format(
-                  'CREATE VIEW %1\$s.%%s AS SELECT %%s.%%s %%s FROM %%s %%s', 
+                  'CREATE VIEW %1\$s.%%s AS SELECT %%s %%s FROM %%s %%s', 
                   cache_view_name, 
-                  foreign_cache_table_name, 
                   %1\$s.get_cache_primary_key_name(foreign_cache_primary_key_name), 
                   concatenated_foreign_aggregation_names, 
                   p_foreign_table_name, 
