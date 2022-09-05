@@ -2556,6 +2556,7 @@ class HoardSchema
             DECLARE
               trigger %1\$s.triggers%%rowtype;
               
+              primary_key_name text;
               foreign_schema_name text;
               foreign_table_name text;
               foreign_cache_table_name text;
@@ -2609,10 +2610,14 @@ class HoardSchema
               -- Create view
               IF foreign_primary_key_name IS NOT NULL THEN
                 cache_view_name := %1\$s.get_cache_view_name(p_foreign_table_name);
+                primary_key_name := foreign_primary_key_name;
+
                 EXECUTE format(
-                  'CREATE VIEW %1\$s.%%s AS SELECT %%s %%s FROM %%s %%s', 
+                  'CREATE VIEW %1\$s.%%I AS SELECT %%I.%%I as %%I %%s FROM %%I %%s', 
                   cache_view_name, 
-                  %1\$s.get_cache_primary_key_name(foreign_cache_primary_key_name), 
+                  p_foreign_table_name, 
+                  primary_key_name, 
+                  %1\$s.get_cache_primary_key_name(primary_key_name), 
                   concatenated_foreign_aggregation_names, 
                   p_foreign_table_name, 
                   concatenated_joins
