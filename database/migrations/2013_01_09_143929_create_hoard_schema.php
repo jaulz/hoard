@@ -20,24 +20,24 @@ return new class extends Migration
     Schema::create(HoardSchema::$cacheSchema . '.triggers', function (Blueprint $table) {
       $table->id()->generatedAs();
 
-      $table->string('schema_name');
-      $table->string('table_name');
-      $table->string('primary_key_name');
-      $table->string('key_name');
-      $table->string('aggregation_function');
+      $table->text('schema_name');
+      $table->text('table_name');
+      $table->text('primary_key_name');
+      $table->text('key_name');
+      $table->text('aggregation_function');
       $table->jsonb('value_names');
       $table->jsonb('options')->default('[]');
-      $table->string('conditions');
+      $table->text('conditions');
       $table->jsonb('dependency_names')->default('[]');
 
-      $table->string('foreign_schema_name');
-      $table->string('foreign_table_name');
-      $table->string('foreign_primary_key_name');
-      $table->string('foreign_key_name');
-      $table->string('foreign_aggregation_name');
-      $table->string('foreign_conditions');
-      $table->string('foreign_cache_table_name');
-      $table->string('foreign_cache_primary_key_name');
+      $table->text('foreign_schema_name');
+      $table->text('foreign_table_name');
+      $table->text('foreign_primary_key_name');
+      $table->text('foreign_key_name');
+      $table->text('foreign_aggregation_name');
+      $table->text('foreign_conditions');
+      $table->text('foreign_cache_table_name');
+      $table->text('foreign_cache_primary_key_name');
 
       $table->boolean('manual')->default(false);
       $table->boolean('lazy')->default(false);
@@ -53,7 +53,7 @@ return new class extends Migration
         ->references('id')->on(HoardSchema::$cacheSchema . '.triggers')
         ->cascadeOnDelete();
 
-      $table->string('operation');
+      $table->text('operation');
       $table->jsonb('old_values')->nullable();
       $table->text('old_foreign_key')->nullable();
       $table->boolean('old_relevant');
