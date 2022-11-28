@@ -52,6 +52,11 @@ class HoardScope implements Scope
       $applyCrossJoin($crossJoinQuery);
     }
 
+    // Ensure that the query still select the actual table
+    if (is_null($query->getQuery()->columns)) {
+      $query->select($query->getQuery()->from . '.*');
+    }
+
     // Eventually use the prepared select and extend the actual query
     $className = class_basename($model);
     $alias = $this->alias ?? 'cached_' . Str::snake($className);
