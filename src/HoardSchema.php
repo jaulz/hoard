@@ -80,7 +80,7 @@ class HoardSchema
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
-        DB::getPdo()->quote('public'),
+        DB::getPdo()->quote(HoardSchema::$schema),
         DB::getPdo()->quote($tableName),
         DB::getPdo()->quote($cacheTableName),
       )
@@ -125,7 +125,7 @@ class HoardSchema
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
-        DB::getPdo()->quote('public'),
+        DB::getPdo()->quote(HoardSchema::$schema),
         DB::getPdo()->quote($tableName)
       )
     );
@@ -1310,7 +1310,7 @@ class HoardSchema
           END IF;
 
           -- We always resolve to the principal table even if the table_name is a cached table (e.g. cached_users__default -> users)
-          principal_schema_name = 'public'; -- TODO: remove hard coded schema
+          principal_schema_name = '%2\$s'; -- TODO: remove hard coded schema
           principal_table_name = %1\$s.get_table_name(table_name);
           principal_primary_key_name = %1\$s.get_primary_key_name(primary_key_name);
 
@@ -1346,6 +1346,7 @@ class HoardSchema
         END;
       PLPGSQL,
         HoardSchema::$cacheSchema,
+        HoardSchema::$schema,
       ), 'PLPGSQL'),
 
       HoardSchema::createFunction('upsert_cache', [
