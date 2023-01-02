@@ -18,7 +18,9 @@ class HoardServiceProvider extends ServiceProvider
   {
     $this->publishes(
       [
-        __DIR__ . '/../database/migrations/' => base_path('database/migrations'),
+        __DIR__ . '/../database/migrations/' => base_path(
+          'database/migrations'
+        ),
       ],
       'hoard-migrations'
     );
@@ -30,19 +32,12 @@ class HoardServiceProvider extends ServiceProvider
 
   public function enhanceBlueprint()
   {
-    Blueprint::macro('hoardContext', function (
-      array $context
-    ) {
+    Blueprint::macro('hoardContext', function (array $context) {
       /** @var \Illuminate\Database\Schema\Blueprint $this */
-      $this->addCommand(
-        'hoardContext',
-        $context
-      );
+      $this->addCommand('hoardContext', $context);
     });
 
-    Blueprint::macro('hoard', function (
-      string $foreignAggregationName
-    ) {
+    Blueprint::macro('hoard', function (string $foreignAggregationName) {
       /** @var \Illuminate\Database\Schema\Blueprint $this */
       $hoardContext = collect($this->getCommands())->first(function ($command) {
         return $command->get('name') === 'hoardContext';
@@ -70,48 +65,76 @@ class HoardServiceProvider extends ServiceProvider
     ) {
       /** @var \Illuminate\Database\Schema\Grammars\PostgresGrammar $this */
       $foreignAggregationName = $command->foreignAggregationName;
-      $foreignSchemaName = Str::contains($command->foreignTableName, '.') ? Str::before($command->foreignTableName, '.') : HoardSchema::$schema;
+      $foreignSchemaName = Str::contains($command->foreignTableName, '.')
+        ? Str::before($command->foreignTableName, '.')
+        : DB::connection()->getConfig('schema');
       $foreignTableName = Str::after($command->foreignTableName, '.');
-      $foreignKeyName = $command->foreignKeyName ?? $command->foreignPrimaryKeyName ??  'id';
-      $keyName = $command->keyName ?? Str::singular($foreignTableName) . '_' . $foreignKeyName;
+      $foreignKeyName =
+        $command->foreignKeyName ?? ($command->foreignPrimaryKeyName ?? 'id');
+      $keyName =
+        $command->keyName ??
+        Str::singular($foreignTableName) . '_' . $foreignKeyName;
       $options = $command->options ?? [];
       $aggregationFunction = Str::upper($command->aggregationFunction) ?? '';
       $valueNames = $command->valueNames ?? [];
-      $foreignConditions = HoardSchema::prepareConditions($command->foreignConditions ?? []);
+      $foreignConditions = HoardSchema::prepareConditions(
+        $command->foreignConditions ?? []
+      );
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $groupName = $command->groupName;
       $tableName = $command->tableName ?? '';
-      $schemaName = $groupName ? HoardSchema::$cacheSchema : HoardSchema::$schema;
-      $tableName = $groupName ? HoardSchema::getCacheTableName($tableName, $groupName, false) : $tableName;
+      $schemaName = $groupName
+        ? HoardSchema::$cacheSchema
+        : DB::connection()->getConfig('schema');
+      $tableName = $groupName
+        ? HoardSchema::getCacheTableName($tableName, $groupName, false)
+        : $tableName;
       $primaryKeyName = $command->primaryKeyName ?? 'id';
-      $primaryKeyName = $groupName ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName) : $primaryKeyName;
-      $foreignPrimaryKeyName = $command->foreignPrimaryKeyName ?? $foreignKeyName;
-      $refreshConditions = HoardSchema::prepareConditions($command->refreshConditions ?? []);
+      $primaryKeyName = $groupName
+        ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName)
+        : $primaryKeyName;
+      $foreignPrimaryKeyName =
+        $command->foreignPrimaryKeyName ?? $foreignKeyName;
+      $refreshConditions = HoardSchema::prepareConditions(
+        $command->refreshConditions ?? []
+      );
       $lazy = $command->lazy ?? false;
       $hidden = $command->hidden ?? false;
       $manual = $command->manual ?? false;
       $asynchronous = $command->asynchronous ?? false;
       $cacheTableGroup = $command->cacheTableGroup;
-      $foreignCacheTableName = HoardSchema::getCacheTableName($foreignTableName, $cacheTableGroup, false);
-      $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName($foreignTableName, $foreignPrimaryKeyName);
+      $foreignCacheTableName = HoardSchema::getCacheTableName(
+        $foreignTableName,
+        $cacheTableGroup,
+        false
+      );
+      $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName(
+        $foreignTableName,
+        $foreignPrimaryKeyName
+      );
 
       // Extract dependencies from key, values and conditions
       // [^\\\\]((\")|('))(?(2)([^\"]|\\\")*|([^']|\\')*)[^\\\\]\\1|([a-zA-Z_$][a-zA-Z_$0-9]*)
-      preg_match_all("/'[^']*'|\b([a-zA-Z_$][a-zA-Z_$0-9]*)\b/m", 
-        implode(' ', [$keyName, ...$valueNames, $conditions])
-      , $matches);
+      preg_match_all(
+        "/'[^']*'|\b([a-zA-Z_$][a-zA-Z_$0-9]*)\b/m",
+        implode(' ', [$keyName, ...$valueNames, $conditions]),
+        $matches
+      );
       $dependencyNames = collect([...$matches[1]])
-      ->map(fn($dependencyName) => Str::lower($dependencyName))
-      ->unique()
-      ->filter(fn ($dependencyName) => !in_array($dependencyName, [
-        'is',
-        'not',
-        'null',
-        'true',
-        'false'
-      ]))
-      ->filter()
-      ->values()->all();
+        ->map(fn($dependencyName) => Str::lower($dependencyName))
+        ->unique()
+        ->filter(
+          fn($dependencyName) => !in_array($dependencyName, [
+            'is',
+            'not',
+            'null',
+            'true',
+            'false',
+          ])
+        )
+        ->filter()
+        ->values()
+        ->all();
 
       return [
         sprintf(
@@ -188,7 +211,9 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($keyName),
           $this->quoteString($aggregationFunction),
           $this->quoteString(base64_encode(json_encode($valueNames))),
-          $this->quoteString(base64_encode(json_encode($options, JSON_FORCE_OBJECT))),
+          $this->quoteString(
+            base64_encode(json_encode($options, JSON_FORCE_OBJECT))
+          ),
           DB::getPdo()->quote($conditions),
           $this->quoteString($foreignTableName),
           $this->quoteString($foreignKeyName),
@@ -204,7 +229,7 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($schemaName),
           $this->quoteString($foreignSchemaName),
           $asynchronous ? 'true' : 'false',
-          $this->quoteString(base64_encode(json_encode($dependencyNames))),
+          $this->quoteString(base64_encode(json_encode($dependencyNames)))
         ),
       ];
     });
