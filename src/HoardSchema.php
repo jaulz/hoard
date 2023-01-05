@@ -1707,7 +1707,7 @@ PLPGSQL
         refresh_query_function_name,
         principal_schema_name,
         principal_table_name,
-        primary_key_name,
+        p_primary_key_name,
         p_key_name,
         p_value_names,
         p_options,
