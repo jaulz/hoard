@@ -67,7 +67,7 @@ class HoardServiceProvider extends ServiceProvider
       $foreignAggregationName = $command->foreignAggregationName;
       $foreignSchemaName = Str::contains($command->foreignTableName, '.')
         ? Str::before($command->foreignTableName, '.')
-        : DB::connection()->getConfig('schema');
+        : HoardSchema::$schema;
       $foreignTableName = Str::after($command->foreignTableName, '.');
       $foreignKeyName =
         $command->foreignKeyName ?? ($command->foreignPrimaryKeyName ?? 'id');
@@ -85,7 +85,7 @@ class HoardServiceProvider extends ServiceProvider
       $tableName = $command->tableName ?? '';
       $schemaName = $groupName
         ? HoardSchema::$cacheSchema
-        : DB::connection()->getConfig('schema');
+        : HoardSchema::$schema;
       $tableName = $groupName
         ? HoardSchema::getCacheTableName($tableName, $groupName, false)
         : $tableName;
