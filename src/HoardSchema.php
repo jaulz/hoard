@@ -11,6 +11,8 @@ use Illuminate\Support\Collection;
 
 class HoardSchema
 {
+  public static $schema = 'public';
+
   public static $cacheSchema = 'hoard';
 
   public static $cachePrimaryKeyNamePrefix = 'cacheable_';
@@ -103,7 +105,7 @@ class HoardSchema
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
-        DB::getPdo()->quote(DB::connection()->getConfig('schema')),
+        HoardSchema::$schema,
         DB::getPdo()->quote($tableName),
         DB::getPdo()->quote($cacheTableName)
       )
@@ -155,7 +157,7 @@ class HoardSchema
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
-        DB::getPdo()->quote(DB::connection()->getConfig('schema')),
+        HoardSchema::$schema,
         DB::getPdo()->quote($tableName)
       )
     );
@@ -1667,15 +1669,15 @@ PLPGSQL
       HoardSchema::createFunction(
         'get_refresh_query',
         [
-          'primary_key_name' => 'text',
-          'aggregation_function' => 'text',
-          'value_names' => 'jsonb',
-          'options' => 'jsonb',
-          'schema_name' => 'text',
-          'table_name' => 'text',
-          'key_name' => 'text',
-          'foreign_key' => 'text',
-          'conditions' => "text DEFAULT ''",
+          'p_primary_key_name' => 'text',
+          'p_aggregation_function' => 'text',
+          'p_value_names' => 'jsonb',
+          'p_options' => 'jsonb',
+          'p_schema_name' => 'text',
+          'p_table_name' => 'text',
+          'p_key_name' => 'text',
+          'p_foreign_key' => 'text',
+          'p_conditions' => "text DEFAULT ''",
         ],
         'text',
         sprintf(
@@ -1688,17 +1690,17 @@ PLPGSQL
     principal_primary_key_name text;
   BEGIN
     -- Ensure that we have any conditions
-    IF conditions = '' THEN
-      conditions := '1 = 1';
+    IF p_conditions = '' THEN
+      p_conditions := '1 = 1';
     END IF;
 
     -- We always resolve to the principal table even if the table_name is a cached table (e.g. cached_users__default -> users)
     principal_schema_name = '%2\$s'; -- TODO: remove hard coded schema
-    principal_table_name = %1\$s.get_table_name(table_name);
-    principal_primary_key_name = %1\$s.get_primary_key_name(primary_key_name);
+    principal_table_name = %1\$s.get_table_name(p_table_name);
+    principal_primary_key_name = %1\$s.get_primary_key_name(p_primary_key_name);
 
     -- Prepare refresh query
-    refresh_query_function_name = lower(format('get_%%s_refresh_query', aggregation_function));
+    refresh_query_function_name = lower(format('get_%%s_refresh_query', p_aggregation_function));
     IF %1\$s.exists_function('%1\$s', refresh_query_function_name) THEN
       EXECUTE format(
         'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
@@ -1706,22 +1708,22 @@ PLPGSQL
         principal_schema_name,
         principal_table_name,
         primary_key_name,
-        key_name,
-        value_names,
-        options,
-        foreign_key,
-        conditions
+        p_key_name,
+        p_value_names,
+        p_options,
+        p_foreign_key,
+        p_conditions
       ) INTO refresh_query;
     ELSE
       refresh_query := format(
         'SELECT %%s(%%s) FROM %%I %%s WHERE %%I = %%L AND (%%s)', 
-        aggregation_function, 
-        value_names->>0, 
+        p_aggregation_function, 
+        p_value_names->>0, 
         principal_table_name, 
         %1\$s.get_join_statement(principal_schema_name, principal_table_name, principal_primary_key_name, principal_table_name), 
-        key_name, 
-        foreign_key, 
-        conditions
+        p_key_name, 
+        p_foreign_key, 
+        p_conditions
       );
     END IF;
 
@@ -1730,7 +1732,7 @@ PLPGSQL
 PLPGSQL
           ,
           HoardSchema::$cacheSchema,
-          DB::connection()->getConfig('schema')
+          HoardSchema::$schema,
         ),
         'PLPGSQL'
       ),
