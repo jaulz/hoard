@@ -3060,7 +3060,17 @@ PLPGSQL
       foreign_cache_primary_key_name := trigger.foreign_cache_primary_key_name;
       foreign_aggregation_name := trigger.foreign_aggregation_name;
     
-      joins := joins || jsonb_build_object(foreign_cache_table_name, format('%%s.%%s.%%s = %1\$s.%%s.%%s', foreign_schema_name, foreign_table_name, foreign_primary_key_name, foreign_cache_table_name, foreign_cache_primary_key_name));
+      joins := joins || jsonb_build_object(
+        foreign_cache_table_name, 
+        format(
+          '%%s.%%s.%%s = %1\$s.%%s.%%s', 
+          foreign_schema_name, 
+          foreign_table_name, 
+          foreign_primary_key_name, 
+          foreign_cache_table_name, 
+          foreign_cache_primary_key_name
+        )
+      );
       foreign_aggregation_names := foreign_aggregation_names || jsonb_build_object(foreign_aggregation_name, foreign_cache_table_name);
     END LOOP;
 
