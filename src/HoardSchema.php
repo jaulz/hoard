@@ -105,7 +105,7 @@ class HoardSchema
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
-        HoardSchema::$schema,
+        DB::getPdo()->quote(HoardSchema::$schema),
         DB::getPdo()->quote($tableName),
         DB::getPdo()->quote($cacheTableName)
       )
@@ -157,7 +157,7 @@ class HoardSchema
         $$ LANGUAGE PLPGSQL;
       ",
         HoardSchema::$cacheSchema,
-        HoardSchema::$schema,
+        DB::getPdo()->quote(HoardSchema::$schema),
         DB::getPdo()->quote($tableName)
       )
     );
@@ -1740,10 +1740,10 @@ PLPGSQL
       HoardSchema::createFunction(
         'upsert_cache',
         [
-          'table_name' => 'text',
-          'primary_key_name' => 'text',
-          'primary_key' => 'text',
-          'updates' => 'jsonb',
+          'p_table_name' => 'text',
+          'p_primary_key_name' => 'text',
+          'p_primary_key' => 'text',
+          'p_updates' => 'jsonb',
         ],
         'void',
         sprintf(
@@ -1756,11 +1756,15 @@ PLPGSQL
     key text;
     value text;
   BEGIN
-    RAISE DEBUG '%1\$s.upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', table_name, primary_key_name, primary_key, updates;
+    RAISE DEBUG '%1\$s.upsert_cache: start (table_name=%%, primary_key_name=%%, primary_key=%%, updates=%%)', 
+      p_table_name, 
+      p_primary_key_name, 
+      p_primary_key, 
+      p_updates;
 
     -- Concatenate updates
     FOR key, value IN 
-      SELECT * FROM jsonb_each_text(updates)
+      SELECT * FROM jsonb_each_text(p_updates)
     LOOP
       concatenated_keys := format('%%s, %%s', concatenated_keys, key);
       concatenated_values := format('%%s, (%%s)', concatenated_values, value);
@@ -1768,7 +1772,16 @@ PLPGSQL
     END LOOP;
     
     -- Run update if required
-    query := format('INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (%%L %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', table_name, primary_key_name, concatenated_keys, primary_key, concatenated_values, primary_key_name, concatenated_updates);
+    query := format(
+      'INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (%%L %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', 
+      p_table_name, 
+      p_primary_key_name, 
+      concatenated_keys, 
+      p_primary_key, 
+      concatenated_values, 
+      p_primary_key_name,
+      concatenated_updates
+    );
     RAISE DEBUG '%1\$s.upsert_cache: execute (query=%%)', query;
     EXECUTE query;
   END;
