@@ -25,57 +25,6 @@ class HoardSchema
   public static string $cacheViewNameSuffix = '';
 
   /**
-   * Update the cache table for a given table name.
-   *
-   * @param  string  $tableName
-   * @param  string  $cacheTableGroup
-   * @param  \Closure  $callback
-   * @param  ?string  $primaryKeyName
-   */
-  public static function table(
-    string $tableName,
-    string $cacheTableGroup,
-    \Closure $callback,
-    ?string $primaryKeyName = 'id'
-  ) {
-    $cacheTableName = static::getCacheTableName($tableName, $cacheTableGroup);
-
-    // Turn off JIT
-    DB::unprepared('SET jit TO off;');
-
-    Schema::table($cacheTableName, function (Blueprint $table) use (
-      $tableName,
-      $cacheTableGroup,
-      $primaryKeyName,
-      $callback
-    ) {
-      $table->hoardContext([
-        'tableName' => $tableName,
-        'cacheTableGroup' => $cacheTableGroup,
-        'primaryKeyName' => $primaryKeyName,
-      ]);
-
-      $callback($table);
-    });
-
-    // Refresh table afterwards
-    DB::statement(
-      sprintf(
-        "
-        DO $$
-          BEGIN
-            PERFORM %1\$s.refresh(%2\$s, %3\$s);
-          END;
-        $$ LANGUAGE PLPGSQL;
-      ",
-        HoardSchema::$cacheSchema,
-        DB::getPdo()->quote(HoardSchema::$schema),
-        DB::getPdo()->quote($tableName)
-      )
-    );
-  }
-
-  /**
    * Return the cache table name for a given table name.
    *
    * @param  string  $tableName
@@ -3255,6 +3204,9 @@ PLPGSQL,
         PERFORM %1\$s.create_triggers(NEW.id::text, '%1\$s', trigger.cache_table_name, NEW.key_name, NEW.value_names, NEW.conditions, NEW.id);
       END LOOP;
     END IF;
+
+    -- Refresh table
+    PERFORM %1\$s.refresh(NEW.foreign_schema_name, NEW.foreign_table_name, NEW.cache_table_name);
 
     RETURN NEW;
   END;
