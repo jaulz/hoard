@@ -30,7 +30,7 @@ return new class extends Migration
     Schema::create(HoardSchema::$cacheSchema . '.triggers', function (Blueprint $table) {
       $table->id()->generatedAs();
 
-      $table->text('query')->storedAs("'SELECT ' || foreign_primary_key_name  || ', (' || replace(" . HoardSchema::$cacheSchema . ".get_refresh_query(primary_key_name, aggregation_function, value_names, options, schema_name, table_name, key_name, 'DUMMY', conditions), '''DUMMY''', 'wrapper.' || foreign_primary_key_name) || ') AS ' || cache_aggregation_name || ' FROM ' || foreign_table_name || ' AS wrapper;'");
+      $table->text('query')->storedAs("CASE WHEN (aggregation_function = '') IS NOT FALSE THEN NULL ELSE 'SELECT ' || foreign_primary_key_name  || ', (' || replace(" . HoardSchema::$cacheSchema . ".get_refresh_query(primary_key_name, aggregation_function, value_names, options, schema_name, table_name, key_name, 'DUMMY', conditions), '''DUMMY''', 'wrapper.' || foreign_primary_key_name) || ') AS ' || cache_aggregation_name || ' FROM ' || foreign_table_name || ' AS wrapper;' END")->nullable();
 
       $table->text('cache_table_name');
       $table->text('cache_aggregation_name');

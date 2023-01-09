@@ -1083,7 +1083,8 @@ PLPGSQL,
     refresh_query text;
     refresh_query_function_name text;
   BEGIN
-    IF (p_table_name = '') IS NOT FALSE THEN
+    -- Return empty query if aggregation function is missing (e.g. for manual fields)
+    IF (p_aggregation_function = '') IS NOT FALSE THEN
       RETURN '';
     END IF;
 
