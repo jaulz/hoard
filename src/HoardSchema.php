@@ -1015,6 +1015,7 @@ PLPGSQL,
   public static function createAggregationFunctions()
   {
     $getRefreshQueryParameters = [
+      'p_refresh_query' => 'text',
       'p_schema_name' => 'text',
       'p_table_name' => 'text',
       'p_primary_key_name' => 'text',
@@ -1062,6 +1063,76 @@ PLPGSQL,
     ];
 
     return [
+      HoardSchema::createFunction(
+        'get_refresh_query',
+        [
+          'p_primary_key_name' => 'text',
+          'p_aggregation_function' => 'text',
+          'p_value_names' => 'jsonb',
+          'p_options' => 'jsonb',
+          'p_schema_name' => 'text',
+          'p_table_name' => 'text',
+          'p_key_name' => 'text',
+          'p_foreign_key' => 'text',
+          'p_conditions' => "text DEFAULT ''",
+        ],
+        'text',
+        sprintf(
+          <<<PLPGSQL
+  DECLARE
+    refresh_query text;
+    refresh_query_function_name text;
+  BEGIN
+    IF (p_table_name = '') IS NOT FALSE THEN
+      RETURN '';
+    END IF;
+
+    -- Ensure that we have any conditions
+    IF p_conditions = '' THEN
+      p_conditions := '1 = 1';
+    END IF;
+
+    -- Prepare refresh query
+    refresh_query := format(
+      'SELECT %%s(%%s) AS value FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s)', 
+      p_aggregation_function, 
+      p_value_names->>0, 
+      p_schema_name,
+      p_table_name, 
+      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name), 
+      p_key_name, 
+      p_foreign_key, 
+      p_conditions
+    );
+
+    -- Check if there is any specific implementation that creates the refresh query
+    refresh_query_function_name = lower(format('get_%%s_refresh_query', p_aggregation_function));
+    IF %1\$s.exists_function('%1\$s', refresh_query_function_name) THEN
+      EXECUTE format(
+        'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
+        refresh_query_function_name,
+        refresh_query,
+        p_schema_name,
+        p_table_name,
+        p_primary_key_name,
+        p_key_name,
+        p_value_names,
+        p_options,
+        p_foreign_key,
+        p_conditions
+      ) INTO refresh_query;
+    END IF;
+
+    RETURN refresh_query;
+  END;
+PLPGSQL,
+          HoardSchema::$cacheSchema,
+          HoardSchema::$schema,
+        ),
+        'PLPGSQL',
+        'IMMUTABLE'
+      ),
+
       /**
        * Sum
        */
@@ -1073,14 +1144,8 @@ PLPGSQL,
           <<<PLPGSQL
   BEGIN
     RETURN format(
-      'SELECT coalesce((SELECT sum(%%I) FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s)), 0)', 
-      p_value_names->>0, 
-      p_schema_name,  
-      p_table_name, 
-      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name), 
-      p_key_name, 
-      p_foreign_key, 
-      p_conditions
+      'SELECT coalesce((%%s), 0)', 
+      p_refresh_query
     );
   END;
 PLPGSQL,
@@ -1146,14 +1211,8 @@ PLPGSQL,
           <<<PLPGSQL
   BEGIN
     RETURN format(
-      'SELECT coalesce((SELECT COUNT(%%I) FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s)), 0)',
-      p_value_names->>0, 
-      p_schema_name,  
-      p_table_name, 
-      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name), 
-      p_key_name, 
-      p_foreign_key, 
-      p_conditions
+      'SELECT coalesce((%%s), 0)', 
+      p_refresh_query
     );
   END;
 PLPGSQL,
@@ -1670,78 +1729,6 @@ PLPGSQL,
   public static function createRefreshFunctions()
   {
     return [
-      HoardSchema::createFunction(
-        'get_refresh_query',
-        [
-          'p_primary_key_name' => 'text',
-          'p_aggregation_function' => 'text',
-          'p_value_names' => 'jsonb',
-          'p_options' => 'jsonb',
-          'p_schema_name' => 'text',
-          'p_table_name' => 'text',
-          'p_key_name' => 'text',
-          'p_foreign_key' => 'text',
-          'p_conditions' => "text DEFAULT ''",
-        ],
-        'text',
-        sprintf(
-          <<<PLPGSQL
-  DECLARE
-    refresh_query text;
-    refresh_query_function_name text;
-    principal_schema_name text;
-    principal_table_name text;
-    principal_primary_key_name text;
-  BEGIN
-    -- Ensure that we have any conditions
-    IF p_conditions = '' THEN
-      p_conditions := '1 = 1';
-    END IF;
-
-    -- We always resolve to the principal table even if the table_name is a cached table (e.g. cached_users__default -> users)
-    principal_schema_name = p_schema_name; -- '%2\$s'; -- TODO: remove hard coded schema
-    principal_table_name = p_table_name; -- %1\$s.get_table_name(p_schema_name, p_table_name);
-    principal_primary_key_name = p_primary_key_name; -- %1\$s.resolve_primary_key_name(p_primary_key_name);
-
-    -- Prepare refresh query
-    refresh_query_function_name = lower(format('get_%%s_refresh_query', p_aggregation_function));
-
-    IF %1\$s.exists_function('%1\$s', refresh_query_function_name) THEN
-      EXECUTE format(
-        'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
-        refresh_query_function_name,
-        p_schema_name,
-        p_table_name,
-        p_primary_key_name,
-        p_key_name,
-        p_value_names,
-        p_options,
-        p_foreign_key,
-        p_conditions
-      ) INTO refresh_query;
-    ELSE
-      refresh_query := format(
-        'SELECT %%s(%%s) FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s)', 
-        p_aggregation_function, 
-        p_value_names->>0, 
-        principal_schema_name,
-        principal_table_name, 
-        %1\$s.get_join_statement(principal_schema_name, principal_table_name, principal_primary_key_name, principal_table_name), 
-        p_key_name, 
-        p_foreign_key, 
-        p_conditions
-      );
-    END IF;
-
-    RETURN refresh_query;
-  END;
-PLPGSQL,
-          HoardSchema::$cacheSchema,
-          HoardSchema::$schema,
-        ),
-        'PLPGSQL'
-      ),
-
       HoardSchema::createFunction(
         'upsert_cache',
         [
@@ -3063,8 +3050,14 @@ PLPGSQL,
 
     -- Prevent update of columns
     IF TG_OP = 'UPDATE' THEN
-      NEW.cache_table_name := OLD. cache_table_name;
+      NEW.cache_group_name := OLD.cache_group_name;
       NEW.cache_aggregation_name := OLD.cache_aggregation_name;
+      NEW.cache_table_name := OLD. cache_table_name;
+      NEW.cache_primary_key_name := OLD. cache_primary_key_name;
+      
+      NEW.foreign_schema_name := OLD.foreign_schema_name;
+      NEW.foreign_table_name := OLD.foreign_table_name;
+      NEW.foreign_table_name := OLD.foreign_table_name;
     END IF;
 
     -- Prefill keys
@@ -3080,13 +3073,13 @@ PLPGSQL,
     END IF;
 
     -- Derive type from aggregation type
-    NEW.aggregation_function = upper(NEW.aggregation_function);
+    NEW.aggregation_function = lower(NEW.aggregation_function);
     IF (NEW.aggregation_type = '') IS NOT FALSE THEN
-      IF NEW.aggregation_function = 'COUNT' THEN
+      IF NEW.aggregation_function = 'count' THEN
         NEW.aggregation_type := 'bigint';
-      ELSEIF NEW.aggregation_function = 'GROUP' THEN
+      ELSEIF NEW.aggregation_function = 'group' THEN
         NEW.aggregation_type := 'jsonb DEFAULT ''{}''';
-      ELSEIF NEW.aggregation_function = 'PUSH' THEN
+      ELSEIF NEW.aggregation_function = 'push' THEN
         NEW.aggregation_type := 'jsonb DEFAULT ''[]''';
       ELSE
         NEW.aggregation_type := %1\$s.get_column_type(NEW.schema_name, NEW.table_name, NEW.value_names->>0);
@@ -3176,10 +3169,39 @@ PLPGSQL,
       OLD, 
       NEW;
 
+    -- Drop columns, triggers and recreate cache views
     IF TG_OP = 'DELETE' THEN
-      PERFORM %1\$s.create_cache_views(OLD.foreign_schema_name, OLD.foreign_table_name);
+      -- Drop columns
+      IF (SELECT COUNT(id) FROM %1\$s.triggers WHERE cache_table_name = OLD.cache_table_name AND cache_aggregation_name = OLD.cache_aggregation_name) = 0 THEN
+        PERFORM %1\$s.drop_cache_aggregation(OLD.cache_table_name, OLD.cache_aggregation_name);
+      END IF;
+
+      -- Drop table
+      IF (SELECT COUNT(id) FROM %1\$s.triggers WHERE cache_table_name = OLD.cache_table_name) = 0 THEN
+        PERFORM %1\$s.drop_cache_table(OLD.cache_table_name);
+      END IF;
+
+      -- Drop triggers
+      PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.schema_name, OLD.table_name);
+      PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.foreign_schema_name, OLD.foreign_table_name);
+
+      FOR trigger IN
+        SELECT * FROM %1\$s.triggers
+        WHERE 
+            %1\$s.triggers.foreign_schema_name = OLD.schema_name
+          AND
+            %1\$s.triggers.foreign_table_name = OLD.table_name
+      LOOP
+        PERFORM %1\$s.drop_triggers(OLD.id::text, '%1\$s', trigger.cache_table_name);
+      END LOOP;
+
+      -- Recreate view
+      PERFORM %1\$s.create_cache_view(OLD.foreign_schema_name, OLD.foreign_table_name);
+
+      RETURN OLD;
     END IF;
 
+    -- Create cache table and aggregation
     IF TG_OP = 'INSERT' THEN
       PERFORM %1\$s.create_cache_table(
         NEW.foreign_schema_name, 
@@ -3194,20 +3216,31 @@ PLPGSQL,
         NEW.cache_aggregation_name,
         NEW.aggregation_type
       );
-      PERFORM %1\$s.create_cache_views(NEW.foreign_schema_name, NEW.foreign_table_name);
     END IF;
 
-    IF TG_OP = 'UPDATE' THEN
-      PERFORM %1\$s.create_cache_views(NEW.foreign_schema_name, NEW.foreign_table_name);
+    -- Create cache view
+    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
+      PERFORM %1\$s.create_cache_view(NEW.foreign_schema_name, NEW.foreign_table_name);
     END IF;
 
-    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN
+    -- Drop (potential) existing triggers
+    IF (TG_OP = 'UPDATE') THEN
       PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.schema_name, NEW.table_name);
       PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name);
-      -- PERFORM %1\$s.drop_triggers(NEW.id::text, '%1\$s', NEW.cache_table_name);
+
+      FOR trigger IN
+        SELECT * FROM %1\$s.triggers
+        WHERE 
+            %1\$s.triggers.foreign_schema_name = NEW.schema_name
+          AND
+            %1\$s.triggers.foreign_table_name = NEW.table_name
+      LOOP
+        PERFORM %1\$s.drop_triggers(NEW.id::text, '%1\$s', trigger.cache_table_name);
+      END LOOP;
     END IF;
 
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+    -- Create new triggers
+    IF TG_OP = 'INSERT' THEN
       PERFORM %1\$s.create_triggers(NEW.id::text, NEW.schema_name, NEW.table_name, NEW.key_name, NEW.value_names, NEW.conditions, NEW.id);
       PERFORM %1\$s.create_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name, NEW.key_name, NEW.value_names, NEW.conditions);
 
@@ -3222,11 +3255,7 @@ PLPGSQL,
       END LOOP;
     END IF;
 
-    IF TG_OP = 'DELETE' THEN
-      RETURN OLD;
-    ELSE
-      RETURN NEW;
-    END IF;
+    RETURN NEW;
   END;
 PLPGSQL,
           HoardSchema::$cacheSchema
@@ -3304,6 +3333,32 @@ PLPGSQL,
       ),
 
       HoardSchema::createFunction(
+        'drop_cache_table',
+        [
+          'p_table_name' => 'text',
+        ],
+        'void',
+        sprintf(
+          <<<PLPGSQL
+  DECLARE
+  BEGIN
+    RAISE DEBUG 
+      '%1\$s.drop_cache_table: start (p_table_name=%%)', 
+      p_table_name;
+
+      IF %1\$s.is_cache_table_name('%1\$s', p_table_name) = FALSE THEN
+        RETURN;
+      END IF;
+
+    -- Create table
+    EXECUTE format('DROP TABLE IF EXISTS %1\$s.%%I', p_table_name);
+  END;
+PLPGSQL,
+          HoardSchema::$cacheSchema
+        )
+      ),
+
+      HoardSchema::createFunction(
         'create_cache_aggregation',
         [
           'p_cache_table_name' => 'text',
@@ -3316,7 +3371,7 @@ PLPGSQL,
   DECLARE
   BEGIN
     RAISE DEBUG 
-      '%1\$s.create_cache_table: start (p_cache_table_name=%%, p_cache_aggregation_name=%%, p_aggregation_type=%%)', 
+      '%1\$s.create_cache_aggregation: start (p_cache_table_name=%%, p_cache_aggregation_name=%%, p_aggregation_type=%%)', 
       p_cache_table_name,
       p_cache_aggregation_name,
       p_aggregation_type;
@@ -3335,7 +3390,35 @@ PLPGSQL,
       ),
 
       HoardSchema::createFunction(
-        'create_cache_views',
+        'drop_cache_aggregation',
+        [
+          'p_cache_table_name' => 'text',
+          'p_cache_aggregation_name' => 'text',
+        ],
+        'void',
+        sprintf(
+          <<<PLPGSQL
+  DECLARE
+  BEGIN
+    RAISE DEBUG 
+      '%1\$s.drop_cache_aggregation: start (p_cache_table_name=%%, p_cache_aggregation_name=%%)', 
+      p_cache_table_name,
+      p_cache_aggregation_name;
+
+    -- Create table
+    EXECUTE format(
+      'ALTER TABLE %1\$s.%%I DROP COLUMN IF EXISTS %%I', 
+      p_cache_table_name,
+      p_cache_aggregation_name
+    );
+  END;
+PLPGSQL,
+          HoardSchema::$cacheSchema
+        )
+      ),
+
+      HoardSchema::createFunction(
+        'create_cache_view',
         [
           'p_foreign_schema_name' => 'text',
           'p_foreign_table_name' => 'text',
@@ -3363,7 +3446,7 @@ PLPGSQL,
     value text;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.create_cache_views: start (p_foreign_schema_name=%%, p_foreign_table_name=%%)', 
+      '%1\$s.create_cache_view: start (p_foreign_schema_name=%%, p_foreign_table_name=%%)', 
       p_foreign_schema_name,
       p_foreign_table_name;
 
@@ -3418,7 +3501,7 @@ PLPGSQL,
       primary_key_name := foreign_primary_key_name;
 
       EXECUTE format(
-        'CREATE VIEW %1\$s.%%I AS SELECT %%I.%%I as %%I %%s FROM %%I %%s', 
+        'CREATE OR REPLACE VIEW %1\$s.%%I AS SELECT %%I.%%I as %%I %%s FROM %%I %%s', 
         cache_view_name, 
         p_foreign_table_name, 
         primary_key_name, 

@@ -16,35 +16,52 @@ return new class extends Migration
   public function up()
   {
     DB::statement('CREATE SCHEMA IF NOT EXISTS hoard;');
+
+      // Create required functions
+    array_map(function (string $statement) {
+      DB::statement($statement);
+    }, [
+      ...HoardSchema::createGenericHelperFunctions(),
+      ...HoardSchema::createSpecificHelperFunctions(),
+      ...HoardSchema::createAggregationFunctions(),
+      ...HoardSchema::createUpdateFunctions(),
+    ]);
     
     Schema::create(HoardSchema::$cacheSchema . '.triggers', function (Blueprint $table) {
       $table->id()->generatedAs();
-      
-      $table->text('foreign_schema_name');
-      $table->text('foreign_table_name');
-      $table->text('cache_group_name');
-      $table->text('cache_aggregation_name');
+
+      $table->text('query')->storedAs("'SELECT ' || foreign_primary_key_name  || ', (' || replace(" . HoardSchema::$cacheSchema . ".get_refresh_query(primary_key_name, aggregation_function, value_names, options, schema_name, table_name, key_name, 'DUMMY', conditions), '''DUMMY''', 'wrapper.' || foreign_primary_key_name) || ') AS ' || cache_aggregation_name || ' FROM ' || foreign_table_name || ' AS wrapper;'");
+
       $table->text('cache_table_name');
-      $table->text('cache_primary_key_name');
+      $table->text('cache_aggregation_name');
 
       $table->text('schema_name')->nullable();
       $table->text('table_name')->nullable();
-      $table->text('primary_key_name')->nullable();
-      $table->text('key_name')->nullable();
-      $table->text('aggregation_function')->nullable();
-      $table->text('aggregation_type')->nullable();
-      $table->jsonb('value_names');
-      $table->jsonb('options')->default('[]');
-      $table->text('conditions');
 
+      $table->text('aggregation_function')->nullable();
+      $table->jsonb('value_names');
+      $table->text('conditions');
+      $table->text('aggregation_type')->nullable();
+      $table->jsonb('options')->default('[]');
+
+      $table->text('key_name')->nullable();
+      
+      $table->text('foreign_schema_name');
+      $table->text('foreign_table_name');
       $table->text('foreign_primary_key_name');
-      $table->text('foreign_key_name');
-      $table->text('foreign_conditions');
 
       $table->boolean('manual')->default(false);
       $table->boolean('lazy')->default(false);
       $table->boolean('hidden')->default(false);
       $table->boolean('asynchronous')->default(false);
+
+      $table->text('cache_group_name');
+      $table->text('cache_primary_key_name');
+
+      $table->text('primary_key_name')->nullable();
+
+      $table->text('foreign_key_name');
+      $table->text('foreign_conditions');
     });
     
     Schema::create(HoardSchema::$cacheSchema . '.logs', function (Blueprint $table) {
@@ -73,18 +90,13 @@ return new class extends Migration
     array_map(function (string $statement) {
       DB::statement($statement);
     }, [
-      // Make logs table more performant
-      sprintf('ALTER TABLE %1$s.logs' . ' SET UNLOGGED;', HoardSchema::$cacheSchema),
-
-      // Create required functions
-      ...HoardSchema::createGenericHelperFunctions(),
-      ...HoardSchema::createSpecificHelperFunctions(),
-      ...HoardSchema::createAggregationFunctions(),
-      ...HoardSchema::createRefreshFunctions(),
-      ...HoardSchema::createProcessFunctions(),
-      ...HoardSchema::createUpdateFunctions(),
       ...HoardSchema::createViewFunctions(),
       ...HoardSchema::createTriggerFunctions(),
+      ...HoardSchema::createProcessFunctions(),
+      ...HoardSchema::createRefreshFunctions(),
+
+      // Make logs table more performant
+      sprintf('ALTER TABLE %1$s.logs' . ' SET UNLOGGED;', HoardSchema::$cacheSchema),
 
       // Create triggers on "triggers" table
       HoardSchema::execute(sprintf(
