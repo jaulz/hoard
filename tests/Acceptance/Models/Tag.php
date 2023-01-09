@@ -11,6 +11,16 @@ class Tag extends Model
 {
     use IsHoardableTrait;
 
+    /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array
+     */
+    protected $casts = [
+      'first_created_at' => 'datetime',
+      'last_created_at' => 'datetime',
+    ];
+
     public static function boot()
     {
         parent::boot();

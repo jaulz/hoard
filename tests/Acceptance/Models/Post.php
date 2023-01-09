@@ -13,6 +13,16 @@ class Post extends Model
     use IsHoardableTrait;
     use SoftDeletes;
 
+    /**
+     * The attributes that should be cast to native types.
+     *
+     * @var array
+     */
+    protected $casts = [
+      'first_commented_at' => 'datetime',
+      'last_commented_at' => 'datetime',
+    ];
+
     public static function boot()
     {
         parent::boot();

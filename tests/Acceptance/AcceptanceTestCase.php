@@ -3,6 +3,8 @@
 namespace Tests\Acceptance;
 
 use Carbon\Carbon;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\PDO\Connection;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,6 +42,7 @@ class AcceptanceTestCase extends TestCase
         $this->migrate();
 
         $this->init();
+        // $this->debug();
     }
 
     protected function getEnvironmentSetUp($app)
@@ -102,23 +105,23 @@ class AcceptanceTestCase extends TestCase
             $table->timestampsTz();
         });
 
-        HoardSchema::create('posts', 'default', function (Blueprint $table) {
-            $table->integer('comments_count')->default(0)->nullable();
+        Schema::table('posts', function (Blueprint $table) {
+            // $table->integer('comments_count')->default(0)->nullable();
             $table->hoard('comments_count')->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id', [
                 ['deleted_at', 'IS', null]
             ]);
 
-            $table->jsonb('comments_ids')->default('[]')->nullable();
+            // $table->jsonb('comments_ids')->default('[]')->nullable();
             $table->hoard('comments_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
                 'type' => 'string'
             ])->withoutSoftDeletes();
 
-            $table->jsonb('comments_numeric_ids')->default('[]')->nullable();
+            // $table->jsonb('comments_numeric_ids')->default('[]')->nullable();
             $table->hoard('comments_numeric_ids')->aggregate('comments',  HoardAggregationFunctionEnum::push(), 'id')->withoutSoftDeletes()->options([
                 'type' => 'number'
             ]);
 
-            $table->jsonb('comments_duplicate_ids')->default('[]')->nullable();
+            // $table->jsonb('comments_duplicate_ids')->default('[]')->nullable();
             $table->hoard('comments_duplicate_ids')->aggregate('comments', HoardAggregationFunctionEnum::push(), 'id')->options([
                 'type' => 'string'
             ])->withoutSoftDeletes();
@@ -126,106 +129,107 @@ class AcceptanceTestCase extends TestCase
                 'type' => 'string'
             ])->withoutSoftDeletes();
 
-            $table->integer('tags_count')->default(0)->nullable();
+            // $table->integer('tags_count')->default(0)->nullable();
             $table->hoard('tags_count')->aggregate('taggables', HoardAggregationFunctionEnum::count(), 'id')->viaMorph('taggable', Post::class);
 
-            $table->integer('important_tags_count')->default(0)->nullable();
+            // $table->integer('important_tags_count')->default(0)->nullable();
             $table->hoard('important_tags_count')->aggregate('taggables', HoardAggregationFunctionEnum::count(), 'id',  [
                 ['weight', '>', 5],
             ])->viaMorph('taggable', Post::class);
 
-            $table->integer('images_count')->default(0)->nullable();
+            // $table->integer('images_count')->default(0)->nullable();
             $table->hoard('images_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id', [])->viaMorph('imageable', Post::class);
 
+            // $table->timestamp('last_commented_at')->nullable();
             $table->hoard('last_commented_at')->aggregate('comments', HoardAggregationFunctionEnum::max(), 'created_at')->withoutSoftDeletes();
-            $table->timestamp('first_commented_at')->nullable();
-
-            $table->timestamp('last_commented_at')->nullable();
+            
+            // $table->timestamp('first_commented_at')->nullable();
             $table->hoard('first_commented_at')->aggregate('comments', HoardAggregationFunctionEnum::min(), 'created_at')->withoutSoftDeletes();
         });
 
-        HoardSchema::create('users', 'default', function (Blueprint $table) {
-            $table->timestampTz('copied_created_at')->nullable();
-            $table->hoard('copied_created_at')->aggregate('users', 'COPY', 'created_at')->viaOwn();
+        Schema::table('users', function (Blueprint $table) {
+            // $table->timestampTz('copied_created_at')->nullable();
+            $table->hoard('copied_created_at')->aggregate('users', 'COPY', 'created_at')
+            ->viaOwn('sequence');
 
-            $table->integer('comments_count')->default(0)->nullable();
+            // $table->integer('comments_count')->default(0)->nullable();
             $table->hoard('comments_count')->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id',  [
                 ['deleted_at', 'IS', null]
-            ]);
+            ])->via('sequence', 'user_sequence');
 
-            $table->integer('posts_count')->default(0)->nullable();
+            // $table->integer('posts_count')->default(0)->nullable();
             $table->hoard('posts_count')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id', [
                 ['deleted_at', 'IS', null]
-            ]);
+            ])->via('sequence', 'user_sequence');
 
-            $table->integer('posts_count_explicit')->default(0)->nullable();
+            // $table->integer('posts_count_explicit')->default(0)->nullable();
             $table->hoard('posts_count_explicit')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id', [
                 ['deleted_at', 'IS', null]
-            ]);
+            ])->via('sequence', 'user_sequence');
 
-            $table->integer('posts_count_conditional')->default(0)->nullable();
-            $table->hoard('posts_count_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "deleted_at" IS NULL');
+            // $table->integer('posts_count_conditional')->default(0)->nullable();
+            $table->hoard('posts_count_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "deleted_at" IS NULL')
+            ->via('sequence', 'user_sequence');
 
-            $table->integer('posts_count_complex_conditional')->default(0)->nullable();
-            $table->hoard('posts_count_complex_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "weight" > 5 AND "deleted_at" IS NULL');
+            // $table->integer('posts_count_complex_conditional')->default(0)->nullable();
+            $table->hoard('posts_count_complex_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "weight" > 5 AND "deleted_at" IS NULL')
+            ->via('sequence', 'user_sequence');
 
-            $table->integer('images_count')->default(0)->nullable();
+            // $table->integer('images_count')->default(0)->nullable();
             $table->hoard('images_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id',  [
                 'imageable_type' => User::class,
             ])->viaMorph('imageable', User::class, 'sequence');
 
-            $table
-                ->double('posts_count_plus_one')
-                ->storedAs(
-                    DB::raw('posts_count + 1')
-                )
-                ->always();
-            $table->hoard('posts_count_plus_one')->manual();
+            // $table->double('posts_count_plus_one')->storedAs(DB::raw('posts_count + 1'))->always();
+            $table->hoard('posts_count_plus_one')->manual('bigint GENERATED ALWAYS AS (posts_count + 1) STORED');
 
-            $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
+            // $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
             $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', HoardAggregationFunctionEnum::sum(), 'weight', [
                 ['deleted_at', 'IS', null]
-            ])->asynchronous();
+            ])->via('sequence', 'user_sequence')->asynchronous();
 
-            $table->jsonb('grouped_posts_count_by_weekday')->default('{}');
+            // $table->jsonb('grouped_posts_count_by_weekday')->default('{}');
             $table->hoard('grouped_posts_count_by_weekday')->aggregate('posts', HoardAggregationFunctionEnum::group(), [
                 'extract(isodow from "created_at") || \'_suffix\'',
                 'id'
-            ])->withoutSoftDeletes()->options([
+            ])->via('sequence', 'user_sequence')->withoutSoftDeletes()->options([
                 'aggregation_function' => 'count',
             ]);
 
-            $table->jsonb('grouped_posts_weight_by_workingday')->default('{}');
+            // $table->jsonb('grouped_posts_weight_by_workingday')->default('{}');
             $table->hoard('grouped_posts_weight_by_workingday')->aggregate('posts', HoardAggregationFunctionEnum::group(), [
                 'extract(isodow from "created_at")',
                 'weight'
-            ])->withoutSoftDeletes()->options([
+            ])->via('sequence', 'user_sequence')->withoutSoftDeletes()->options([
                 'aggregation_function' => 'sum',
                 'condition' => '"key"::int >= 1 AND "key"::int <= 5'
             ]);
-        }, 'sequence');
+        });
 
-        HoardSchema::create('taggables', 'default', function (Blueprint $table) {
-            $table->integer('cached_taggable_count')->default(0)->nullable();
-            $table->hoard('cached_taggable_count')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
+        Schema::table('taggables', function (Blueprint $table) {
+            // $table->integer('cached_taggable_count')->default(0)->nullable();
+            $table->hoard('cached_taggable_count')->aggregate('users', HoardAggregationFunctionEnum::count(), 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
             $table->hoard('cached_taggable_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id')->viaMorphPivot('taggable', Image::class);
-            $table->hoard('cached_taggable_count')->aggregate('users', HoardAggregationFunctionEnum::count(), 'sequence', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
+            $table->hoard('cached_taggable_count')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
 
-            $table->timestamp('taggable_created_at')->nullable();
-            $table->hoard('taggable_created_at')->aggregate('users', HoardAggregationFunctionEnum::max(), 'created_at', null, 'sequence')->viaMorphPivot('taggable', User::class, 'sequence');
+            // $table->timestamp('taggable_created_at')->nullable();
+            $table->hoard('taggable_created_at')->aggregate('users', HoardAggregationFunctionEnum::max(), 'created_at')->viaMorphPivot('taggable', User::class, 'sequence');
             $table->hoard('taggable_created_at')->aggregate('images', HoardAggregationFunctionEnum::max(), 'created_at')->viaMorphPivot('taggable', Image::class);
             $table->hoard('taggable_created_at')->aggregate('posts', HoardAggregationFunctionEnum::max(), 'created_at')->withoutSoftDeletes()->viaMorphPivot('taggable', Post::class);
         });
 
-        HoardSchema::create('tags', 'default', function (Blueprint $table) {
-            $table->integer('taggables_count')->default(0)->nullable();
-            $table->hoard('taggables_count')->aggregate('taggables', HoardAggregationFunctionEnum::sum(), 'cached_taggable_count', null, null, 'default');
+        Schema::table('tags', function (Blueprint $table) {
+            // $table->integer('taggables_count')->default(0)->nullable();
+            $table->hoard('taggables_count')->aggregate('taggables', HoardAggregationFunctionEnum::sum(), 'cached_taggable_count')
+            ->type('bigint');
 
-            $table->timestamp('first_created_at')->nullable();
-            $table->hoard('first_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::min(), 'taggable_created_at', null, null, 'default');
+            // $table->timestamp('first_created_at')->nullable();
+            $table->hoard('first_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::min(), 'taggable_created_at')
+            ->type('timestamptz');
 
-            $table->timestamp('last_created_at')->nullable();
-            $table->hoard('last_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::max(), 'taggable_created_at', null, null, 'default');
+            // $table->timestamp('last_created_at')->nullable();
+            $table->hoard('last_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::max(), 'taggable_created_at')
+            ->type('timestamptz');
         });
     }
 

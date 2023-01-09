@@ -5,6 +5,7 @@ namespace Jaulz\Hoard;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Fluent;
+use Jaulz\Hoard\Enums\HoardAggregationFunctionEnum;
 use ReflectionProperty;
 
 class HoardDefinition
@@ -59,24 +60,36 @@ class HoardDefinition
    * @param  string  $aggregationFunction
    * @param  string  $valueName
    * @param  ?string|array $conditions
-   * @param  ?string  $groupName
    * @return \Jaulz\Hoard\HoardDefinition
    */
   public function aggregate(
     string $tableName,
     string $aggregationFunction,
     string|array $valueNames,
-    string|array|null $conditions = null,
-    string $primaryKeyName = null,
-    string $groupName = null
+    string|array|null $conditions = null
   ) {
     $attributes = $this->command->getAttributes();
     $attributes['tableName'] = $tableName;
-    $attributes['primaryKeyName'] = $primaryKeyName;
     $attributes['aggregationFunction'] = $aggregationFunction;
     $attributes['valueNames'] = (is_array($valueNames) ? $valueNames : [$valueNames]) ?? null;
-    $attributes['groupName'] = $groupName ?? $attributes['groupName'] ?? null;
     $attributes['conditions'] = array_merge($attributes['conditions'] ?? [], is_string($conditions) ? [$conditions] : ($conditions ?? []));
+
+    $this->setAttributes($attributes);
+
+    return $this;
+  }
+
+  /**
+   * Set the aggregation type.
+   *
+   * @param  string  $name
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function type(
+    string $type
+  ) {
+    $attributes = $this->command->getAttributes();
+    $attributes['aggregationType'] = $type;
 
     $this->setAttributes($attributes);
 
@@ -93,7 +106,7 @@ class HoardDefinition
     string $name
   ) {
     $attributes = $this->command->getAttributes();
-    $attributes['groupName'] = $name;
+    $attributes['cacheGroupName'] = $name;
 
     $this->setAttributes($attributes);
 
@@ -116,16 +129,14 @@ class HoardDefinition
    * @param  string  $foreignKeyName
    * @param  ?string  $keyName
    * @param  ?string|array  $foreignConditions
-   * @param  ?string  $foreignPrimaryKeyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function via(string $foreignKeyName = null, ?string $keyName = null, string|array|null $foreignConditions = null, string $foreignPrimaryKeyName = null)
+  public function via(string $foreignKeyName = null, ?string $keyName = null, string|array|null $foreignConditions = null)
   {
     $attributes = $this->command->getAttributes();
     $attributes['keyName'] = $keyName ?? $attributes['keyName'] ?? null;
     $attributes['foreignKeyName'] = $foreignKeyName ?? $attributes['foreignKeyName'] ?? null;
     $attributes['foreignConditions'] = array_merge($attributes['foreignConditions'] ?? [], is_string($foreignConditions) ? [$foreignConditions] : ($foreignConditions ?? []));
-    $attributes['foreignPrimaryKeyName'] = $foreignPrimaryKeyName ?? $attributes['foreignPrimaryKeyName'] ?? null;
     $this->setAttributes($attributes);
 
     return $this;
@@ -139,11 +150,7 @@ class HoardDefinition
    */
   public function viaOwn(?string $keyName = null)
   {
-    $attributes = $this->command->getAttributes();
-    $attributes['primaryKeyName'] = $keyName ?? $attributes['foreignPrimaryKeyName'];
-    $this->setAttributes($attributes);
-
-    return $this->via($keyName ?? $attributes['foreignPrimaryKeyName'], $keyName ?? $attributes['foreignPrimaryKeyName']);
+    return $this->via($keyName ?? null, $keyName ?? null);
   }
 
   /**
@@ -186,11 +193,10 @@ class HoardDefinition
    * @param  string  $morphable
    * @param  string  $morphableTypeValue
    * @param  ?string  $keyName
-   * @param  ?string  $foreignPrimaryKeyName
    * @param  ?string  $morphableKeyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $foreignPrimaryKeyName = 'id', ?string $morphableKeyName = 'id')
+  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $morphableKeyName = 'id')
   {
     $morphableKey = $morphable . '_' . $morphableKeyName;
     $morphableType = $morphable . '_type';
@@ -200,13 +206,13 @@ class HoardDefinition
       $foreignConditions[$morphableType] = (new $morphableTypeValue())->getMorphClass();
     }
 
-    return $this->via($morphableKey, $keyName, $foreignConditions, $foreignPrimaryKeyName);
+    return $this->via($morphableKey, $keyName, $foreignConditions);
   }
 
   /**
    * Set the options of the aggregated value column.
    *
-   * @param  string  $type
+   * @param  array  $options
    * @return \Jaulz\Hoard\HoardDefinition
    */
   public function options(array $options)
@@ -222,12 +228,14 @@ class HoardDefinition
   /**
    * If the definition is manual it means that "refresh_all" must be used to update the cached values.
    *
+   * @param  string  $aggregationType
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function manual()
+  public function manual(string $aggregationType)
   {
     $attributes = $this->command->getAttributes();
     $attributes['manual'] = true;
+    $attributes['aggregationType'] = $aggregationType;
 
     $this->setAttributes($attributes);
 

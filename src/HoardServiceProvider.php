@@ -32,27 +32,16 @@ class HoardServiceProvider extends ServiceProvider
 
   public function enhanceBlueprint()
   {
-    Blueprint::macro('hoardContext', function (array $context) {
+    Blueprint::macro('hoard', function (string $foreignAggregationName, string $cacheGroupName = 'default') {
       /** @var \Illuminate\Database\Schema\Blueprint $this */
-      $this->addCommand('hoardContext', $context);
-    });
-
-    Blueprint::macro('hoard', function (string $foreignAggregationName) {
-      /** @var \Illuminate\Database\Schema\Blueprint $this */
-      $hoardContext = collect($this->getCommands())->first(function ($command) {
-        return $command->get('name') === 'hoardContext';
-      });
-      $foreignTableName = $this->prefix . $hoardContext->get('tableName');
-      $foreignPrimaryKeyName = $hoardContext->get('primaryKeyName');
-      $cacheTableGroup = $hoardContext->get('cacheTableGroup');
+      $foreignTableName = $this->prefix . $this->table;
 
       $command = $this->addCommand(
         'hoard',
         compact(
           'foreignAggregationName',
           'foreignTableName',
-          'foreignPrimaryKeyName',
-          'cacheTableGroup'
+          'cacheGroupName'
         )
       );
 
@@ -70,31 +59,24 @@ class HoardServiceProvider extends ServiceProvider
         : HoardSchema::$schema;
       $foreignTableName = Str::after($command->foreignTableName, '.');
       $foreignKeyName =
-        $command->foreignKeyName ?? ($command->foreignPrimaryKeyName ?? 'id');
-      $keyName =
-        $command->keyName ??
-        Str::singular($foreignTableName) . '_' . $foreignKeyName;
+        $command->foreignKeyName ?? null;
       $options = $command->options ?? [];
-      $aggregationFunction = Str::upper($command->aggregationFunction) ?? '';
+      $aggregationFunction = Str::upper($command->aggregationFunction) ?? null;
+      $aggregationType = $command->aggregationType ?? null;
       $valueNames = $command->valueNames ?? [];
       $foreignConditions = HoardSchema::prepareConditions(
         $command->foreignConditions ?? []
       );
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
-      $groupName = $command->groupName;
-      $tableName = $command->tableName ?? '';
-      $schemaName = $groupName
-        ? HoardSchema::$cacheSchema
+      $cacheGroupName = $command->cacheGroupName;
+      $schemaName = Str::contains($command->tableName, '.')
+        ? Str::before($command->tableName, '.')
         : HoardSchema::$schema;
-      $tableName = $groupName
-        ? HoardSchema::getCacheTableName($tableName, $groupName, false)
-        : $tableName;
-      $primaryKeyName = $command->primaryKeyName ?? 'id';
-      $primaryKeyName = $groupName
-        ? HoardSchema::getCachePrimaryKeyName($tableName, $primaryKeyName)
-        : $primaryKeyName;
-      $foreignPrimaryKeyName =
-        $command->foreignPrimaryKeyName ?? $foreignKeyName;
+      $tableName = Str::after($command->tableName, '.');
+      $keyName =
+        $command->keyName ??
+        ($schemaName === HoardSchema::$cacheSchema ? 
+          null: Str::singular($foreignTableName) . '_id');
       $refreshConditions = HoardSchema::prepareConditions(
         $command->refreshConditions ?? []
       );
@@ -102,39 +84,6 @@ class HoardServiceProvider extends ServiceProvider
       $hidden = $command->hidden ?? false;
       $manual = $command->manual ?? false;
       $asynchronous = $command->asynchronous ?? false;
-      $cacheTableGroup = $command->cacheTableGroup;
-      $foreignCacheTableName = HoardSchema::getCacheTableName(
-        $foreignTableName,
-        $cacheTableGroup,
-        false
-      );
-      $foreignCachePrimaryKeyName = HoardSchema::getCachePrimaryKeyName(
-        $foreignTableName,
-        $foreignPrimaryKeyName
-      );
-
-      // Extract dependencies from key, values and conditions
-      // [^\\\\]((\")|('))(?(2)([^\"]|\\\")*|([^']|\\')*)[^\\\\]\\1|([a-zA-Z_$][a-zA-Z_$0-9]*)
-      preg_match_all(
-        "/'[^']*'|\b([a-zA-Z_$][a-zA-Z_$0-9]*)\b/m",
-        implode(' ', [$keyName, ...$valueNames, $conditions]),
-        $matches
-      );
-      $dependencyNames = collect([...$matches[1]])
-        ->map(fn($dependencyName) => Str::lower($dependencyName))
-        ->unique()
-        ->filter(
-          fn($dependencyName) => !in_array($dependencyName, [
-            'is',
-            'not',
-            'null',
-            'true',
-            'false',
-          ])
-        )
-        ->filter()
-        ->values()
-        ->all();
 
       return [
         sprintf(
@@ -148,19 +97,16 @@ class HoardServiceProvider extends ServiceProvider
               conditions,
               foreign_table_name,
               foreign_key_name, 
-              foreign_aggregation_name,
+              cache_aggregation_name,
               foreign_conditions,
-              foreign_primary_key_name,
               lazy,
-              primary_key_name,
-              foreign_cache_table_name,
-              foreign_cache_primary_key_name,
               hidden,
               manual,
               schema_name,
               foreign_schema_name,
               asynchronous,
-              dependency_names
+              cache_group_name,
+              aggregation_type
             ) VALUES (
               %2\$s,
               %3\$s,
@@ -179,10 +125,7 @@ class HoardServiceProvider extends ServiceProvider
               %16\$s,
               %17\$s,
               %18\$s,
-              %19\$s,
-              %20\$s,
-              %21\$s,
-              convert_from(decode(%22\$s, 'base64'), 'utf8')::jsonb
+              %19\$s
             ) ON CONFLICT (id) DO UPDATE SET 
               table_name = EXCLUDED.table_name, 
               key_name = EXCLUDED.key_name, 
@@ -192,19 +135,16 @@ class HoardServiceProvider extends ServiceProvider
               conditions = EXCLUDED.conditions, 
               foreign_table_name = EXCLUDED.foreign_table_name, 
               foreign_key_name = EXCLUDED.foreign_key_name, 
-              foreign_aggregation_name = EXCLUDED.foreign_aggregation_name, 
+              cache_aggregation_name = EXCLUDED.cache_aggregation_name, 
               foreign_conditions = EXCLUDED.foreign_conditions, 
-              foreign_primary_key_name = EXCLUDED.foreign_primary_key_name, 
               lazy = EXCLUDED.lazy, 
-              primary_key_name = EXCLUDED.primary_key_name, 
-              foreign_cache_table_name = EXCLUDED.foreign_cache_table_name, 
-              foreign_cache_primary_key_name = EXCLUDED.foreign_cache_primary_key_name, 
               hidden = EXCLUDED.hidden, 
               manual = EXCLUDED.manual, 
               schema_name = EXCLUDED.schema_name, 
               foreign_schema_name = EXCLUDED.foreign_schema_name, 
               asynchronous = EXCLUDED.asynchronous, 
-              dependency_names = EXCLUDED.dependency_names;
+              cache_group_name = EXCLUDED.cache_group_name,
+              aggregation_type = EXCLUDED.aggregation_type;
           ",
           HoardSchema::$cacheSchema,
           $this->quoteString($tableName),
@@ -219,17 +159,14 @@ class HoardServiceProvider extends ServiceProvider
           $this->quoteString($foreignKeyName),
           $this->quoteString($foreignAggregationName),
           DB::getPdo()->quote($foreignConditions),
-          $this->quoteString($foreignPrimaryKeyName),
           $lazy ? 'true' : 'false',
-          $this->quoteString($primaryKeyName),
-          $this->quoteString($foreignCacheTableName),
-          $this->quoteString($foreignCachePrimaryKeyName),
           $hidden ? 'true' : 'false',
           $manual ? 'true' : 'false',
           $this->quoteString($schemaName),
           $this->quoteString($foreignSchemaName),
           $asynchronous ? 'true' : 'false',
-          $this->quoteString(base64_encode(json_encode($dependencyNames)))
+          $this->quoteString($cacheGroupName),
+          $this->quoteString($aggregationType),
         ),
       ];
     });
