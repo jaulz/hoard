@@ -226,6 +226,7 @@ class HoardDefinition
   }
 
   /**
+   * Manual aggregations are usually generated columns that are automatically updated by Postgres itself.
    * If the definition is manual it means that "refresh_all" must be used to update the cached values.
    *
    * @param  string  $aggregationType
@@ -240,6 +241,18 @@ class HoardDefinition
     $this->setAttributes($attributes);
 
     return $this;
+  }
+
+  /**
+   * Stored aggregations are special manual aggregations and usually the primary use case of those.
+   *
+   * @param  string  $aggregationType
+   * @param  string  $expression
+   * @return \Jaulz\Hoard\HoardDefinition
+   */
+  public function stored(string $aggregationType, string $expression)
+  {
+    return $this->manual($aggregationType . ' GENERATED ALWAYS AS (' . $expression . ') STORED');
   }
 
   /**

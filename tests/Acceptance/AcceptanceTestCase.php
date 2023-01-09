@@ -181,7 +181,8 @@ class AcceptanceTestCase extends TestCase
             ])->viaMorph('imageable', User::class, 'sequence');
 
             // $table->double('posts_count_plus_one')->storedAs(DB::raw('posts_count + 1'))->always();
-            $table->hoard('posts_count_plus_one')->manual('bigint GENERATED ALWAYS AS (posts_count + 1) STORED');
+            $table->hoard('posts_count_plus_one')->stored('bigint',
+            'posts_count + 1');
 
             // $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
             $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', HoardAggregationFunctionEnum::sum(), 'weight', [
