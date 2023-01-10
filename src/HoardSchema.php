@@ -2391,10 +2391,10 @@ PLPGSQL,
    *
    * @return array
    */
-  public static function createTriggerFunctions()
+  public static function createCacheTriggerFunctions()
   {
     HoardSchema::createFunction(
-        'after_trigger',
+        'cacheable__after',
         [],
         'trigger',
         sprintf(
@@ -2437,7 +2437,7 @@ BEGIN
 
   -- Log
   RAISE DEBUG '
-    %1\$s.after_trigger: start (
+    %1\$s.cacheable__after: start (
       TG_NAME=%%, 
       TG_OP=%%, 
       TG_TABLE_NAME=%%, 
@@ -2500,7 +2500,7 @@ BEGIN
     foreign_conditions := trigger.foreign_conditions;
     asynchronous := trigger.asynchronous;
 
-    RAISE DEBUG '%1\$s.after_trigger: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+    RAISE DEBUG '%1\$s.cacheable__after: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
       TG_TABLE_NAME,
       trigger_id, 
       schema_name, 
@@ -2550,7 +2550,7 @@ BEGIN
       new_relevant := false;
     END IF;
 
-    RAISE DEBUG '%1\$s.after_trigger: new (new_values=%%, new_foreign_key=%%, new_relevant=%%)', new_values, new_foreign_key, new_relevant;
+    RAISE DEBUG '%1\$s.cacheable__after: new (new_values=%%, new_foreign_key=%%, new_relevant=%%)', new_values, new_foreign_key, new_relevant;
 
     -- Run update if required
     IF asynchronous = false THEN
@@ -2583,7 +2583,7 @@ BEGIN
       );
       processed_at := NOW();
     ELSE
-      RAISE DEBUG '%1\$s.after_trigger: skip update because of asynchronous mode';
+      RAISE DEBUG '%1\$s.cacheable__after: skip update because of asynchronous mode';
     END IF;
     RAISE DEBUG '';
 
@@ -2592,7 +2592,7 @@ BEGIN
       USING trigger_id, TG_OP, new_values, new_foreign_key, new_relevant, processed_at;
   END LOOP;
 
-  RAISE DEBUG '%1\$s.after_trigger: end';
+  RAISE DEBUG '%1\$s.cacheable__after: end';
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;
@@ -2607,7 +2607,7 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'before_trigger',
+        'cacheable__before',
         [],
         'trigger',
         sprintf(
@@ -2656,7 +2656,7 @@ BEGIN
 
   -- Log
   RAISE DEBUG '
-    %1\$s.before_trigger: start (
+    %1\$s.cacheable__before: start (
       TG_NAME=%%, 
       TG_OP=%%, 
       TG_TABLE_NAME=%%, 
@@ -2719,7 +2719,7 @@ BEGIN
       asynchronous := trigger.asynchronous;
 
       RAISE DEBUG 
-        '%1\$s.before_trigger: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+        '%1\$s.cacheable__before: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
         TG_TABLE_NAME,
         trigger_id, 
         schema_name, 
@@ -2771,7 +2771,7 @@ BEGIN
       END IF;
 
       RAISE DEBUG 
-        '%1\$s.before_trigger: old (old_values=%%, old_foreign_key=%%, old_relevant=%%)', 
+        '%1\$s.cacheable__before: old (old_values=%%, old_foreign_key=%%, old_relevant=%%)', 
         old_values, 
         old_foreign_key, 
         old_relevant;
@@ -2821,7 +2821,7 @@ BEGIN
         );
         processed_at := NOW();
       ELSE
-        RAISE DEBUG '%1\$s.before_trigger: skip update because of asynchronous mode';
+        RAISE DEBUG '%1\$s.cacheable__before: skip update because of asynchronous mode';
       END IF;
       RAISE DEBUG '';
 
@@ -2830,7 +2830,7 @@ BEGIN
     END LOOP;
   END IF;
 
-  RAISE DEBUG '%1\$s.before_trigger: end';
+  RAISE DEBUG '%1\$s.cacheable__before: end';
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;
@@ -2844,7 +2844,15 @@ PLPGSQL,
         ),
         'PLPGSQL'
       );
+    }
 
+      /**
+       * Create trigger functions.
+       *
+       * @return array
+       */
+      public static function createTriggerFunctions()
+      {
       HoardSchema::createFunction(
         'create_triggers',
         [
@@ -2874,8 +2882,8 @@ BEGIN
 
   IF p_trigger_id IS NOT NULL THEN
     -- Concatenate trigger names
-    before_trigger_name := 'hoard_before_update_' || p_trigger_name;
-    after_trigger_name := 'hoard_after_update_' || p_trigger_name;
+    before_trigger_name := '9999_hoard_' || p_trigger_name || '__before';
+    after_trigger_name := '9999_hoard_' || p_trigger_name || '__after';
 
     -- Check if the table contains this column
     FOREACH dependency_name IN ARRAY p_dependency_names LOOP
@@ -2891,21 +2899,21 @@ BEGIN
     IF cardinality(column_names) > 0 THEN
       IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, before_trigger_name) THEN
         EXECUTE format('
-          CREATE TRIGGER %%s
+          CREATE TRIGGER %%I
             BEFORE UPDATE OF %%s
-            ON %%s.%%s
+            ON %%I.%%I
             FOR EACH ROW 
-            EXECUTE FUNCTION %1\$s.before_trigger(%%L)
+            EXECUTE FUNCTION %1\$s.cacheable__before(%%L)
           ', before_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_trigger_id);
       END IF;
 
       IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, after_trigger_name) THEN
         EXECUTE format('
-          CREATE TRIGGER %%s
+          CREATE TRIGGER %%I
             AFTER UPDATE OF %%s
-            ON %%s.%%s
+            ON %%I.%%I
             FOR EACH ROW 
-            EXECUTE FUNCTION %1\$s.after_trigger(%%L)
+            EXECUTE FUNCTION %1\$s.cacheable__after(%%L)
           ', after_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_trigger_id);
       END IF;
     END IF;
@@ -2917,9 +2925,9 @@ BEGIN
       EXECUTE format('
         CREATE TRIGGER hoard_before_create_or_delete
           BEFORE INSERT OR DELETE 
-          ON %%s.%%s
+          ON %%I.%%I
           FOR EACH ROW 
-          EXECUTE FUNCTION %1\$s.before_trigger()
+          EXECUTE FUNCTION %1\$s.cacheable__before()
         ', p_schema_name, p_table_name);
     END IF;
 
@@ -2927,9 +2935,9 @@ BEGIN
       EXECUTE format('
         CREATE TRIGGER hoard_after_create_or_delete
           AFTER INSERT OR DELETE 
-          ON %%s.%%s
+          ON %%I.%%I
           FOR EACH ROW 
-          EXECUTE FUNCTION %1\$s.after_trigger()
+          EXECUTE FUNCTION %1\$s.cacheable__after()
         ', p_schema_name, p_table_name);
     END IF;
   END IF;
@@ -2957,17 +2965,17 @@ BEGIN
   RAISE DEBUG '%1\$s.drop_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%)', p_trigger_name, p_schema_name, p_table_name;
 
   -- Concatenate trigger names
-  before_trigger_name := 'hoard_before_update_' || p_trigger_name;
-  after_trigger_name := 'hoard_after_update_' || p_trigger_name;
+  before_trigger_name := '9999_hoard_' || p_trigger_name || '__before';
+  after_trigger_name := '9999_hoard_' || p_trigger_name || '__after';
 
   -- Drop triggers for table
   IF p_table_name <> '' THEN
     EXECUTE format('
-        DROP TRIGGER IF EXISTS %%s ON %%s.%%s
+        DROP TRIGGER IF EXISTS %%I ON %%I.%%I
       ', before_trigger_name, p_schema_name, p_table_name);
 
     EXECUTE format('
-        DROP TRIGGER IF EXISTS %%s ON %%s.%%s
+        DROP TRIGGER IF EXISTS %%I ON %%I.%%I
       ', after_trigger_name, p_schema_name, p_table_name);
   END IF;
 END;
@@ -2978,7 +2986,7 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'prepare',
+        'triggers__before',
         [],
         'trigger',
         sprintf(
@@ -2986,10 +2994,19 @@ PLPGSQL,
   DECLARE
   BEGIN
     RAISE DEBUG 
-      '%1\$s.prepare: start (TG_OP=%%, OLD=%%, NEW=%%)', 
+      '%1\$s.triggers__before: start (TG_OP=%%, OLD=%%, NEW=%%)', 
       TG_OP, 
       OLD, 
       NEW;
+
+    -- Drop view
+    IF TG_OP = 'DELETE' THEN
+      -- RAISE EXCEPTION '%1\$s.triggers__before: triggers cannot be deleted and must be deactivated instead';
+      EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name));
+      RAISE DEBUG 'hoard.triggers__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name);
+
+      RETURN OLD;
+    END IF;
 
     -- Prevent update of columns
     IF TG_OP = 'UPDATE' THEN
@@ -3077,23 +3094,11 @@ PLPGSQL,
       END IF;
     END IF;
 
-    -- Drop old views in case they already exist
-    IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
-      EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name));
-      RAISE DEBUG 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name);
-    END IF;
+    -- Drop view
+    EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name));
+    RAISE DEBUG 'hoard.triggers__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name);
 
-    -- Drop old views in case they already exist and prepare dependency names
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-      EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name));
-      RAISE DEBUG 'hoard.prepare: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name);
-    END IF;
-
-    IF TG_OP = 'DELETE' THEN
-      RETURN OLD;
-    ELSE
-      RETURN NEW;
-    END IF;
+    RETURN NEW;
   END;
 PLPGSQL,
           HoardSchema::$cacheSchema,
@@ -3106,7 +3111,7 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'initialize',
+        'triggers__after',
         [],
         'trigger',
         sprintf(
@@ -3115,7 +3120,7 @@ PLPGSQL,
     trigger %1\$s.triggers%%rowtype;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.initialize: start (TG_OP=%%, OLD=%%, NEW=%%)', 
+      '%1\$s.triggers__after: start (TG_OP=%%, OLD=%%, NEW=%%)', 
       TG_OP, 
       OLD, 
       NEW;

@@ -87,6 +87,7 @@ return new class extends Migration
       // Create functions that require the tables to exist
     HoardSchema::createViewFunctions();
     HoardSchema::createTriggerFunctions();
+    HoardSchema::createCacheTriggerFunctions();
     HoardSchema::createProcessFunctions();
     HoardSchema::createRefreshFunctions();
 
@@ -101,14 +102,14 @@ return new class extends Migration
             CREATE TRIGGER hoard_before
               BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
               FOR EACH ROW 
-              EXECUTE FUNCTION %1\$s.prepare();
+              EXECUTE FUNCTION %1\$s.triggers__before();
           END IF;
 
           IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_after') THEN
             CREATE TRIGGER hoard_after
               AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
               FOR EACH ROW 
-              EXECUTE FUNCTION %1\$s.initialize();
+              EXECUTE FUNCTION %1\$s.triggers__after();
           END IF;
         END;
         PLPGSQL,

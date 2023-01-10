@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Jaulz\Hoard\Enums\HoardAggregationFunctionEnum;
 use Jaulz\Hoard\HoardSchema;
 use Jaulz\Hoard\HoardServiceProvider;
+use Jaulz\Hoard\Scopes\HoardScope;
 use Orchestra\Testbench\Concerns\CreatesApplication;
 use Orchestra\Testbench\TestCase;
 use Tests\Acceptance\Models\Comment;
@@ -961,5 +962,12 @@ class AcceptanceTestCase extends TestCase
             '2' => 1,
             '5' => 7,
         ], $this->refresh($user)->grouped_posts_weight_by_workingday);
+    }
+
+    public function testRemoveTrigger()
+    {
+        DB::statement('DELETE FROM ' . HoardSchema::$cacheSchema . '.triggers WHERE id = 1');
+
+        $this->assertEquals(true, true);
     }
 }
