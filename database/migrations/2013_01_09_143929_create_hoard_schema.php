@@ -17,16 +17,13 @@ return new class extends Migration
   {
     DB::statement('CREATE SCHEMA IF NOT EXISTS hoard;');
 
-      // Create required functions
-    array_map(function (string $statement) {
-      DB::statement($statement);
-    }, [
-      ...HoardSchema::createGenericHelperFunctions(),
-      ...HoardSchema::createSpecificHelperFunctions(),
-      ...HoardSchema::createAggregationFunctions(),
-      ...HoardSchema::createUpdateFunctions(),
-    ]);
+      // Create functions that do not require the tables to exist
+      HoardSchema::createGenericHelperFunctions();
+      HoardSchema::createSpecificHelperFunctions();
+      HoardSchema::createAggregationFunctions();
+      HoardSchema::createUpdateFunctions();
     
+      // Create tables
     Schema::create(HoardSchema::$cacheSchema . '.triggers', function (Blueprint $table) {
       $table->id()->generatedAs();
 
@@ -87,39 +84,36 @@ return new class extends Migration
       $table->index(['trigger_id', 'processed_at']);
     });
 
-    array_map(function (string $statement) {
-      DB::statement($statement);
-    }, [
-      ...HoardSchema::createViewFunctions(),
-      ...HoardSchema::createTriggerFunctions(),
-      ...HoardSchema::createProcessFunctions(),
-      ...HoardSchema::createRefreshFunctions(),
+      // Create functions that require the tables to exist
+    HoardSchema::createViewFunctions();
+    HoardSchema::createTriggerFunctions();
+    HoardSchema::createProcessFunctions();
+    HoardSchema::createRefreshFunctions();
 
-      // Make logs table more performant
-      sprintf('ALTER TABLE %1$s.logs' . ' SET UNLOGGED;', HoardSchema::$cacheSchema),
+    // Optimize logs performance
+    DB::statement(sprintf('ALTER TABLE %1$s.logs' . ' SET UNLOGGED;', HoardSchema::$cacheSchema));
 
-      // Create triggers on "triggers" table
-      HoardSchema::execute(sprintf(
-        <<<PLPGSQL
-          BEGIN
-            IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_before') THEN
-              CREATE TRIGGER hoard_before
-                BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
-                FOR EACH ROW 
-                EXECUTE FUNCTION %1\$s.prepare();
-            END IF;
+    // Create triggers on "triggers" table
+    HoardSchema::execute(sprintf(
+      <<<PLPGSQL
+        BEGIN
+          IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_before') THEN
+            CREATE TRIGGER hoard_before
+              BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.triggers
+              FOR EACH ROW 
+              EXECUTE FUNCTION %1\$s.prepare();
+          END IF;
 
-            IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_after') THEN
-              CREATE TRIGGER hoard_after
-                AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
-                FOR EACH ROW 
-                EXECUTE FUNCTION %1\$s.initialize();
-            END IF;
-          END;
-          PLPGSQL,
-        HoardSchema::$cacheSchema
-      )),
-    ]);
+          IF NOT %1\$s.exists_trigger('%1\$s', 'triggers', 'hoard_after') THEN
+            CREATE TRIGGER hoard_after
+              AFTER INSERT OR UPDATE OR DELETE ON %1\$s.triggers
+              FOR EACH ROW 
+              EXECUTE FUNCTION %1\$s.initialize();
+          END IF;
+        END;
+        PLPGSQL,
+      HoardSchema::$cacheSchema
+    ));
   }
 
   /**

@@ -199,7 +199,7 @@ class HoardSchema
    */
   public static function execute(string $body, string $language = 'PLPGSQL')
   {
-    return sprintf("DO $$ %1\$s $$ LANGUAGE %2\$s;", $body, $language);
+    return DB::statement(sprintf("DO $$ %1\$s $$ LANGUAGE %2\$s;", $body, $language));
   }
 
   /**
@@ -234,7 +234,7 @@ class HoardSchema
         )
       );
 
-    return sprintf(
+    return DB::statement(sprintf(
       "
         CREATE OR REPLACE FUNCTION %1\$s.%2\$s(%3\$s)
           RETURNS %4\$s
@@ -249,7 +249,7 @@ class HoardSchema
       $body,
       $language,
       $volatility
-    );
+    ));
   }
 
   /**
@@ -259,7 +259,6 @@ class HoardSchema
    */
   public static function createGenericHelperFunctions()
   {
-    return [
       HoardSchema::createFunction(
         'get_column_type',
         [
@@ -296,7 +295,7 @@ class HoardSchema
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_primary_key_name',
@@ -340,7 +339,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_primary_key_type',
@@ -362,7 +361,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'array_diff',
@@ -380,7 +379,7 @@ SQL
         ),
         'SQL',
         'IMMUTABLE'
-      ),
+      );
 
       HoardSchema::createFunction(
         'array_distinct',
@@ -395,7 +394,7 @@ SQL
         ),
         'SQL',
         'IMMUTABLE'
-      ),
+      );
 
       HoardSchema::createFunction(
         'exists_trigger',
@@ -429,7 +428,7 @@ SQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'exists_table',
@@ -460,7 +459,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'exists_view',
@@ -492,7 +491,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'exists_function',
@@ -524,7 +523,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'exists_table_column',
@@ -558,7 +557,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'set_row_value',
@@ -574,7 +573,7 @@ PLPGSQL
 SQL
         ),
         'SQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'set_row_value',
@@ -590,7 +589,7 @@ SQL
 SQL
         ),
         'SQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_row_value',
@@ -607,7 +606,7 @@ SQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_row_value',
@@ -624,7 +623,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_row_value',
@@ -641,7 +640,7 @@ PLPGSQL
 PLPGSQL
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'jsonb_array_to_text_array',
@@ -656,7 +655,7 @@ SQL
         ),
         'SQL',
         'IMMUTABLE PARALLEL SAFE STRICT'
-      ),
+      );
 
       HoardSchema::createFunction(
         'row_values_to_json',
@@ -671,7 +670,7 @@ SQL
         ),
         'SQL',
         'IMMUTABLE PARALLEL SAFE STRICT'
-      ),
+      );
 
       HoardSchema::createFunction(
         'jsonb_object_to_value_array',
@@ -686,7 +685,7 @@ SQL
         ),
         'SQL',
         'IMMUTABLE PARALLEL SAFE STRICT'
-      ),
+      );
 
       HoardSchema::createFunction(
         'filter_jsonb_object',
@@ -713,8 +712,7 @@ PLPGSQL
         ),
         'PLPGSQL',
         'IMMUTABLE PARALLEL SAFE STRICT'
-      ),
-    ];
+      );
   }
 
   /**
@@ -724,7 +722,6 @@ PLPGSQL
    */
   public static function createSpecificHelperFunctions()
   {
-    return [
       HoardSchema::createFunction(
         'resolve_primary_key_name',
         [
@@ -745,7 +742,7 @@ PLPGSQL,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'is_cache_primary_key_name',
@@ -763,7 +760,7 @@ PLPGSQL,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'resolve_cache_primary_key_name',
@@ -785,7 +782,7 @@ PLPGSQL,
           HoardSchema::$cachePrimaryKeyNamePrefix
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_cache_view_name',
@@ -809,7 +806,7 @@ PLPGSQL,
           HoardSchema::$cacheViewNameSuffix
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_table_name',
@@ -838,7 +835,7 @@ PLPGSQL,
           HoardSchema::$cacheTableNameDelimiter
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'is_cache_table_name',
@@ -867,7 +864,7 @@ PLPGSQL,
           HoardSchema::$cacheTableNameSuffix
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_join_statement',
@@ -932,7 +929,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'value_names_to_columns',
@@ -967,8 +964,7 @@ PLPGSQL,
         ),
         'PLPGSQL',
         'IMMUTABLE PARALLEL SAFE STRICT'
-      ),
-    ];
+      );
   }
 
   /**
@@ -1026,7 +1022,6 @@ PLPGSQL,
       'p_action' => 'text',
     ];
 
-    return [
       HoardSchema::createFunction(
         'get_refresh_query',
         [
@@ -1096,7 +1091,7 @@ PLPGSQL,
         ),
         'PLPGSQL',
         'IMMUTABLE'
-      ),
+      );
 
       /**
        * Sum
@@ -1117,7 +1112,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'concat_sum_refresh_queries',
@@ -1132,7 +1127,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_sum_statement',
@@ -1163,7 +1158,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       /**
        * Count
@@ -1184,7 +1179,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'concat_count_refresh_queries',
@@ -1199,7 +1194,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_count_statement',
@@ -1226,7 +1221,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       /**
        * Max
@@ -1244,7 +1239,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_max_statement',
@@ -1284,7 +1279,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       /**
        * Min
@@ -1302,7 +1297,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_min_statement',
@@ -1342,7 +1337,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       /**
        * Copy
@@ -1370,7 +1365,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'concat_copy_refresh_queries',
@@ -1385,7 +1380,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_copy_statement',
@@ -1408,7 +1403,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       /**
        * Push
@@ -1435,7 +1430,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'concat_push_refresh_queries',
@@ -1450,7 +1445,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_push_statement',
@@ -1523,7 +1518,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       /**
        * Group
@@ -1572,7 +1567,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'concat_group_refresh_queries',
@@ -1598,7 +1593,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'get_update_group_statement',
@@ -1682,8 +1677,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
-    ];
+      );
   }
 
   /**
@@ -1693,7 +1687,6 @@ PLPGSQL,
    */
   public static function createRefreshFunctions()
   {
-    return [
       HoardSchema::createFunction(
         'upsert_cache',
         [
@@ -1747,7 +1740,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'refresh_row',
@@ -1914,7 +1907,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'refresh',
@@ -1953,8 +1946,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
-    ];
+      );
   }
 
   /**
@@ -1964,7 +1956,6 @@ PLPGSQL,
    */
   public static function createProcessFunctions()
   {
-    return [
       HoardSchema::createFunction(
         'process',
         [
@@ -2049,8 +2040,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
-    ];
+      );
   }
 
   /**
@@ -2060,7 +2050,6 @@ PLPGSQL,
    */
   public static function createUpdateFunctions()
   {
-    return [
       HoardSchema::createFunction(
         'update',
         [
@@ -2394,8 +2383,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
-    ];
+      );
   }
 
   /**
@@ -2405,8 +2393,7 @@ PLPGSQL,
    */
   public static function createTriggerFunctions()
   {
-    return [
-      HoardSchema::createFunction(
+    HoardSchema::createFunction(
         'after_trigger',
         [],
         'trigger',
@@ -2617,7 +2604,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'before_trigger',
@@ -2856,7 +2843,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'create_triggers',
@@ -2951,7 +2938,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'drop_triggers',
@@ -2988,7 +2975,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'prepare',
@@ -3116,7 +3103,7 @@ PLPGSQL,
           HoardSchema::$cacheTableNameSuffix,
         ),
         'PLPGSQL'
-      ),
+      );
 
       HoardSchema::createFunction(
         'initialize',
@@ -3249,8 +3236,7 @@ PLPGSQL,
           HoardSchema::$cacheSchema
         ),
         'PLPGSQL'
-      ),
-    ];
+      );
   }
 
   /**
@@ -3260,7 +3246,6 @@ PLPGSQL,
    */
   public static function createViewFunctions()
   {
-    return [
       HoardSchema::createFunction(
         'create_cache_table',
         [
@@ -3318,7 +3303,7 @@ PLPGSQL,
 PLPGSQL,
           HoardSchema::$cacheSchema
         )
-      ),
+  );
 
       HoardSchema::createFunction(
         'drop_cache_table',
@@ -3344,7 +3329,7 @@ PLPGSQL,
 PLPGSQL,
           HoardSchema::$cacheSchema
         )
-      ),
+        );
 
       HoardSchema::createFunction(
         'create_cache_aggregation',
@@ -3375,7 +3360,7 @@ PLPGSQL,
 PLPGSQL,
           HoardSchema::$cacheSchema
         )
-      ),
+      );
 
       HoardSchema::createFunction(
         'drop_cache_aggregation',
@@ -3403,7 +3388,7 @@ PLPGSQL,
 PLPGSQL,
           HoardSchema::$cacheSchema
         )
-      ),
+      );
 
       HoardSchema::createFunction(
         'create_cache_view',
@@ -3503,7 +3488,6 @@ PLPGSQL,
 PLPGSQL,
           HoardSchema::$cacheSchema
         )
-      ),
-    ];
+      );
   }
 }
