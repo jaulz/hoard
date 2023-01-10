@@ -3008,6 +3008,7 @@ PLPGSQL,
         sprintf(
           <<<PLPGSQL
   DECLARE
+    trigger %1\$s.triggers%%rowtype;
   BEGIN
     RAISE DEBUG 
       '%1\$s.triggers__before: start (TG_OP=%%, OLD=%%, NEW=%%)', 
@@ -3072,7 +3073,25 @@ PLPGSQL,
         NEW.aggregation_type := %1\$s.get_column_type(NEW.schema_name, NEW.table_name, NEW.value_names->>0);
 
         IF (NEW.aggregation_type = '') IS NOT FALSE THEN
-          NEW.aggregation_type := %1\$s.get_column_type('%1\$s', NEW.cache_table_name, NEW.value_names->>0);
+          -- Try to resolve from same cache table
+          -- NEW.aggregation_type := %1\$s.get_column_type('%1\$s', NEW.cache_table_name, NEW.value_names->>0);
+
+          IF (NEW.aggregation_type = '') IS NOT FALSE THEN
+            -- Try to resolve from cache tables of foreign table
+            FOR trigger IN
+              SELECT * FROM %1\$s.triggers
+              WHERE 
+                  %1\$s.triggers.foreign_schema_name = NEW.schema_name
+                AND
+                  %1\$s.triggers.foreign_table_name = NEW.table_name
+            LOOP
+              NEW.aggregation_type := %1\$s.get_column_type('%1\$s', trigger.cache_table_name, NEW.value_names->>0);
+
+              IF NEW.aggregation_type IS NOT NULL AND NEW.aggregation_type <> '' THEN
+                EXIT;
+              END IF;
+            END LOOP;
+          END IF;
         END IF;
       END IF;
     END IF;

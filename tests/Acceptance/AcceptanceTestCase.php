@@ -144,7 +144,7 @@ class AcceptanceTestCase extends TestCase
 
             // $table->timestamp('last_commented_at')->nullable();
             $table->hoard('last_commented_at')->aggregate('comments', HoardAggregationFunctionEnum::max(), 'created_at')->withoutSoftDeletes();
-            
+
             // $table->timestamp('first_commented_at')->nullable();
             $table->hoard('first_commented_at')->aggregate('comments', HoardAggregationFunctionEnum::min(), 'created_at')->withoutSoftDeletes();
         });
@@ -152,7 +152,7 @@ class AcceptanceTestCase extends TestCase
         Schema::table('users', function (Blueprint $table) {
             // $table->timestampTz('copied_created_at')->nullable();
             $table->hoard('copied_created_at')->aggregate('users', 'COPY', 'created_at')
-            ->viaOwn('sequence');
+                ->viaOwn('sequence');
 
             // $table->integer('comments_count')->default(0)->nullable();
             $table->hoard('comments_count')->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id',  [
@@ -171,11 +171,11 @@ class AcceptanceTestCase extends TestCase
 
             // $table->integer('posts_count_conditional')->default(0)->nullable();
             $table->hoard('posts_count_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "deleted_at" IS NULL')
-            ->via('sequence', 'user_sequence');
+                ->via('sequence', 'user_sequence');
 
             // $table->integer('posts_count_complex_conditional')->default(0)->nullable();
             $table->hoard('posts_count_complex_conditional')->aggregate('posts', HoardAggregationFunctionEnum::count(), 'id',  '"visible" = true AND "weight" > 5 AND "deleted_at" IS NULL')
-            ->via('sequence', 'user_sequence');
+                ->via('sequence', 'user_sequence');
 
             // $table->integer('images_count')->default(0)->nullable();
             $table->hoard('images_count')->aggregate('images', HoardAggregationFunctionEnum::count(), 'id',  [
@@ -183,8 +183,10 @@ class AcceptanceTestCase extends TestCase
             ])->viaMorph('imageable', User::class, 'sequence');
 
             // $table->double('posts_count_plus_one')->storedAs(DB::raw('posts_count + 1'))->always();
-            $table->hoard('posts_count_plus_one')->generated('bigint',
-            'posts_count + 1');
+            $table->hoard('posts_count_plus_one')->generated(
+                'bigint',
+                'posts_count + 1'
+            );
 
             // $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
             $table->hoard('asynchronous_posts_weight_sum')->aggregate('posts', HoardAggregationFunctionEnum::sum(), 'weight', [
@@ -223,30 +225,27 @@ class AcceptanceTestCase extends TestCase
 
         Schema::table('tags', function (Blueprint $table) {
             // $table->integer('taggables_count')->default(0)->nullable();
-            $table->hoard('taggables_count')->aggregate('taggables', HoardAggregationFunctionEnum::sum(), 'cached_taggable_count')
-            ->type('bigint');
+            $table->hoard('taggables_count')->aggregate('taggables', HoardAggregationFunctionEnum::sum(), 'cached_taggable_count');
 
             // $table->timestamp('first_created_at')->nullable();
-            $table->hoard('first_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::min(), 'taggable_created_at')
-            ->type('timestamptz');
+            $table->hoard('first_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::min(), 'taggable_created_at');
 
             // $table->timestamp('last_created_at')->nullable();
-            $table->hoard('last_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::max(), 'taggable_created_at')
-            ->type('timestamptz');
+            $table->hoard('last_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::max(), 'taggable_created_at');
         });
 
         Schema::table('comments', function (Blueprint $table) {
             $table
-              ->hoard('direct_comments_count')
-              ->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id')
-              ->viaParent();
+                ->hoard('direct_comments_count')
+                ->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id')
+                ->viaParent();
 
-              $table
+            $table
                 ->hoard('nested_comments_count')
                 ->aggregate(
-                  'comments',
-                  HoardAggregationFunctionEnum::sum(),
-                  'direct_comments_count'
+                    'comments',
+                    HoardAggregationFunctionEnum::sum(),
+                    'direct_comments_count'
                 )
                 ->viaParent();
         });
@@ -391,7 +390,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals(19, $this->refresh($user)->asynchronous_posts_weight_sum);
 
         $post->delete();
-        
+
         $this->assertEquals(2, DB::table(HoardSchema::$cacheSchema . '.logs')
             ->whereNull('processed_at')
             ->whereNull('canceled_at')
