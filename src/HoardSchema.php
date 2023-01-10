@@ -1748,7 +1748,7 @@ PLPGSQL,
           'p_foreign_schema_name' => 'text',
           'p_foreign_table_name' => 'text',
           'p_foreign_row' => 'jsonb',
-          'p_cache_table_name' => 'text DEFAULT NULL',
+          'p_cache_aggregation_name' => 'text DEFAULT NULL',
         ],
         'void',
         sprintf(
@@ -1779,38 +1779,46 @@ PLPGSQL,
     relevant boolean;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_cache_table_name=%%)', 
+      '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_cache_aggregation_name=%%)', 
       p_foreign_schema_name, 
       p_foreign_table_name, 
       p_foreign_row,
-      p_cache_table_name;
+      p_cache_aggregation_name;
 
     -- Collect all updates in a JSON map
-    FOR trigger IN
-      EXECUTE format(
-        'SELECT 
-            * 
-          FROM 
-            %1\$s.triggers 
-          WHERE 
-              %1\$s.triggers.foreign_schema_name = %%L 
-            AND 
-              %1\$s.triggers.foreign_table_name = %%L 
-            AND 
-              %1\$s.triggers.table_name <> '''' 
-          ORDER BY cache_table_name', 
-        p_foreign_schema_name, 
-        p_foreign_table_name
-      )
+    FOR trigger IN 
+      SELECT 
+          * 
+        FROM 
+          %1\$s.triggers 
+        WHERE 
+            (
+              (
+                  p_cache_aggregation_name IS NULL
+                AND
+                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                AND 
+                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+              )
+            OR
+              (
+                  p_cache_aggregation_name IS NOT NULL
+                AND
+                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                AND 
+                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+                AND
+                  %1\$s.triggers.cache_aggregation_name = p_cache_aggregation_name
+              )
+            )
+          AND 
+            %1\$s.triggers.manual = false
     LOOP
       -- Execute updates whenever the foreign cache table name changes
       IF cache_table_name IS NOT NULL AND cache_table_name <> trigger.cache_table_name THEN
         PERFORM %1\$s.upsert_cache(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
         updates := '{}';
       END IF;
-
-      -- Ignore tables that do not fit the condition
-      CONTINUE WHEN p_cache_table_name IS NOT NULL AND cache_table_name <> p_cache_table_name;
 
       table_name := trigger.table_name;
       schema_name := trigger.schema_name;
@@ -1914,7 +1922,7 @@ PLPGSQL,
         [
           'p_foreign_schema_name' => 'text',
           'p_foreign_table_name' => 'text',
-          'p_cache_table_name' => 'text DEFAULT NULL',
+          'p_cache_aggregation_name' => 'text DEFAULT NULL',
           'p_foreign_table_conditions' => "text DEFAULT '1 = 1'",
         ],
         'void',
@@ -1924,11 +1932,11 @@ PLPGSQL,
     foreign_row record;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.refresh: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_cache_table_name=%%)', 
+      '%1\$s.refresh: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_cache_aggregation_name=%%)', 
       p_foreign_schema_name, 
       p_foreign_table_name, 
       p_foreign_table_conditions, 
-      p_cache_table_name;
+      p_cache_aggregation_name;
 
     -- Ensure that we have any conditions
     IF p_foreign_table_conditions = '' THEN
@@ -1939,7 +1947,7 @@ PLPGSQL,
     FOR foreign_row IN
       EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_schema_name, p_foreign_table_name, p_foreign_table_conditions)
     LOOP
-      PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, to_jsonb(foreign_row), p_cache_table_name);
+      PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, to_jsonb(foreign_row), p_cache_aggregation_name);
     END LOOP;
   END;
 PLPGSQL,
@@ -2402,9 +2410,9 @@ PLPGSQL,
 DECLARE
   trigger %1\$s.triggers%%rowtype;
 
-  p_trigger_id int DEFAULT NULL;
+  p_trigger_id bigint DEFAULT NULL;
 
-  trigger_id int;
+  trigger_id bigint;
   schema_name text;
   table_name text;
   primary_key_name text;
@@ -2475,7 +2483,7 @@ BEGIN
           (
               p_trigger_id IS NOT NULL
             AND
-              %1\$s.triggers.id = TG_ARGV[0]::bigint
+              %1\$s.triggers.id = p_trigger_id
           )
         )
       AND 
@@ -3233,7 +3241,9 @@ PLPGSQL,
     END IF;
 
     -- Refresh table
-    PERFORM %1\$s.refresh(NEW.foreign_schema_name, NEW.foreign_table_name, NEW.cache_table_name);
+    SET jit TO off;
+    PERFORM %1\$s.refresh(NEW.foreign_schema_name, NEW.foreign_table_name, NEW.cache_aggregation_name);
+    RESET jit;
 
     RETURN NEW;
   END;
