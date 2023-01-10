@@ -3386,6 +3386,11 @@ PLPGSQL,
       IF (NEW.cache_primary_key_name = '') IS NOT FALSE THEN
         RAISE EXCEPTION 'cache_primary_key_name must not be empty.';
       END IF;
+
+      -- Replace placeholders
+      NEW.key_name = REPLACE(NEW.key_name, 'PRIMARY_KEY_NAME', NEW.primary_key_name);
+      NEW.foreign_primary_key_name = REPLACE(NEW.foreign_primary_key_name, 'PRIMARY_KEY_NAME', NEW.primary_key_name);
+      NEW.foreign_key_name = REPLACE(NEW.foreign_key_name, 'PRIMARY_KEY_NAME', NEW.primary_key_name);
     END IF;
 
     -- Drop view

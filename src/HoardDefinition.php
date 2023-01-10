@@ -148,9 +148,9 @@ class HoardDefinition
    * @param  ?string  $keyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaOwn(?string $keyName = null)
+  public function viaOwn(?string $keyName = 'PRIMARY_KEY_NAME')
   {
-    return $this->via($keyName ?? null, $keyName ?? null);
+    return $this->via($keyName , $keyName);
   }
 
   /**
@@ -160,7 +160,7 @@ class HoardDefinition
    * @param  string  $parentPrefix
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaParent(?string $keyName = 'id', ?string $parentPrefix = 'parent')
+  public function viaParent(?string $keyName = 'PRIMARY_KEY_NAME', ?string $parentPrefix = 'parent')
   {
     return $this->via($keyName, $parentPrefix . '_' . $keyName);
   }
@@ -173,7 +173,7 @@ class HoardDefinition
    * @param  ?string  $keyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaMorph(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $morphableKeyName = 'id')
+  public function viaMorph(string $morphable, string $morphableTypeValue, ?string $keyName = 'PRIMARY_KEY_NAME', ?string $morphableKeyName = 'id')
   {
     $morphableKey = $morphable . '_' . $morphableKeyName;
     $morphableType = $morphable . '_type';
@@ -196,7 +196,7 @@ class HoardDefinition
    * @param  ?string  $morphableKeyName
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'id', ?string $morphableKeyName = 'id')
+  public function viaMorphPivot(string $morphable, string $morphableTypeValue, ?string $keyName = 'PRIMARY_KEY_NAME', ?string $morphableKeyName = 'id')
   {
     $morphableKey = $morphable . '_' . $morphableKeyName;
     $morphableType = $morphable . '_type';
