@@ -275,7 +275,7 @@ class HoardSchema
     EXECUTE format(
         '
         SELECT 
-            data_type 
+            CASE WHEN character_maximum_length IS NOT NULL THEN data_type || ''('' || character_maximum_length || '')'' ELSE data_type END 
           FROM information_schema.columns 
           WHERE 
             table_schema = %%L
