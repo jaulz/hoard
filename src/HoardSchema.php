@@ -383,6 +383,21 @@ SQL
       ),
 
       HoardSchema::createFunction(
+        'array_distinct',
+        [
+          'p_array' => 'anyarray',
+        ],
+        'anyarray',
+        sprintf(
+          <<<SQL
+  SELECT array_agg(DISTINCT x) FROM unnest(p_array) t(x)
+SQL
+        ),
+        'SQL',
+        'IMMUTABLE'
+      ),
+
+      HoardSchema::createFunction(
         'exists_trigger',
         [
           'p_schema_name' => 'text',
@@ -2849,9 +2864,7 @@ PLPGSQL,
           'p_trigger_name' => 'text',
           'p_schema_name' => 'text',
           'p_table_name' => 'text',
-          'p_key_name' => 'text',
-          'p_value_names' => 'jsonb',
-          'p_conditions' => 'text',
+          'p_dependency_names' => 'text[]',
           'p_trigger_id' => 'bigint DEFAULT NULL',
         ],
         'void',
@@ -2862,17 +2875,15 @@ DECLARE
   after_trigger_name text;
   dependency_name text;
   column_names text[] DEFAULT '{}';
-  tokens text[];
-  token text;
+  value_name text;
 BEGIN
   RAISE DEBUG 
-    '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_key_name=%%, p_value_names=%%, p_conditions=%%)', 
+    '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%, p_trigger_id=%%)', 
     p_trigger_name, 
     p_schema_name, 
     p_table_name, 
-    p_key_name,
-    p_value_names,
-    p_conditions;
+    p_dependency_names,
+    p_trigger_id;
 
   IF p_trigger_id IS NOT NULL THEN
     -- Concatenate trigger names
@@ -2880,19 +2891,14 @@ BEGIN
     after_trigger_name := 'hoard_after_update_' || p_trigger_name;
 
     -- Check if the table contains this column
-    tokens := array(
-      SELECT DISTINCT 
-        jsonb_array_elements_text(
-          p_value_names || to_jsonb(ARRAY[p_key_name, p_conditions])
-        )
-    );
-    FOREACH token IN ARRAY tokens LOOP
-      FOREACH dependency_name IN ARRAY array(SELECT REGEXP_MATCHES(token, '[A-Za-z0-9_]+', 'g')) LOOP
-        IF %1\$s.exists_table_column(p_schema_name, p_table_name, dependency_name) THEN
-          column_names := column_names || format('%%I', dependency_name::text);
+    FOREACH dependency_name IN ARRAY p_dependency_names LOOP
+      FOREACH value_name IN ARRAY array(SELECT REGEXP_MATCHES(dependency_name, '[A-Za-z0-9_]+', 'g')) LOOP
+        IF %1\$s.exists_table_column(p_schema_name, p_table_name, value_name) THEN
+          column_names := column_names || format('%%I', value_name::text);
         END IF;
       END LOOP;
     END LOOP;
+    column_names := %1\$s.array_distinct(column_names);
 
     -- If none of the columns match the table, we don't need any update trigger
     IF cardinality(column_names) > 0 THEN
@@ -3048,7 +3054,7 @@ PLPGSQL,
     );
 
     -- Check if all required fields are set
-    IF NEW.manual = FALSE THEN
+    IF NEW.manual = false THEN
       IF (NEW.primary_key_name = '') IS NOT FALSE THEN
         RAISE EXCEPTION 
           'primary_key_name must not be empty (schema_name=%%, table_name=%%).', 
@@ -3191,8 +3197,21 @@ PLPGSQL,
 
     -- Create new triggers
     IF TG_OP = 'INSERT' THEN
-      PERFORM %1\$s.create_triggers(NEW.id::text, NEW.schema_name, NEW.table_name, NEW.key_name, NEW.value_names, NEW.conditions, NEW.id);
-      PERFORM %1\$s.create_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name, NEW.key_name, NEW.value_names, NEW.conditions);
+      PERFORM %1\$s.create_triggers(
+        NEW.id::text, 
+        NEW.schema_name, 
+        NEW.table_name, 
+        array(SELECT jsonb_array_elements_text(
+          NEW.value_names || to_jsonb(ARRAY[NEW.key_name, NEW.conditions])
+        )), 
+        NEW.id
+      );
+      PERFORM %1\$s.create_triggers(
+        NEW.id::text, 
+        NEW.foreign_schema_name, 
+        NEW.foreign_table_name, 
+        ARRAY[NEW.foreign_key_name, NEW.foreign_conditions]
+      );
 
       FOR trigger IN
         SELECT * FROM %1\$s.triggers
@@ -3201,7 +3220,15 @@ PLPGSQL,
           AND
             %1\$s.triggers.foreign_table_name = NEW.table_name
       LOOP
-        PERFORM %1\$s.create_triggers(NEW.id::text, '%1\$s', trigger.cache_table_name, NEW.key_name, NEW.value_names, NEW.conditions, NEW.id);
+        PERFORM %1\$s.create_triggers(
+          NEW.id::text, 
+          '%1\$s', 
+          trigger.cache_table_name, 
+          array(SELECT jsonb_array_elements_text(
+            NEW.value_names || to_jsonb(ARRAY[NEW.key_name, NEW.conditions])
+          )),
+          NEW.id
+        );
       END LOOP;
     END IF;
 
@@ -3299,7 +3326,7 @@ PLPGSQL,
       '%1\$s.drop_cache_table: start (p_table_name=%%)', 
       p_table_name;
 
-      IF %1\$s.is_cache_table_name('%1\$s', p_table_name) = FALSE THEN
+      IF %1\$s.is_cache_table_name('%1\$s', p_table_name) = false THEN
         RETURN;
       END IF;
 

@@ -554,6 +554,7 @@ class AcceptanceTestCase extends TestCase
     {
         $post = $this->data['post'];
 
+        // Check if attaching the tag updates counts
         $this->startQueryLog();
         $post->tags()->attach($this->data['tag']->id, [
             'weight' => 1,
@@ -567,6 +568,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->first_created_at);
         $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->last_created_at);
 
+        // Check if attaching a second tag updates counts
         $secondTag = new Tag();
         $secondTag->title = 'Updates';
         $secondTag->save();
@@ -584,6 +586,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->first_created_at);
         $this->assertEquals($this->refresh($post)->created_at, $this->refresh($this->data['tag'])->last_created_at);
 
+        // Check if it also works with a second post
         Carbon::setTestNow(Carbon::now()->addSecond());
         $secondPost = new Post;
         $secondPost->user_sequence = $this->data['user']->sequence;
@@ -604,6 +607,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
         $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
+        // Check if refresh generates the same numbers
         $this->startQueryLog();
         $post->refreshHoard();
 
@@ -616,6 +620,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
         $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
+        // Check if detaching of a tag updates counts
         $this->startQueryLog();
         $post->tags()->detach($this->data['tag']->id);
 
@@ -627,6 +632,7 @@ class AcceptanceTestCase extends TestCase
         // $this->assertEquals(Taggable::orderBy('created_at', 'desc')->first()->created_at, $this->refresh($this->data['tag'])->last_created_at);
         // $this->assertEquals(Taggable::orderBy('created_at', 'asc')->first()->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
+        // Check if reattaching of a tag updates counts again
         $this->startQueryLog();
         $post->tags()->attach($this->data['tag']->id, [
             'weight' => 3,
@@ -640,6 +646,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
         $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
+        // Check if deleting of a post updates counts
         $this->startQueryLog();
         $post->delete();
 
@@ -649,6 +656,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
         $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
+        // Check if restoring of a post updates counts
         $this->startQueryLog();
         $post->restore();
 
@@ -660,6 +668,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertEquals($secondPost->created_at, $this->refresh($this->data['tag'])->last_created_at);
         $this->assertEquals($post->created_at, $this->refresh($this->data['tag'])->first_created_at);
 
+        // Check if detaching of a tag updates counts
         $this->startQueryLog();
         $post->tags()->detach();
 
@@ -667,6 +676,7 @@ class AcceptanceTestCase extends TestCase
         // NOTE: detach (without arguments) does not trigger any events so we cannot update the cache
         $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
 
+        // Check if refresh generates the same numbers
         $tag = $this->refresh($this->data['tag']);
         $this->startQueryLog();
         $tag->refreshHoard();
@@ -674,6 +684,7 @@ class AcceptanceTestCase extends TestCase
         $this->assertQueryLogCountEquals(1);
         $this->assertEquals(1, $this->refresh($this->data['tag'])->taggables_count);
 
+        // Check if counts are also updated with a different taggable
         $image = new Image();
         $image->source = 'https://laravel.com/img/logotype.min.svg';
         $image->imageable()->associate($this->data['post']);
@@ -687,12 +698,24 @@ class AcceptanceTestCase extends TestCase
         $this->assertQueryLogCountEquals(1);
         $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
 
+        // Check if refresh works properly
         $tag = $this->refresh($this->data['tag']);
         $this->startQueryLog();
         $tag->refreshHoard();
 
         $this->assertQueryLogCountEquals(1);
         $this->assertEquals(2, $this->refresh($this->data['tag'])->taggables_count);
+
+        // Check if foreign key change updates count
+        $this->assertEquals(0, $this->refresh($post)->tags_count);
+        $this->assertEquals(1, $this->refresh($secondPost)->tags_count);
+
+        $taggable = Taggable::first();
+        $taggable->taggable_id = 1;
+        $taggable->save();
+
+        $this->assertEquals(1, $this->refresh($post)->tags_count);
+        $this->assertEquals(0, $this->refresh($secondPost)->tags_count);
     }
 
     public function testMorphByMany()
