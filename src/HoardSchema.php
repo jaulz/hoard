@@ -3293,8 +3293,8 @@ PLPGSQL,
           txid bigint NOT NULL,
           cached_at timestamp(0) with time zone NOT NULL,
           PRIMARY KEY (%%I),
-          CONSTRAINT %1\$s_%%s_%%s_unique UNIQUE (%%I),
-          CONSTRAINT %1\$s_%%s_%%s_foreign FOREIGN KEY (%%I)
+          CONSTRAINT %%s_%%s_unique UNIQUE (%%I),
+          CONSTRAINT %%s_%%s_foreign FOREIGN KEY (%%I)
             REFERENCES %%I.%%I (%%I) MATCH SIMPLE
             ON UPDATE NO ACTION
             ON DELETE CASCADE
@@ -3304,11 +3304,11 @@ PLPGSQL,
       p_cache_primary_key_name,
       %1\$s.get_primary_key_type(p_foreign_schema_name, p_foreign_table_name),
       p_cache_primary_key_name,
-      p_cache_table_name,
+      p_cache_primary_key_name,
+      md5(p_cache_table_name),
       p_cache_primary_key_name,
       p_cache_primary_key_name,
-      p_cache_table_name,
-      p_cache_primary_key_name,
+      md5(p_cache_table_name),
       p_cache_primary_key_name,
       p_foreign_schema_name,
       p_foreign_table_name,
