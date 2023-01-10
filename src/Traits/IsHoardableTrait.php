@@ -44,7 +44,7 @@ trait IsHoardableTrait
    */
   public function refreshHoard()
   {
-    return DB::select('SELECT ' . HoardSchema::$cacheSchema . '.refresh(?, ?, NULL, ?)', [
+    return DB::select('SELECT ' . HoardSchema::$cacheSchema . '.upsert_cache_table_rows(?, ?, ?)', [
       HoardSchema::$schema,
       $this->getTable(), 
       $this->getKeyName() . ' = ' . $this->getKey()

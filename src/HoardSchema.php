@@ -1062,7 +1062,7 @@ PLPGSQL,
 
     -- Prepare refresh query
     refresh_query := format(
-      'SELECT %%s(%%s) AS value FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s)', 
+      'SELECT %%s(%%s) AS value FROM %%I.%%I %%s WHERE %%I = %%s AND (%%s)', 
       p_aggregation_function, 
       p_value_names->>0, 
       p_schema_name,
@@ -1358,7 +1358,7 @@ PLPGSQL,
           <<<PLPGSQL
   BEGIN
     RETURN format(
-      'SELECT %%s FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s) %%s LIMIT 1', 
+      'SELECT %%s FROM %%I.%%I %%s WHERE %%I = %%s AND (%%s) %%s LIMIT 1', 
       p_value_names->>0, 
       p_schema_name, 
       p_table_name, 
@@ -1424,7 +1424,7 @@ PLPGSQL,
           <<<PLPGSQL
   BEGIN
     RETURN format(
-      'SELECT coalesce((SELECT jsonb_agg(%%I) FROM %%I.%%I %%s WHERE %%I = %%L AND (%%s)), ''[]''::jsonb)', 
+      'SELECT coalesce((SELECT jsonb_agg(%%I) FROM %%I.%%I %%s WHERE %%I = %%s AND (%%s)), ''[]''::jsonb)', 
       p_value_names->>0, 
       p_schema_name, 
       p_table_name, 
@@ -1696,14 +1696,14 @@ PLPGSQL,
   public static function createRefreshFunctions()
   {
       HoardSchema::createFunction(
-        'upsert_cache',
+        'upsert_row',
         [
           'p_table_name' => 'text',
           'p_primary_key_name' => 'text',
           'p_primary_key' => 'text',
           'p_updates' => 'jsonb',
         ],
-        'void',
+        'int',
         sprintf(
           <<<PLPGSQL
   DECLARE 
@@ -1713,9 +1713,10 @@ PLPGSQL,
     concatenated_updates text;
     key text;
     value text;
+    affected_rows int;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.upsert_cache: start (p_table_name=%%, p_primary_key_name=%%, p_primary_key=%%, p_updates=%%)', 
+      '%1\$s.upsert_row: start (p_table_name=%%, p_primary_key_name=%%, p_primary_key=%%, p_updates=%%)', 
       p_table_name, 
       p_primary_key_name, 
       p_primary_key, 
@@ -1732,7 +1733,16 @@ PLPGSQL,
     
     -- Run update if required
     query := format(
-      'INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) VALUES (%%L %%s, txid_current(), NOW()) ON CONFLICT (%%s) DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s', 
+      '
+        WITH rows AS (
+          INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) 
+            VALUES (%%L %%s, txid_current(), NOW()) 
+            ON CONFLICT (%%s) 
+            DO UPDATE SET txid=txid_current(), cached_at=NOW() %%s
+            RETURNING 1
+        )
+        SELECT count(*) FROM rows;
+      ', 
       p_table_name, 
       p_primary_key_name, 
       concatenated_keys, 
@@ -1741,8 +1751,11 @@ PLPGSQL,
       p_primary_key_name,
       concatenated_updates
     );
-    RAISE DEBUG '%1\$s.upsert_cache: execute (query=%%)', query;
-    EXECUTE query;
+    RAISE DEBUG '%1\$s.upsert_row: execute (query=%%)', query;
+
+    EXECUTE query INTO affected_rows;
+
+    RETURN affected_rows;
   END;
 PLPGSQL,
           HoardSchema::$cacheSchema
@@ -1751,7 +1764,98 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'refresh_row',
+        'upsert_rows',
+        [
+          'p_foreign_table_name' => 'text',
+          'p_foreign_primary_key_name' => 'text',
+          'p_foreign_conditions' => 'text',
+          'p_cache_table_name' => 'text',
+          'p_primary_key_name' => 'text',
+          'p_updates' => 'jsonb',
+          'p_alias' => 'text DEFAULT \'wrapper\'',
+        ],
+        'int',
+        sprintf(
+          <<<PLPGSQL
+  DECLARE 
+    query text;
+    concatenated_keys text;
+    concatenated_values text;
+    concatenated_updates text;
+    key text;
+    value text;
+    affected_rows int;
+  BEGIN
+    RAISE DEBUG 
+      '%1\$s.upsert_rows: start (p_foreign_table_name=%%, p_foreign_primary_key_name=%%, p_foreign_conditions=%%, p_cache_table_name=%%, p_primary_key_name=%%, p_updates=%%, p_alias=%%)', 
+      p_foreign_table_name,
+      p_foreign_primary_key_name,
+      p_foreign_conditions,
+      p_cache_table_name, 
+      p_primary_key_name,
+      p_updates,
+      p_alias;
+
+    -- Ensure that we have any conditions
+    IF p_foreign_conditions = '' THEN
+      p_foreign_conditions := '1 = 1';
+    END IF;
+
+    -- Concatenate updates
+    FOR key, value IN 
+      SELECT * FROM jsonb_each_text(p_updates)
+    LOOP
+      concatenated_keys := format('%%s, %%s', concatenated_keys, key);
+      concatenated_values := format('%%s, (%%s) AS %%I', concatenated_values, value, key);
+      concatenated_updates := format('%%s, %%s = excluded.%%s', concatenated_updates, key, key);
+    END LOOP;
+    
+    -- Run update if required
+    query := format(
+      '
+        WITH rows AS (
+          INSERT INTO %1\$s.%%s (%%s %%s, txid, cached_at) 
+            SELECT 
+              %%I
+              %%s,
+              txid_current() as txid,
+              NOW() as cached_at
+              FROM %%I AS %%I
+              WHERE %%s
+            ON CONFLICT (%%s) 
+            DO UPDATE SET 
+              txid=txid_current(), 
+              cached_at=NOW() 
+              %%s
+              RETURNING 1
+        )
+        SELECT count(*) FROM rows;
+      ', 
+      p_cache_table_name, 
+      p_primary_key_name, 
+      concatenated_keys,
+      p_foreign_primary_key_name, 
+      concatenated_values, 
+      p_foreign_table_name, 
+      p_alias,
+      p_foreign_conditions,
+      p_primary_key_name,
+      concatenated_updates
+    );
+    RAISE DEBUG '%1\$s.upsert_rows: execute (query=%%)', query;
+
+    EXECUTE query INTO affected_rows;
+
+    RETURN affected_rows;
+  END;
+PLPGSQL,
+          HoardSchema::$cacheSchema
+        ),
+        'PLPGSQL'
+      );
+
+      HoardSchema::createFunction(
+        'upsert_single_cache_table_row',
         [
           'p_foreign_schema_name' => 'text',
           'p_foreign_table_name' => 'text',
@@ -1787,7 +1891,7 @@ PLPGSQL,
     relevant boolean;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.refresh_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_cache_aggregation_name=%%)', 
+      '%1\$s.upsert_single_cache_table_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_cache_aggregation_name=%%)', 
       p_foreign_schema_name, 
       p_foreign_table_name, 
       p_foreign_row,
@@ -1824,7 +1928,7 @@ PLPGSQL,
     LOOP
       -- Execute updates whenever the foreign cache table name changes
       IF cache_table_name IS NOT NULL AND cache_table_name <> trigger.cache_table_name THEN
-        PERFORM %1\$s.upsert_cache(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
+        PERFORM %1\$s.upsert_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
         updates := '{}';
       END IF;
 
@@ -1876,7 +1980,7 @@ PLPGSQL,
           schema_name, 
           table_name, 
           key_name,
-          %1\$s.get_row_value(p_foreign_row, trigger.foreign_key_name), 
+          format('%%L', %1\$s.get_row_value(p_foreign_row, trigger.foreign_key_name)), 
           conditions
         );
 
@@ -1903,7 +2007,7 @@ PLPGSQL,
 
     -- Run updates that were not yet executed within the loop
     IF cache_table_name IS NOT NULL AND cache_primary_key_name IS NOT NULL THEN
-      PERFORM %1\$s.upsert_cache(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
+      PERFORM %1\$s.upsert_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
     END IF;
 
     -- Clear logs table
@@ -1926,7 +2030,7 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'refresh',
+        'upsert_single_cache_table_rows',
         [
           'p_foreign_schema_name' => 'text',
           'p_foreign_table_name' => 'text',
@@ -1940,7 +2044,7 @@ PLPGSQL,
     foreign_row record;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.refresh: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_cache_aggregation_name=%%)', 
+      '%1\$s.upsert_single_cache_table_rows: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_cache_aggregation_name=%%)', 
       p_foreign_schema_name, 
       p_foreign_table_name, 
       p_foreign_table_conditions, 
@@ -1955,8 +2059,163 @@ PLPGSQL,
     FOR foreign_row IN
       EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_schema_name, p_foreign_table_name, p_foreign_table_conditions)
     LOOP
-      PERFORM %1\$s.refresh_row(p_foreign_schema_name, p_foreign_table_name, to_jsonb(foreign_row), p_cache_aggregation_name);
+      PERFORM %1\$s.upsert_single_cache_table_row(p_foreign_schema_name, p_foreign_table_name, to_jsonb(foreign_row), p_cache_aggregation_name);
     END LOOP;
+  END;
+PLPGSQL,
+          HoardSchema::$cacheSchema
+        ),
+        'PLPGSQL'
+      );
+
+      HoardSchema::createFunction(
+        'upsert_cache_table_rows',
+        [
+          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_name' => 'text',
+          'p_foreign_conditions' => 'text DEFAULT \'\'',
+          'p_cache_aggregation_name' => 'text DEFAULT NULL',
+        ],
+        'int',
+        sprintf(
+          <<<PLPGSQL
+  DECLARE
+    foreign_row record;
+
+    trigger %1\$s.triggers%%rowtype;
+    updates jsonb DEFAULT '{}';
+    refresh_query text;
+    existing_refresh_query text;
+    concat_query_function_name text;
+
+    schema_name text;
+    table_name text;
+    primary_key_name text;
+    foreign_schema_name text;
+    cache_table_name text;
+    cache_primary_key_name text;
+    foreign_table_name text;
+    foreign_primary_key_name text;
+    cache_aggregation_name text;
+    aggregation_function text;
+    value_names jsonb;
+    options jsonb;
+    key_name text;
+    conditions text;
+    foreign_conditions text;
+    
+    affected_rows int;
+  BEGIN
+    RAISE DEBUG 
+      '%1\$s.upsert_cache_table_rows: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_cache_aggregation_name=%%, p_foreign_conditions=%%)', 
+      p_foreign_schema_name, 
+      p_foreign_table_name, 
+      p_cache_aggregation_name,
+      p_foreign_conditions;
+
+    -- Ensure that we have any conditions
+    IF p_foreign_conditions = '' THEN
+      p_foreign_conditions := '1 = 1';
+    END IF;
+
+    -- Collect all updates in a JSON map
+    FOR trigger IN 
+      SELECT 
+          * 
+        FROM 
+          %1\$s.triggers 
+        WHERE 
+            (
+              (
+                  p_cache_aggregation_name IS NULL
+                AND
+                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                AND 
+                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+              )
+            OR
+              (
+                  p_cache_aggregation_name IS NOT NULL
+                AND
+                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                AND 
+                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+                AND
+                  %1\$s.triggers.cache_aggregation_name = p_cache_aggregation_name
+              )
+            )
+          AND 
+            %1\$s.triggers.manual = false
+    LOOP
+      table_name := trigger.table_name;
+      schema_name := trigger.schema_name;
+      primary_key_name := trigger.primary_key_name;
+      cache_table_name := trigger.cache_table_name;
+      cache_primary_key_name := trigger.cache_primary_key_name;
+      cache_aggregation_name := trigger.cache_aggregation_name;
+      foreign_primary_key_name := trigger.foreign_primary_key_name;
+      foreign_table_name := trigger.foreign_table_name;
+      foreign_schema_name := trigger.foreign_schema_name;
+      aggregation_function := trigger.aggregation_function;
+      value_names := trigger.value_names;
+      options := trigger.options;
+      key_name := trigger.key_name;
+      conditions := trigger.conditions;
+      foreign_conditions := trigger.foreign_conditions;
+
+      -- Ensure that we have any conditions
+      IF conditions = '' THEN
+        conditions := '1 = 1';
+      END IF;
+
+      -- Prepare refresh query
+      refresh_query := %1\$s.get_refresh_query(
+        primary_key_name, 
+        aggregation_function, 
+        value_names, 
+        options, 
+        schema_name, 
+        table_name, 
+        key_name,
+        'wrapper.' || foreign_primary_key_name, 
+        conditions
+      );
+
+      -- Concatenate query if necessary
+      existing_refresh_query := updates ->> cache_aggregation_name;
+      IF existing_refresh_query != '' THEN
+        concat_query_function_name = lower(format('concat_%%s_refresh_queries', aggregation_function));
+        IF %1\$s.exists_function('%1\$s', concat_query_function_name) THEN
+          EXECUTE format(
+            'SELECT %1\$s.%%s(%%L, %%L)',
+            concat_query_function_name,
+            existing_refresh_query,
+            refresh_query
+          ) INTO refresh_query;
+        ELSE
+          refresh_query := format('%%s((%%s), (%%s))', aggregation_function, existing_refresh_query, refresh_query);
+        END IF;
+      END IF;
+
+      -- Set new refresh query in updates map
+      updates := updates || jsonb_build_object(cache_aggregation_name, refresh_query);
+
+      -- Clear logs table
+      UPDATE %1\$s.logs 
+        SET 
+          canceled_at = NOW() 
+        WHERE 
+          trigger_id = trigger.id;
+    END LOOP;
+
+    -- Run updates that were not yet executed within the loop
+    IF (SELECT count(*) FROM jsonb_object_keys(updates)) = 0 THEN
+      RETURN 0;
+    END IF;
+
+    affected_rows = %1\$s.upsert_rows(foreign_table_name, foreign_primary_key_name, p_foreign_conditions, cache_table_name, cache_primary_key_name, updates);
+  
+    RETURN affected_rows;
   END;
 PLPGSQL,
           HoardSchema::$cacheSchema
@@ -2226,7 +2485,7 @@ PLPGSQL,
       p_schema_name, 
       p_table_name, 
       p_key_name, 
-      p_old_foreign_key, 
+      format('%%L', p_old_foreign_key), 
       p_conditions
     );
     new_refresh_query := %1\$s.get_refresh_query(
@@ -2237,7 +2496,7 @@ PLPGSQL,
       p_schema_name, 
       p_table_name, 
       p_key_name, 
-      p_new_foreign_key, 
+      format('%%L', p_new_foreign_key), 
       p_conditions
     );
 
@@ -2472,7 +2731,7 @@ BEGIN
 
   -- If this is the first row we need to create an entry for the new row in the cache table
   IF TG_OP = 'INSERT' AND NOT %1\$s.is_cache_table_name(TG_TABLE_SCHEMA, TG_TABLE_NAME) THEN
-    PERFORM %1\$s.refresh_row(TG_TABLE_SCHEMA, TG_TABLE_NAME, to_jsonb(NEW));
+    PERFORM %1\$s.upsert_single_cache_table_row(TG_TABLE_SCHEMA, TG_TABLE_NAME, to_jsonb(NEW));
   END IF;
 
   -- Get all triggers that affect OTHER tables
@@ -3269,7 +3528,7 @@ PLPGSQL,
 
     -- Refresh table
     SET jit TO off;
-    PERFORM %1\$s.refresh(NEW.foreign_schema_name, NEW.foreign_table_name, NEW.cache_aggregation_name);
+    PERFORM %1\$s.upsert_cache_table_rows(NEW.foreign_schema_name, NEW.foreign_table_name, '', NEW.cache_aggregation_name);
     RESET jit;
 
     RETURN NEW;
