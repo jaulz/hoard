@@ -275,7 +275,15 @@ class HoardSchema
     EXECUTE format(
         '
         SELECT 
-            CASE WHEN character_maximum_length IS NOT NULL THEN data_type || ''('' || character_maximum_length || '')'' ELSE data_type END 
+            CASE WHEN data_type = ''USER-DEFINED'' THEN 
+              udt_schema || ''.'' || udt_name 
+            ELSE 
+              CASE WHEN character_maximum_length IS NOT NULL THEN 
+                data_type || ''('' || character_maximum_length || '')'' 
+              ELSE 
+                data_type 
+              END
+            END 
           FROM information_schema.columns 
           WHERE 
             table_schema = %%L
