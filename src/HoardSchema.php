@@ -3027,6 +3027,17 @@ PLPGSQL,
     IF (NEW.foreign_key_name = '') IS NOT FALSE THEN
       NEW.foreign_key_name := NEW.foreign_primary_key_name;
     END IF;
+    
+    -- Set cache information
+    NEW.cache_table_name := format(
+      '%3\$s%%s%4\$s%%s%5\$s',
+      NEW.foreign_table_name,
+      NEW.cache_group_name
+    );
+    NEW.cache_primary_key_name := format(
+      '%2\$s%%s',
+      NEW.foreign_primary_key_name
+    );
 
     -- Derive type from aggregation type
     NEW.aggregation_function = lower(NEW.aggregation_function);
@@ -3039,19 +3050,16 @@ PLPGSQL,
         NEW.aggregation_type := 'jsonb DEFAULT ''[]''';
       ELSE
         NEW.aggregation_type := %1\$s.get_column_type(NEW.schema_name, NEW.table_name, NEW.value_names->>0);
+
+        IF (NEW.aggregation_type = '') IS NOT FALSE THEN
+          NEW.aggregation_type := %1\$s.get_column_type('%1\$s', NEW.cache_table_name, NEW.value_names->>0);
+        END IF;
       END IF;
     END IF;
-    
-    -- Set cache information
-    NEW.cache_table_name := format(
-      '%3\$s%%s%4\$s%%s%5\$s',
-      NEW.foreign_table_name,
-      NEW.cache_group_name
-    );
-    NEW.cache_primary_key_name := format(
-      '%2\$s%%s',
-      NEW.foreign_primary_key_name
-    );
+
+    IF (NEW.aggregation_type = '') IS NOT FALSE THEN
+      RAISE EXCEPTION 'aggregation_type must not be empty.';
+    END IF;
 
     -- Check if all required fields are set
     IF NEW.manual = false THEN

@@ -244,13 +244,13 @@ class HoardDefinition
   }
 
   /**
-   * Stored aggregations are special manual aggregations and usually the primary use case of those.
+   * Generated aggregations are special manual aggregations and usually the primary use case of those.
    *
    * @param  string  $aggregationType
    * @param  string  $expression
    * @return \Jaulz\Hoard\HoardDefinition
    */
-  public function stored(string $aggregationType, string $expression)
+  public function generated(string $aggregationType, string $expression)
   {
     return $this->manual($aggregationType . ' GENERATED ALWAYS AS (' . $expression . ') STORED');
   }

@@ -78,6 +78,7 @@ class AcceptanceTestCase extends TestCase
             $table->increments('id');
             $table->integer('user_sequence');
             $table->integer('post_id');
+            $table->integer('parent_id')->nullable();
             $table->boolean('visible')->default(false);
             $table->timestampsTz();
             $table->softDeletesTz();
@@ -181,7 +182,7 @@ class AcceptanceTestCase extends TestCase
             ])->viaMorph('imageable', User::class, 'sequence');
 
             // $table->double('posts_count_plus_one')->storedAs(DB::raw('posts_count + 1'))->always();
-            $table->hoard('posts_count_plus_one')->stored('bigint',
+            $table->hoard('posts_count_plus_one')->generated('bigint',
             'posts_count + 1');
 
             // $table->integer('asynchronous_posts_weight_sum')->default(0)->nullable();
@@ -231,6 +232,22 @@ class AcceptanceTestCase extends TestCase
             // $table->timestamp('last_created_at')->nullable();
             $table->hoard('last_created_at')->aggregate('taggables', HoardAggregationFunctionEnum::max(), 'taggable_created_at')
             ->type('timestamptz');
+        });
+
+        Schema::table('comments', function (Blueprint $table) {
+            $table
+              ->hoard('direct_comments_count')
+              ->aggregate('comments', HoardAggregationFunctionEnum::count(), 'id')
+              ->viaParent();
+
+              $table
+                ->hoard('nested_comments_count')
+                ->aggregate(
+                  'comments',
+                  HoardAggregationFunctionEnum::sum(),
+                  'direct_comments_count'
+                )
+                ->viaParent();
         });
     }
 
