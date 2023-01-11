@@ -76,7 +76,7 @@ class HoardServiceProvider extends ServiceProvider
       $keyName =
         $command->keyName ??
         ($schemaName === HoardSchema::$cacheSchema ? 
-          null: Str::singular($foreignTableName) . '_id');
+          null: Str::singular($foreignTableName) . '_{FOREIGN_PRIMARY_KEY_NAME}');
       $refreshConditions = HoardSchema::prepareConditions(
         $command->refreshConditions ?? []
       );

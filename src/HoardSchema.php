@@ -3388,9 +3388,13 @@ PLPGSQL,
       END IF;
 
       -- Replace placeholders
-      NEW.key_name = REPLACE(NEW.key_name, 'PRIMARY_KEY_NAME', NEW.primary_key_name);
-      NEW.foreign_primary_key_name = REPLACE(NEW.foreign_primary_key_name, 'PRIMARY_KEY_NAME', NEW.primary_key_name);
-      NEW.foreign_key_name = REPLACE(NEW.foreign_key_name, 'PRIMARY_KEY_NAME', NEW.primary_key_name);
+      NEW.key_name = REPLACE(NEW.key_name, '{PRIMARY_KEY_NAME}', NEW.primary_key_name);
+      NEW.key_name = REPLACE(NEW.key_name, '{FOREIGN_PRIMARY_KEY_NAME}', NEW.foreign_primary_key_name);
+
+      NEW.foreign_primary_key_name = REPLACE(NEW.foreign_primary_key_name, '{PRIMARY_KEY_NAME}', NEW.primary_key_name);
+
+      NEW.foreign_key_name = REPLACE(NEW.foreign_key_name, '{PRIMARY_KEY_NAME}', NEW.primary_key_name);
+      NEW.foreign_key_name = REPLACE(NEW.foreign_key_name, '{FOREIGN_PRIMARY_KEY_NAME}', NEW.foreign_primary_key_name);
     END IF;
 
     -- Drop view
