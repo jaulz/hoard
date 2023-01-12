@@ -1866,7 +1866,7 @@ PLPGSQL,
         sprintf(
           <<<PLPGSQL
   DECLARE
-    trigger %1\$s.triggers%%rowtype;
+    definition %1\$s.definitions%%rowtype;
     foreign_primary_key text;
     updates jsonb DEFAULT '{}';
     refresh_query text;
@@ -1898,54 +1898,54 @@ PLPGSQL,
       p_cache_aggregation_name;
 
     -- Collect all updates in a JSON map
-    FOR trigger IN 
+    FOR definition IN 
       SELECT 
           * 
         FROM 
-          %1\$s.triggers 
+          %1\$s.definitions 
         WHERE 
             (
               (
                   p_cache_aggregation_name IS NULL
                 AND
-                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
                 AND 
-                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+                  %1\$s.definitions.foreign_table_name = p_foreign_table_name
               )
             OR
               (
                   p_cache_aggregation_name IS NOT NULL
                 AND
-                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
                 AND 
-                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+                  %1\$s.definitions.foreign_table_name = p_foreign_table_name
                 AND
-                  %1\$s.triggers.cache_aggregation_name = p_cache_aggregation_name
+                  %1\$s.definitions.cache_aggregation_name = p_cache_aggregation_name
               )
             )
           AND 
-            %1\$s.triggers.manual = false
+            %1\$s.definitions.manual = false
     LOOP
       -- Execute updates whenever the cache table name changes
-      IF cache_table_name IS NOT NULL AND cache_table_name <> trigger.cache_table_name THEN
+      IF cache_table_name IS NOT NULL AND cache_table_name <> definition.cache_table_name THEN
         PERFORM %1\$s.upsert_single_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
         updates := '{}';
       END IF;
 
-      table_name := trigger.table_name;
-      schema_name := trigger.schema_name;
-      primary_key_name := trigger.primary_key_name;
-      cache_table_name := trigger.cache_table_name;
-      cache_primary_key_name := trigger.cache_primary_key_name;
-      cache_aggregation_name := trigger.cache_aggregation_name;
-      foreign_primary_key_name := trigger.foreign_primary_key_name;
-      foreign_schema_name := trigger.foreign_schema_name;
-      aggregation_function := trigger.aggregation_function;
-      value_names := trigger.value_names;
-      options := trigger.options;
-      key_name := trigger.key_name;
-      conditions := trigger.conditions;
-      foreign_conditions := trigger.foreign_conditions;
+      table_name := definition.table_name;
+      schema_name := definition.schema_name;
+      primary_key_name := definition.primary_key_name;
+      cache_table_name := definition.cache_table_name;
+      cache_primary_key_name := definition.cache_primary_key_name;
+      cache_aggregation_name := definition.cache_aggregation_name;
+      foreign_primary_key_name := definition.foreign_primary_key_name;
+      foreign_schema_name := definition.foreign_schema_name;
+      aggregation_function := definition.aggregation_function;
+      value_names := definition.value_names;
+      options := definition.options;
+      key_name := definition.key_name;
+      conditions := definition.conditions;
+      foreign_conditions := definition.foreign_conditions;
 
       -- Ensure that we have any conditions
       IF conditions = '' THEN
@@ -1980,7 +1980,7 @@ PLPGSQL,
           schema_name, 
           table_name, 
           key_name,
-          format('%%L', %1\$s.get_row_value(p_foreign_row, trigger.foreign_key_name)), 
+          format('%%L', %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)), 
           conditions
         );
 
@@ -2015,12 +2015,12 @@ PLPGSQL,
       SET 
         canceled_at = NOW() 
       WHERE 
-          trigger_id = trigger.id
+          definition_id = definition.id
         AND
           ( 
-              new_foreign_key = %1\$s.get_row_value(p_foreign_row, trigger.foreign_key_name)
+              new_foreign_key = %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)
             OR
-              old_foreign_key = %1\$s.get_row_value(p_foreign_row, trigger.foreign_key_name)
+              old_foreign_key = %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)
           );
   END;
 PLPGSQL,
@@ -2082,7 +2082,7 @@ PLPGSQL,
   DECLARE
     foreign_row record;
 
-    trigger %1\$s.triggers%%rowtype;
+    definition %1\$s.definitions%%rowtype;
     updates jsonb DEFAULT '{}';
     refresh_query text;
     existing_refresh_query text;
@@ -2119,55 +2119,55 @@ PLPGSQL,
     END IF;
 
     -- Collect all updates in a JSON map
-    FOR trigger IN 
+    FOR definition IN 
       SELECT 
           * 
         FROM 
-          %1\$s.triggers 
+          %1\$s.definitions 
         WHERE 
             (
               (
                   p_cache_aggregation_name IS NULL
                 AND
-                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
                 AND 
-                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+                  %1\$s.definitions.foreign_table_name = p_foreign_table_name
               )
             OR
               (
                   p_cache_aggregation_name IS NOT NULL
                 AND
-                  %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
                 AND 
-                  %1\$s.triggers.foreign_table_name = p_foreign_table_name
+                  %1\$s.definitions.foreign_table_name = p_foreign_table_name
                 AND
-                  %1\$s.triggers.cache_aggregation_name = p_cache_aggregation_name
+                  %1\$s.definitions.cache_aggregation_name = p_cache_aggregation_name
               )
             )
           AND 
-            %1\$s.triggers.manual = false
+            %1\$s.definitions.manual = false
     LOOP
       -- Execute updates whenever the cache table name changes
-      IF cache_table_name IS NOT NULL AND cache_table_name <> trigger.cache_table_name THEN
+      IF cache_table_name IS NOT NULL AND cache_table_name <> definition.cache_table_name THEN
         PERFORM %1\$s.upsert_rows(foreign_table_name, foreign_primary_key_name, p_foreign_conditions, cache_table_name, cache_primary_key_name, updates);
         updates := '{}';
       END IF;
 
-      table_name := trigger.table_name;
-      schema_name := trigger.schema_name;
-      primary_key_name := trigger.primary_key_name;
-      cache_table_name := trigger.cache_table_name;
-      cache_primary_key_name := trigger.cache_primary_key_name;
-      cache_aggregation_name := trigger.cache_aggregation_name;
-      foreign_primary_key_name := trigger.foreign_primary_key_name;
-      foreign_table_name := trigger.foreign_table_name;
-      foreign_schema_name := trigger.foreign_schema_name;
-      aggregation_function := trigger.aggregation_function;
-      value_names := trigger.value_names;
-      options := trigger.options;
-      key_name := trigger.key_name;
-      conditions := trigger.conditions;
-      foreign_conditions := trigger.foreign_conditions;
+      table_name := definition.table_name;
+      schema_name := definition.schema_name;
+      primary_key_name := definition.primary_key_name;
+      cache_table_name := definition.cache_table_name;
+      cache_primary_key_name := definition.cache_primary_key_name;
+      cache_aggregation_name := definition.cache_aggregation_name;
+      foreign_primary_key_name := definition.foreign_primary_key_name;
+      foreign_table_name := definition.foreign_table_name;
+      foreign_schema_name := definition.foreign_schema_name;
+      aggregation_function := definition.aggregation_function;
+      value_names := definition.value_names;
+      options := definition.options;
+      key_name := definition.key_name;
+      conditions := definition.conditions;
+      foreign_conditions := definition.foreign_conditions;
 
       -- Ensure that we have any conditions
       IF conditions = '' THEN
@@ -2211,7 +2211,7 @@ PLPGSQL,
         SET 
           canceled_at = NOW() 
         WHERE 
-          trigger_id = trigger.id;
+          definition_id = definition.id;
     END LOOP;
 
     -- Check if any upsert need to be performed at all
@@ -2249,7 +2249,7 @@ PLPGSQL,
         sprintf(
           <<<PLPGSQL
   DECLARE
-    trigger %1\$s.triggers%%rowtype;
+    definition %1\$s.definitions%%rowtype;
     log %1\$s.logs%%rowtype;
     logs %1\$s.logs[];
   BEGIN
@@ -2258,12 +2258,12 @@ PLPGSQL,
     -- Set global variable for the transaction (can be read via current_setting('hoard.processing')::bool)
     SET hoard.processing = 'true';
 
-    -- Find triggers for the table and run updates
-    FOR trigger IN 
+    -- Find definitions for the table and run updates
+    FOR definition IN 
       SELECT 
           * 
         FROM 
-          %1\$s.triggers
+          %1\$s.definitions
         WHERE 
             foreign_schema_name = p_foreign_schema_name 
           AND 
@@ -2277,7 +2277,7 @@ PLPGSQL,
           FROM 
             %1\$s.logs
           WHERE 
-              trigger_id = trigger.id
+              definition_id = definition.id
             AND
               (processed_at IS NULL AND canceled_at IS NULL)
           ORDER BY 
@@ -2285,23 +2285,23 @@ PLPGSQL,
           FOR UPDATE SKIP LOCKED
       LOOP
         PERFORM %1\$s.update(
-          trigger.id, 
-          trigger.schema_name, 
-          trigger.table_name, 
-          trigger.primary_key_name, 
-          trigger.key_name, 
-          trigger.foreign_schema_name, 
-          trigger.foreign_table_name, 
-          trigger.foreign_primary_key_name, 
-          trigger.foreign_key_name, 
-          trigger.cache_aggregation_name, 
-          trigger.cache_table_name, 
-          trigger.cache_primary_key_name, 
-          trigger.aggregation_function, 
-          trigger.value_names, 
-          trigger.options, 
-          trigger.conditions, 
-          trigger.foreign_conditions, 
+          definition.id, 
+          definition.schema_name, 
+          definition.table_name, 
+          definition.primary_key_name, 
+          definition.key_name, 
+          definition.foreign_schema_name, 
+          definition.foreign_table_name, 
+          definition.foreign_primary_key_name, 
+          definition.foreign_key_name, 
+          definition.cache_aggregation_name, 
+          definition.cache_table_name, 
+          definition.cache_primary_key_name, 
+          definition.aggregation_function, 
+          definition.value_names, 
+          definition.options, 
+          definition.conditions, 
+          definition.foreign_conditions, 
           log.operation, 
           log.old_values, 
           log.old_foreign_key, 
@@ -2335,7 +2335,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'update',
         [
-          'p_trigger_id' => 'bigint',
+          'p_definition_id' => 'bigint',
           'p_schema_name' => 'text',
           'p_table_name' => 'text',
           'p_primary_key_name' => 'text',
@@ -2401,7 +2401,7 @@ PLPGSQL,
 
     RAISE DEBUG '
       %1\$s.update: start (
-        p_trigger_id=%%,
+        p_definition_id=%%,
         p_schema_name=%%, 
         p_table_name=%%, 
         p_key_name=%%, 
@@ -2426,7 +2426,7 @@ PLPGSQL,
         changed_foreign_key=%%, 
         changed_value=%%
       )',
-      p_trigger_id,
+      p_definition_id,
       p_schema_name,  
       p_table_name,
       p_key_name,
@@ -2682,11 +2682,11 @@ PLPGSQL,
         sprintf(
           <<<PLPGSQL
 DECLARE
-  trigger %1\$s.triggers%%rowtype;
+  definition %1\$s.definitions%%rowtype;
 
-  p_trigger_id bigint DEFAULT NULL;
+  p_definition_id bigint DEFAULT NULL;
 
-  trigger_id bigint;
+  definition_id bigint;
   schema_name text;
   table_name text;
   primary_key_name text;
@@ -2712,9 +2712,9 @@ DECLARE
   asynchronous boolean;
   processed_at timestamp with time zone DEFAULT null; 
 BEGIN
-  -- Cast trigger id
+  -- Cast definition id
   IF TG_ARGV[0] != 'null' THEN
-    p_trigger_id = TG_ARGV[0]::bigint;
+    p_definition_id = TG_ARGV[0]::bigint;
   END IF;
 
   -- Log
@@ -2726,7 +2726,7 @@ BEGIN
       OLD=%%, 
       NEW=%%, 
       TG_ARGV=%%, 
-      p_trigger_id=%%
+      p_definition_id=%%
     )', 
     TG_NAME, 
     TG_OP, 
@@ -2734,57 +2734,57 @@ BEGIN
     OLD::text, 
     NEW::text, 
     TG_ARGV::text,
-    p_trigger_id;
+    p_definition_id;
 
   -- If this is the first row we need to create an entry for the new row in the cache table
   IF TG_OP = 'INSERT' AND NOT %1\$s.is_cache_table_name(TG_TABLE_SCHEMA, TG_TABLE_NAME) THEN
     PERFORM %1\$s.upsert_single_cache_table_row(TG_TABLE_SCHEMA, TG_TABLE_NAME, to_jsonb(NEW));
   END IF;
 
-  -- Get all triggers that affect OTHER tables
-  FOR trigger IN
-    SELECT * FROM %1\$s.triggers
+  -- Get all definitions that affect OTHER tables
+  FOR definition IN
+    SELECT * FROM %1\$s.definitions
     WHERE 
         (
           (
-              p_trigger_id IS NULL
+              p_definition_id IS NULL
             AND
-              %1\$s.triggers.schema_name = TG_TABLE_SCHEMA
+              %1\$s.definitions.schema_name = TG_TABLE_SCHEMA
             AND 
-              %1\$s.triggers.table_name = TG_TABLE_NAME
+              %1\$s.definitions.table_name = TG_TABLE_NAME
           )
         OR
           (
-              p_trigger_id IS NOT NULL
+              p_definition_id IS NOT NULL
             AND
-              %1\$s.triggers.id = p_trigger_id
+              %1\$s.definitions.id = p_definition_id
           )
         )
       AND 
-        %1\$s.triggers.manual = false
+        %1\$s.definitions.manual = false
   LOOP
-    trigger_id := trigger.id;
-    schema_name := trigger.schema_name;
-    table_name := trigger.table_name;
-    primary_key_name := trigger.primary_key_name;
-    foreign_schema_name := trigger.foreign_schema_name;
-    foreign_table_name := trigger.foreign_table_name;
-    cache_table_name := trigger.cache_table_name;
-    cache_aggregation_name := trigger.cache_aggregation_name;
-    foreign_primary_key_name := trigger.foreign_primary_key_name;
-    cache_primary_key_name := trigger.cache_primary_key_name;
-    foreign_key_name := trigger.foreign_key_name;
-    aggregation_function := trigger.aggregation_function;
-    value_names := trigger.value_names;
-    options := trigger.options;
-    key_name := trigger.key_name;
-    conditions := trigger.conditions;
-    foreign_conditions := trigger.foreign_conditions;
-    asynchronous := trigger.asynchronous;
+    definition_id := definition.id;
+    schema_name := definition.schema_name;
+    table_name := definition.table_name;
+    primary_key_name := definition.primary_key_name;
+    foreign_schema_name := definition.foreign_schema_name;
+    foreign_table_name := definition.foreign_table_name;
+    cache_table_name := definition.cache_table_name;
+    cache_aggregation_name := definition.cache_aggregation_name;
+    foreign_primary_key_name := definition.foreign_primary_key_name;
+    cache_primary_key_name := definition.cache_primary_key_name;
+    foreign_key_name := definition.foreign_key_name;
+    aggregation_function := definition.aggregation_function;
+    value_names := definition.value_names;
+    options := definition.options;
+    key_name := definition.key_name;
+    conditions := definition.conditions;
+    foreign_conditions := definition.foreign_conditions;
+    asynchronous := definition.asynchronous;
 
-    RAISE DEBUG '%1\$s.hoardable__after: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+    RAISE DEBUG '%1\$s.hoardable__after: trigger (TG_TABLE_NAME=%%, definition_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
       TG_TABLE_NAME,
-      trigger_id, 
+      definition_id, 
       schema_name, 
       table_name, 
       primary_key_name, 
@@ -2837,7 +2837,7 @@ BEGIN
     -- Run update if required
     IF asynchronous = false THEN
       PERFORM %1\$s.update(
-        trigger_id,
+        definition_id,
         schema_name,
         table_name,
         primary_key_name,
@@ -2870,8 +2870,8 @@ BEGIN
     RAISE DEBUG '';
 
     -- Store update in logs
-    EXECUTE format('INSERT INTO %1\$s.logs (trigger_id, operation, old_relevant, new_values, new_foreign_key, new_relevant, processed_at) VALUES($1, $2, false, $3, $4, $5, $6)') 
-      USING trigger_id, TG_OP, new_values, new_foreign_key, new_relevant, processed_at;
+    EXECUTE format('INSERT INTO %1\$s.logs (definition_id, operation, old_relevant, new_values, new_foreign_key, new_relevant, processed_at) VALUES($1, $2, false, $3, $4, $5, $6)') 
+      USING definition_id, TG_OP, new_values, new_foreign_key, new_relevant, processed_at;
   END LOOP;
 
   RAISE DEBUG '%1\$s.hoardable__after: end';
@@ -2895,11 +2895,11 @@ PLPGSQL,
         sprintf(
           <<<PLPGSQL
 DECLARE
-  trigger %1\$s.triggers%%rowtype;
+  definition %1\$s.definitions%%rowtype;
 
-  p_trigger_id int DEFAULT NULL;
+  p_definition_id int DEFAULT NULL;
   
-  trigger_id int;
+  definition_id int;
   schema_name text;
   table_name text;
   primary_key_name text;
@@ -2931,9 +2931,9 @@ DECLARE
 
   exception_context text;
 BEGIN
-  -- Cast trigger id
+  -- Cast definition id
   IF TG_ARGV[0] != 'null' THEN
-    p_trigger_id = TG_ARGV[0]::bigint;
+    p_definition_id = TG_ARGV[0]::bigint;
   END IF;
 
   -- Log
@@ -2945,7 +2945,7 @@ BEGIN
       OLD=%%, 
       NEW=%%, 
       TG_ARGV=%%, 
-      p_trigger_id=%%
+      p_definition_id=%%
     )', 
     TG_NAME, 
     TG_OP, 
@@ -2953,57 +2953,57 @@ BEGIN
     OLD::text, 
     NEW::text, 
     TG_ARGV::text,
-    p_trigger_id;
+    p_definition_id;
 
-  -- On DELETE we need to check the triggers before because otherwise the join table will be deleted and we cannot check the conditions anymore
+  -- On DELETE we need to check the definitions before because otherwise the join table will be deleted and we cannot check the conditions anymore
   IF TG_OP = 'DELETE' OR TG_OP = 'UPDATE' THEN
-    -- Get all triggers that affect OTHER tables
-    FOR trigger IN
-      SELECT * FROM %1\$s.triggers 
+    -- Get all definitions that affect OTHER tables
+    FOR definition IN
+      SELECT * FROM %1\$s.definitions 
       WHERE 
         (
           (
-              p_trigger_id IS NULL
+              p_definition_id IS NULL
             AND
-              %1\$s.triggers.schema_name = TG_TABLE_SCHEMA
+              %1\$s.definitions.schema_name = TG_TABLE_SCHEMA
             AND 
-              %1\$s.triggers.table_name = TG_TABLE_NAME
+              %1\$s.definitions.table_name = TG_TABLE_NAME
           )
         OR
           (
-              p_trigger_id IS NOT NULL
+              p_definition_id IS NOT NULL
             AND
-              %1\$s.triggers.id = p_trigger_id
+              %1\$s.definitions.id = p_definition_id
           )
         )
       AND 
-        %1\$s.triggers.manual = false
+        %1\$s.definitions.manual = false
     LOOP
-      CONTINUE WHEN TG_OP = 'DELETE' AND trigger.lazy = true;
+      CONTINUE WHEN TG_OP = 'DELETE' AND definition.lazy = true;
 
-      trigger_id := trigger.id;
-      schema_name := trigger.schema_name;
-      table_name := trigger.table_name;
-      primary_key_name := trigger.primary_key_name;
-      foreign_schema_name := trigger.foreign_schema_name;
-      foreign_table_name := trigger.foreign_table_name;
-      cache_table_name := trigger.cache_table_name;
-      cache_aggregation_name := trigger.cache_aggregation_name;
-      foreign_primary_key_name := trigger.foreign_primary_key_name;
-      cache_primary_key_name := trigger.cache_primary_key_name;
-      foreign_key_name := trigger.foreign_key_name;
-      aggregation_function := trigger.aggregation_function;
-      value_names:= trigger.value_names;
-      options := trigger.options;
-      key_name := trigger.key_name;
-      conditions := trigger.conditions;
-      foreign_conditions := trigger.foreign_conditions;
-      asynchronous := trigger.asynchronous;
+      definition_id := definition.id;
+      schema_name := definition.schema_name;
+      table_name := definition.table_name;
+      primary_key_name := definition.primary_key_name;
+      foreign_schema_name := definition.foreign_schema_name;
+      foreign_table_name := definition.foreign_table_name;
+      cache_table_name := definition.cache_table_name;
+      cache_aggregation_name := definition.cache_aggregation_name;
+      foreign_primary_key_name := definition.foreign_primary_key_name;
+      cache_primary_key_name := definition.cache_primary_key_name;
+      foreign_key_name := definition.foreign_key_name;
+      aggregation_function := definition.aggregation_function;
+      value_names:= definition.value_names;
+      options := definition.options;
+      key_name := definition.key_name;
+      conditions := definition.conditions;
+      foreign_conditions := definition.foreign_conditions;
+      asynchronous := definition.asynchronous;
 
       RAISE DEBUG 
-        '%1\$s.hoardable__before: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+        '%1\$s.hoardable__before: trigger (TG_TABLE_NAME=%%, definition_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
         TG_TABLE_NAME,
-        trigger_id, 
+        definition_id, 
         schema_name, 
         table_name,
         primary_key_name, 
@@ -3075,7 +3075,7 @@ BEGIN
       -- Run update if required
       IF asynchronous = false THEN
         PERFORM %1\$s.update(
-          trigger_id,
+          definition_id,
           TG_TABLE_SCHEMA,
           TG_TABLE_NAME,
           primary_key_name,
@@ -3108,7 +3108,7 @@ BEGIN
       RAISE DEBUG '';
 
       -- Store update in logs
-      EXECUTE format('INSERT INTO %1\$s.logs (trigger_id, operation, new_relevant, old_values, old_foreign_key, old_relevant, processed_at) VALUES($1, $2, false, $3, $4, $5, $6)') USING trigger_id, TG_OP, old_values, old_foreign_key, old_relevant, processed_at;
+      EXECUTE format('INSERT INTO %1\$s.logs (definition_id, operation, new_relevant, old_values, old_foreign_key, old_relevant, processed_at) VALUES($1, $2, false, $3, $4, $5, $6)') USING definition_id, TG_OP, old_values, old_foreign_key, old_relevant, processed_at;
     END LOOP;
   END IF;
 
@@ -3142,7 +3142,7 @@ PLPGSQL,
           'p_schema_name' => 'text',
           'p_table_name' => 'text',
           'p_dependency_names' => 'text[]',
-          'p_trigger_id' => 'bigint DEFAULT NULL',
+          'p_definition_id' => 'bigint DEFAULT NULL',
         ],
         'void',
         sprintf(
@@ -3155,14 +3155,14 @@ DECLARE
   value_name text;
 BEGIN
   RAISE DEBUG 
-    '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%, p_trigger_id=%%)', 
+    '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%, p_definition_id=%%)', 
     p_trigger_name, 
     p_schema_name, 
     p_table_name, 
     p_dependency_names,
-    p_trigger_id;
+    p_definition_id;
 
-  IF p_trigger_id IS NOT NULL THEN
+  IF p_definition_id IS NOT NULL THEN
     -- Concatenate trigger names
     before_trigger_name := '9999_hoard_' || p_trigger_name || '__before';
     after_trigger_name := '9999_hoard_' || p_trigger_name || '__after';
@@ -3186,7 +3186,7 @@ BEGIN
             ON %%I.%%I
             FOR EACH ROW 
             EXECUTE FUNCTION %1\$s.hoardable__before(%%L)
-          ', before_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_trigger_id);
+          ', before_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_definition_id);
       END IF;
 
       IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, after_trigger_name) THEN
@@ -3196,7 +3196,7 @@ BEGIN
             ON %%I.%%I
             FOR EACH ROW 
             EXECUTE FUNCTION %1\$s.hoardable__after(%%L)
-          ', after_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_trigger_id);
+          ', after_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_definition_id);
       END IF;
     END IF;
   END IF;
@@ -3268,25 +3268,25 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'triggers__before',
+        'definitions__before',
         [],
         'trigger',
         sprintf(
           <<<PLPGSQL
   DECLARE
-    trigger %1\$s.triggers%%rowtype;
+    definition %1\$s.definitions%%rowtype;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.triggers__before: start (TG_OP=%%, OLD=%%, NEW=%%)', 
+      '%1\$s.definitions__before: start (TG_OP=%%, OLD=%%, NEW=%%)', 
       TG_OP, 
       OLD, 
       NEW;
 
     -- Drop view
     IF TG_OP = 'DELETE' THEN
-      -- RAISE EXCEPTION '%1\$s.triggers__before: triggers cannot be deleted and must be deactivated instead';
+      -- RAISE EXCEPTION '%1\$s.definitions__before: definitions cannot be deleted and must be deactivated instead';
       EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name));
-      RAISE DEBUG 'hoard.triggers__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name);
+      RAISE DEBUG 'hoard.definitions__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name);
 
       RETURN OLD;
     END IF;
@@ -3344,14 +3344,14 @@ PLPGSQL,
 
           IF (NEW.aggregation_type = '') IS NOT FALSE THEN
             -- Try to resolve from cache tables of foreign table
-            FOR trigger IN
-              SELECT * FROM %1\$s.triggers
+            FOR definition IN
+              SELECT * FROM %1\$s.definitions
               WHERE 
-                  %1\$s.triggers.foreign_schema_name = NEW.schema_name
+                  %1\$s.definitions.foreign_schema_name = NEW.schema_name
                 AND
-                  %1\$s.triggers.foreign_table_name = NEW.table_name
+                  %1\$s.definitions.foreign_table_name = NEW.table_name
             LOOP
-              NEW.aggregation_type := %1\$s.get_column_type('%1\$s', trigger.cache_table_name, NEW.value_names->>0);
+              NEW.aggregation_type := %1\$s.get_column_type('%1\$s', definition.cache_table_name, NEW.value_names->>0);
 
               IF NEW.aggregation_type IS NOT NULL AND NEW.aggregation_type <> '' THEN
                 EXIT;
@@ -3406,7 +3406,7 @@ PLPGSQL,
 
     -- Drop view
     EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name));
-    RAISE DEBUG 'hoard.triggers__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name);
+    RAISE DEBUG 'hoard.definitions__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name);
 
     RETURN NEW;
   END;
@@ -3421,16 +3421,16 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'triggers__after',
+        'definitions__after',
         [],
         'trigger',
         sprintf(
           <<<PLPGSQL
   DECLARE 
-    trigger %1\$s.triggers%%rowtype;
+    definition %1\$s.definitions%%rowtype;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.triggers__after: start (TG_OP=%%, OLD=%%, NEW=%%)', 
+      '%1\$s.definitions__after: start (TG_OP=%%, OLD=%%, NEW=%%)', 
       TG_OP, 
       OLD, 
       NEW;
@@ -3438,12 +3438,12 @@ PLPGSQL,
     -- Drop columns, triggers and recreate cache views
     IF TG_OP = 'DELETE' THEN
       -- Drop columns
-      IF (SELECT COUNT(id) FROM %1\$s.triggers WHERE cache_table_name = OLD.cache_table_name AND cache_aggregation_name = OLD.cache_aggregation_name) = 0 THEN
+      IF (SELECT COUNT(id) FROM %1\$s.definitions WHERE cache_table_name = OLD.cache_table_name AND cache_aggregation_name = OLD.cache_aggregation_name) = 0 THEN
         PERFORM %1\$s.drop_cache_aggregation(OLD.cache_table_name, OLD.cache_aggregation_name);
       END IF;
 
       -- Drop table
-      IF (SELECT COUNT(id) FROM %1\$s.triggers WHERE cache_table_name = OLD.cache_table_name) = 0 THEN
+      IF (SELECT COUNT(id) FROM %1\$s.definitions WHERE cache_table_name = OLD.cache_table_name) = 0 THEN
         PERFORM %1\$s.drop_cache_table(OLD.cache_table_name);
       END IF;
 
@@ -3451,14 +3451,14 @@ PLPGSQL,
       PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.schema_name, OLD.table_name);
       PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.foreign_schema_name, OLD.foreign_table_name);
 
-      FOR trigger IN
-        SELECT * FROM %1\$s.triggers
+      FOR definition IN
+        SELECT * FROM %1\$s.definitions
         WHERE 
-            %1\$s.triggers.foreign_schema_name = OLD.schema_name
+            %1\$s.definitions.foreign_schema_name = OLD.schema_name
           AND
-            %1\$s.triggers.foreign_table_name = OLD.table_name
+            %1\$s.definitions.foreign_table_name = OLD.table_name
       LOOP
-        PERFORM %1\$s.drop_triggers(OLD.id::text, '%1\$s', trigger.cache_table_name);
+        PERFORM %1\$s.drop_triggers(OLD.id::text, '%1\$s', definition.cache_table_name);
       END LOOP;
 
       -- Recreate view
@@ -3494,14 +3494,14 @@ PLPGSQL,
       PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.schema_name, NEW.table_name);
       PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name);
 
-      FOR trigger IN
-        SELECT * FROM %1\$s.triggers
+      FOR definition IN
+        SELECT * FROM %1\$s.definitions
         WHERE 
-            %1\$s.triggers.foreign_schema_name = NEW.schema_name
+            %1\$s.definitions.foreign_schema_name = NEW.schema_name
           AND
-            %1\$s.triggers.foreign_table_name = NEW.table_name
+            %1\$s.definitions.foreign_table_name = NEW.table_name
       LOOP
-        PERFORM %1\$s.drop_triggers(NEW.id::text, '%1\$s', trigger.cache_table_name);
+        PERFORM %1\$s.drop_definitions(NEW.id::text, '%1\$s', definition.cache_table_name);
       END LOOP;
     END IF;
 
@@ -3523,17 +3523,17 @@ PLPGSQL,
         ARRAY[NEW.foreign_key_name, NEW.foreign_conditions]
       );
 
-      FOR trigger IN
-        SELECT * FROM %1\$s.triggers
+      FOR definition IN
+        SELECT * FROM %1\$s.definitions
         WHERE 
-            %1\$s.triggers.foreign_schema_name = NEW.schema_name
+            %1\$s.definitions.foreign_schema_name = NEW.schema_name
           AND
-            %1\$s.triggers.foreign_table_name = NEW.table_name
+            %1\$s.definitions.foreign_table_name = NEW.table_name
       LOOP
         PERFORM %1\$s.create_triggers(
           NEW.id::text, 
           '%1\$s', 
-          trigger.cache_table_name, 
+          definition.cache_table_name, 
           array(SELECT jsonb_array_elements_text(
             NEW.value_names || to_jsonb(ARRAY[NEW.key_name, NEW.conditions])
           )),
@@ -3717,7 +3717,7 @@ PLPGSQL,
         sprintf(
           <<<PLPGSQL
   DECLARE
-    trigger %1\$s.triggers%%rowtype;
+    definition %1\$s.definitions%%rowtype;
     
     primary_key_name text;
     foreign_schema_name text;
@@ -3741,21 +3741,21 @@ PLPGSQL,
       p_foreign_table_name;
 
     -- Get all visible cached fields
-    FOR trigger IN
-      SELECT * FROM %1\$s.triggers
+    FOR definition IN
+      SELECT * FROM %1\$s.definitions
       WHERE 
-          %1\$s.triggers.foreign_schema_name = p_foreign_schema_name
+          %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
         AND
-          %1\$s.triggers.foreign_table_name = p_foreign_table_name
+          %1\$s.definitions.foreign_table_name = p_foreign_table_name
         AND
           hidden = false
     LOOP
-      foreign_schema_name := trigger.foreign_schema_name;
-      foreign_table_name := trigger.foreign_table_name;
-      foreign_primary_key_name := trigger.foreign_primary_key_name;
-      cache_table_name := trigger.cache_table_name;
-      cache_primary_key_name := trigger.cache_primary_key_name;
-      cache_aggregation_name := trigger.cache_aggregation_name;
+      foreign_schema_name := definition.foreign_schema_name;
+      foreign_table_name := definition.foreign_table_name;
+      foreign_primary_key_name := definition.foreign_primary_key_name;
+      cache_table_name := definition.cache_table_name;
+      cache_primary_key_name := definition.cache_primary_key_name;
+      cache_aggregation_name := definition.cache_aggregation_name;
     
       joins := joins || jsonb_build_object(
         cache_table_name, 

@@ -965,7 +965,7 @@ class AcceptanceTestCase extends TestCase
 
     public function testRemoveTrigger()
     {
-        DB::statement('DELETE FROM ' . HoardSchema::$cacheSchema . '.triggers WHERE id = 1');
+        DB::statement('DELETE FROM ' . HoardSchema::$cacheSchema . '.definitions WHERE id = 1');
 
         $this->assertEquals(true, true);
     }

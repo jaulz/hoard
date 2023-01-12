@@ -88,7 +88,7 @@ class HoardServiceProvider extends ServiceProvider
       return [
         sprintf(
           "
-            INSERT INTO %1\$s.triggers (
+            INSERT INTO %1\$s.definitions (
               table_name, 
               key_name,
               aggregation_function, 
