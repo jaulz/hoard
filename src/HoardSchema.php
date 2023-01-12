@@ -3695,7 +3695,7 @@ PLPGSQL,
       p_cache_table_name,
       p_cache_aggregation_name;
 
-    -- Create table
+    -- Drop column
     EXECUTE format(
       'ALTER TABLE %1\$s.%%I DROP COLUMN IF EXISTS %%I', 
       p_cache_table_name,
