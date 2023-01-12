@@ -2782,7 +2782,7 @@ BEGIN
     foreign_conditions := definition.foreign_conditions;
     asynchronous := definition.asynchronous;
 
-    RAISE DEBUG '%1\$s.hoardable__after: trigger (TG_TABLE_NAME=%%, definition_id=%%, table_schema=%%, table_name=%%, primary_key_name=%%, foreign_table_schema=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+    RAISE DEBUG '%1\$s.hoardable__after: definition (TG_TABLE_NAME=%%, definition_id=%%, table_schema=%%, table_name=%%, primary_key_name=%%, foreign_table_schema=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
       TG_TABLE_NAME,
       definition_id, 
       table_schema, 
@@ -3001,7 +3001,7 @@ BEGIN
       asynchronous := definition.asynchronous;
 
       RAISE DEBUG 
-        '%1\$s.hoardable__before: trigger (TG_TABLE_NAME=%%, definition_id=%%, table_schema=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+        '%1\$s.hoardable__before: definition (TG_TABLE_NAME=%%, definition_id=%%, table_schema=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
         TG_TABLE_NAME,
         definition_id, 
         table_schema, 
