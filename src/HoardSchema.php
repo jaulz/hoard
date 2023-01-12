@@ -262,7 +262,7 @@ class HoardSchema
       HoardSchema::createFunction(
         'get_column_type',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
           'p_column_name' => 'text',
         ],
@@ -292,7 +292,7 @@ class HoardSchema
           AND 
             column_name = %%L
         ',
-        p_schema_name,
+        p_table_schema,
         p_table_name,
         p_column_name
       ) 
@@ -308,7 +308,7 @@ PLPGSQL
       HoardSchema::createFunction(
         'get_primary_key_name',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
         ],
         'text',
@@ -337,7 +337,7 @@ PLPGSQL
               AND 
                 tc.table_name = %%L
         ',
-        p_schema_name,
+        p_table_schema,
         p_table_name
       ) 
       INTO primary_key_name;
@@ -352,7 +352,7 @@ PLPGSQL
       HoardSchema::createFunction(
         'get_primary_key_type',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
         ],
         'text',
@@ -360,9 +360,9 @@ PLPGSQL
           <<<PLPGSQL
   BEGIN
     RETURN %1\$s.get_column_type(
-      p_schema_name, 
+      p_table_schema, 
       p_table_name, 
-      %1\$s.get_primary_key_name(p_schema_name, p_table_name)
+      %1\$s.get_primary_key_name(p_table_schema, p_table_name)
     );
   END;
 PLPGSQL,
@@ -407,7 +407,7 @@ SQL
       HoardSchema::createFunction(
         'exists_trigger',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
           'p_trigger_name' => 'text',
         ],
@@ -421,7 +421,7 @@ SQL
           true 
         FROM information_schema.triggers 
         WHERE 
-            trigger_schema = p_schema_name 
+            trigger_schema = p_table_schema 
           AND 
             triggers.event_object_table = p_table_name 
           AND 
@@ -441,7 +441,7 @@ PLPGSQL
       HoardSchema::createFunction(
         'exists_table',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
         ],
         'bool',
@@ -454,7 +454,7 @@ PLPGSQL
           true 
         FROM information_schema.tables 
         WHERE 
-            table_schema = p_schema_name 
+            table_schema = p_table_schema 
           AND 
             table_name = p_table_name
       ) 
@@ -472,7 +472,7 @@ PLPGSQL
       HoardSchema::createFunction(
         'exists_view',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_view_name' => 'text',
         ],
         'bool',
@@ -486,7 +486,7 @@ PLPGSQL
         FROM 
           information_schema.views 
         WHERE 
-            table_schema = p_schema_name 
+            table_schema = p_table_schema 
           AND 
             table_name = p_view_name
       ) 
@@ -504,7 +504,7 @@ PLPGSQL
       HoardSchema::createFunction(
         'exists_function',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_function_name' => 'text',
         ],
         'bool',
@@ -518,7 +518,7 @@ PLPGSQL
         FROM 
           pg_proc 
         WHERE 
-            pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = p_schema_name) 
+            pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = p_table_schema) 
           AND 
             proname = p_function_name
       ) 
@@ -536,7 +536,7 @@ PLPGSQL
       HoardSchema::createFunction(
         'exists_table_column',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
           'p_column_name' => 'text',
         ],
@@ -550,7 +550,7 @@ PLPGSQL
           true 
         FROM information_schema.columns 
         WHERE 
-            table_schema = p_schema_name 
+            table_schema = p_table_schema 
           AND 
             table_name = p_table_name
           AND 
@@ -795,15 +795,15 @@ PLPGSQL,
       HoardSchema::createFunction(
         'get_cache_view_name',
         [
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
         ],
         'text',
         sprintf(
           <<<PLPGSQL
   BEGIN
-    IF %1\$s.is_cache_table_name(p_schema_name, p_table_name) THEN
-      p_table_name := %1\$s.get_table_name(p_schema_name, p_table_name);
+    IF %1\$s.is_cache_table_name(p_table_schema, p_table_name) THEN
+      p_table_name := %1\$s.get_table_name(p_table_schema, p_table_name);
     END IF;
 
     RETURN format('%2\$s%%s%3\$s', p_table_name);
@@ -819,7 +819,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'get_table_name',
         [
-          'p_cache_schema_name' => 'text',
+          'p_cache_table_schema' => 'text',
           'p_cache_table_name' => 'text',
         ],
         'text',
@@ -828,7 +828,7 @@ PLPGSQL,
   DECLARE
     table_name text;
   BEGIN
-    IF %1\$s.is_cache_table_name(p_cache_schema_name, p_cache_table_name) THEN
+    IF %1\$s.is_cache_table_name(p_cache_table_schema, p_cache_table_name) THEN
       table_name := SUBSTRING(p_cache_table_name, 1, POSITION('%3\$s' in p_cache_table_name) - 1);
       table_name := SUBSTRING(table_name, LENGTH('%2\$s') + 1);
 
@@ -848,7 +848,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'is_cache_table_name',
         [
-          'p_join_schema_name' => 'text',
+          'p_join_table_schema' => 'text',
           'p_table_name' => 'text',
         ],
         'boolean',
@@ -856,7 +856,7 @@ PLPGSQL,
           <<<PLPGSQL
   BEGIN
     RETURN (
-        p_join_schema_name = '%1\$s'
+        p_join_table_schema = '%1\$s'
       AND
         POSITION('%2\$s' in p_table_name) = 1 
       AND 
@@ -877,7 +877,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'get_join_statement',
         [
-          'p_join_schema_name' => 'text',
+          'p_join_table_schema' => 'text',
           'p_join_table_name' => 'text',
           'p_primary_key_name' => 'text',
           'p_alias' => 'text',
@@ -891,9 +891,9 @@ PLPGSQL,
     table_name text;
   BEGIN
     -- In case the provided table name is a cache table name we will join the principal table
-    IF %1\$s.is_cache_table_name(p_join_schema_name, p_join_table_name) THEN
+    IF %1\$s.is_cache_table_name(p_join_table_schema, p_join_table_name) THEN
       cache_table_name := p_join_table_name;
-      table_name := %1\$s.get_table_name(p_join_schema_name, p_join_table_name);
+      table_name := %1\$s.get_table_name(p_join_table_schema, p_join_table_name);
 
       RETURN format(
         'LEFT JOIN "%%s" ON "%%s"."%%s" = "%%s"."%%s"', 
@@ -906,7 +906,7 @@ PLPGSQL,
     END IF;
 
     -- In case the provided table name is a principal table, we will check if there is a cache view and join that 
-    cache_view_name := %1\$s.get_cache_view_name(p_join_schema_name, p_join_table_name);
+    cache_view_name := %1\$s.get_cache_view_name(p_join_table_schema, p_join_table_name);
     IF NOT %1\$s.exists_view('%1\$s', cache_view_name) THEN
       RETURN '';
     END IF;
@@ -928,7 +928,7 @@ PLPGSQL,
       cache_view_name, 
       cache_view_name, 
       %1\$s.resolve_cache_primary_key_name(p_primary_key_name), 
-      p_join_schema_name, 
+      p_join_table_schema, 
       p_alias, 
       %1\$s.resolve_primary_key_name(p_primary_key_name)
     );
@@ -984,7 +984,7 @@ PLPGSQL,
   {
     $getRefreshQueryParameters = [
       'p_refresh_query' => 'text',
-      'p_schema_name' => 'text',
+      'p_table_schema' => 'text',
       'p_table_name' => 'text',
       'p_primary_key_name' => 'text',
       'p_key_name' => 'text',
@@ -998,11 +998,11 @@ PLPGSQL,
       'p_refresh_query' => 'text',
     ];
     $updateParameters = [
-      'p_schema_name' => 'text',
+      'p_table_schema' => 'text',
       'p_table_name' => 'text',
       'p_primary_key_name' => 'text',
       'p_key_name' => 'text',
-      'p_foreign_schema_name' => 'text',
+      'p_foreign_table_schema' => 'text',
       'p_foreign_table_name' => 'text',
       'p_foreign_primary_key_name' => 'text',
       'p_foreign_key_name' => 'text',
@@ -1037,7 +1037,7 @@ PLPGSQL,
           'p_aggregation_function' => 'text',
           'p_value_names' => 'jsonb',
           'p_options' => 'jsonb',
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
           'p_key_name' => 'text',
           'p_foreign_key' => 'text',
@@ -1065,9 +1065,9 @@ PLPGSQL,
       'SELECT %%s(%%s) AS value FROM %%I.%%I %%s WHERE %%I = %%s AND (%%s)', 
       p_aggregation_function, 
       p_value_names->>0, 
-      p_schema_name,
+      p_table_schema,
       p_table_name, 
-      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name), 
+      %1\$s.get_join_statement(p_table_schema, p_table_name, p_primary_key_name, p_table_name), 
       p_key_name, 
       p_foreign_key, 
       p_conditions
@@ -1080,7 +1080,7 @@ PLPGSQL,
         'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L)',
         refresh_query_function_name,
         refresh_query,
-        p_schema_name,
+        p_table_schema,
         p_table_name,
         p_primary_key_name,
         p_key_name,
@@ -1360,9 +1360,9 @@ PLPGSQL,
     RETURN format(
       'SELECT %%s FROM %%I.%%I %%s WHERE %%I = %%s AND (%%s) %%s LIMIT 1', 
       p_value_names->>0, 
-      p_schema_name, 
+      p_table_schema, 
       p_table_name, 
-      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name), 
+      %1\$s.get_join_statement(p_table_schema, p_table_name, p_primary_key_name, p_table_name), 
       p_key_name, 
       p_foreign_key, 
       p_conditions,
@@ -1426,9 +1426,9 @@ PLPGSQL,
     RETURN format(
       'SELECT coalesce((SELECT jsonb_agg(%%I) FROM %%I.%%I %%s WHERE %%I = %%s AND (%%s)), ''[]''::jsonb)', 
       p_value_names->>0, 
-      p_schema_name, 
+      p_table_schema, 
       p_table_name, 
-      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name), 
+      %1\$s.get_join_statement(p_table_schema, p_table_name, p_primary_key_name, p_table_name), 
       p_key_name, 
       p_foreign_key, 
       p_conditions
@@ -1565,7 +1565,7 @@ PLPGSQL,
       p_options->>'aggregation_function',
       p_value_names->>1,
       p_table_name,
-      %1\$s.get_join_statement(p_schema_name, p_table_name, p_primary_key_name, p_table_name),
+      %1\$s.get_join_statement(p_table_schema, p_table_name, p_primary_key_name, p_table_name),
       p_conditions,
       p_value_names->>0,
       coalesce(p_options->>'condition', '')
@@ -1634,11 +1634,11 @@ PLPGSQL,
     EXECUTE format(
       'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L)',
       lower(format('get_update_%%s_statement', p_options->>'aggregation_function')),
-      p_schema_name,
+      p_table_schema,
       p_table_name,
       p_primary_key_name,
       p_key_name,
-      p_foreign_schema_name,
+      p_foreign_table_schema,
       p_foreign_table_name,
       p_foreign_primary_key_name,
       p_foreign_key_name,
@@ -1857,7 +1857,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'upsert_single_cache_table_row',
         [
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
           'p_foreign_row' => 'jsonb',
           'p_cache_aggregation_name' => 'text DEFAULT NULL',
@@ -1873,10 +1873,10 @@ PLPGSQL,
     existing_refresh_query text;
     concat_query_function_name text;
 
-    schema_name text;
+    table_schema text;
     table_name text;
     primary_key_name text;
-    foreign_schema_name text;
+    foreign_table_schema text;
     cache_table_name text;
     cache_primary_key_name text;
     foreign_primary_key_name text;
@@ -1891,8 +1891,8 @@ PLPGSQL,
     relevant boolean;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.upsert_single_cache_table_row: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_cache_aggregation_name=%%)', 
-      p_foreign_schema_name, 
+      '%1\$s.upsert_single_cache_table_row: start (p_foreign_table_schema=%%, p_foreign_table_name=%%, p_foreign_row=%%, p_cache_aggregation_name=%%)', 
+      p_foreign_table_schema, 
       p_foreign_table_name, 
       p_foreign_row,
       p_cache_aggregation_name;
@@ -1908,7 +1908,7 @@ PLPGSQL,
               (
                   p_cache_aggregation_name IS NULL
                 AND
-                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_table_schema = p_foreign_table_schema
                 AND 
                   %1\$s.definitions.foreign_table_name = p_foreign_table_name
               )
@@ -1916,7 +1916,7 @@ PLPGSQL,
               (
                   p_cache_aggregation_name IS NOT NULL
                 AND
-                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_table_schema = p_foreign_table_schema
                 AND 
                   %1\$s.definitions.foreign_table_name = p_foreign_table_name
                 AND
@@ -1933,13 +1933,13 @@ PLPGSQL,
       END IF;
 
       table_name := definition.table_name;
-      schema_name := definition.schema_name;
+      table_schema := definition.table_schema;
       primary_key_name := definition.primary_key_name;
       cache_table_name := definition.cache_table_name;
       cache_primary_key_name := definition.cache_primary_key_name;
       cache_aggregation_name := definition.cache_aggregation_name;
       foreign_primary_key_name := definition.foreign_primary_key_name;
-      foreign_schema_name := definition.foreign_schema_name;
+      foreign_table_schema := definition.foreign_table_schema;
       aggregation_function := definition.aggregation_function;
       value_names := definition.value_names;
       options := definition.options;
@@ -1963,8 +1963,8 @@ PLPGSQL,
       -- Check if foreign conditions are met
       EXECUTE format(
         'SELECT true FROM %%s.%%s WHERE %%s = %%L AND %%s;',
-        p_foreign_schema_name, 
-        %1\$s.get_table_name(p_foreign_schema_name, p_foreign_table_name), 
+        p_foreign_table_schema, 
+        %1\$s.get_table_name(p_foreign_table_schema, p_foreign_table_name), 
         foreign_primary_key_name, 
         foreign_primary_key, 
         foreign_conditions
@@ -1977,7 +1977,7 @@ PLPGSQL,
           aggregation_function, 
           value_names, 
           options, 
-          schema_name, 
+          table_schema, 
           table_name, 
           key_name,
           format('%%L', %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)), 
@@ -2032,7 +2032,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'upsert_single_cache_table_rows',
         [
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
           'p_cache_aggregation_name' => 'text DEFAULT NULL',
           'p_foreign_table_conditions' => "text DEFAULT '1 = 1'",
@@ -2044,8 +2044,8 @@ PLPGSQL,
     foreign_row record;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.upsert_single_cache_table_rows: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_cache_aggregation_name=%%)', 
-      p_foreign_schema_name, 
+      '%1\$s.upsert_single_cache_table_rows: start (p_foreign_table_schema=%%, p_foreign_table_name=%%, p_foreign_table_conditions=%%, p_cache_aggregation_name=%%)', 
+      p_foreign_table_schema, 
       p_foreign_table_name, 
       p_foreign_table_conditions, 
       p_cache_aggregation_name;
@@ -2057,9 +2057,9 @@ PLPGSQL,
 
     -- Run updates
     FOR foreign_row IN
-      EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_schema_name, p_foreign_table_name, p_foreign_table_conditions)
+      EXECUTE format('SELECT * FROM %%s.%%s WHERE %%s', p_foreign_table_schema, p_foreign_table_name, p_foreign_table_conditions)
     LOOP
-      PERFORM %1\$s.upsert_single_cache_table_row(p_foreign_schema_name, p_foreign_table_name, to_jsonb(foreign_row), p_cache_aggregation_name);
+      PERFORM %1\$s.upsert_single_cache_table_row(p_foreign_table_schema, p_foreign_table_name, to_jsonb(foreign_row), p_cache_aggregation_name);
     END LOOP;
   END;
 PLPGSQL,
@@ -2071,7 +2071,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'upsert_cache_table_rows',
         [
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
           'p_foreign_conditions' => 'text DEFAULT \'\'',
           'p_cache_aggregation_name' => 'text DEFAULT NULL',
@@ -2088,10 +2088,10 @@ PLPGSQL,
     existing_refresh_query text;
     concat_query_function_name text;
 
-    schema_name text;
+    table_schema text;
     table_name text;
     primary_key_name text;
-    foreign_schema_name text;
+    foreign_table_schema text;
     cache_table_name text;
     cache_primary_key_name text;
     foreign_table_name text;
@@ -2107,8 +2107,8 @@ PLPGSQL,
     affected_rows int;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.upsert_cache_table_rows: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_cache_aggregation_name=%%, p_foreign_conditions=%%)', 
-      p_foreign_schema_name, 
+      '%1\$s.upsert_cache_table_rows: start (p_foreign_table_schema=%%, p_foreign_table_name=%%, p_cache_aggregation_name=%%, p_foreign_conditions=%%)', 
+      p_foreign_table_schema, 
       p_foreign_table_name, 
       p_cache_aggregation_name,
       p_foreign_conditions;
@@ -2129,7 +2129,7 @@ PLPGSQL,
               (
                   p_cache_aggregation_name IS NULL
                 AND
-                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_table_schema = p_foreign_table_schema
                 AND 
                   %1\$s.definitions.foreign_table_name = p_foreign_table_name
               )
@@ -2137,7 +2137,7 @@ PLPGSQL,
               (
                   p_cache_aggregation_name IS NOT NULL
                 AND
-                  %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
+                  %1\$s.definitions.foreign_table_schema = p_foreign_table_schema
                 AND 
                   %1\$s.definitions.foreign_table_name = p_foreign_table_name
                 AND
@@ -2154,14 +2154,14 @@ PLPGSQL,
       END IF;
 
       table_name := definition.table_name;
-      schema_name := definition.schema_name;
+      table_schema := definition.table_schema;
       primary_key_name := definition.primary_key_name;
       cache_table_name := definition.cache_table_name;
       cache_primary_key_name := definition.cache_primary_key_name;
       cache_aggregation_name := definition.cache_aggregation_name;
       foreign_primary_key_name := definition.foreign_primary_key_name;
       foreign_table_name := definition.foreign_table_name;
-      foreign_schema_name := definition.foreign_schema_name;
+      foreign_table_schema := definition.foreign_table_schema;
       aggregation_function := definition.aggregation_function;
       value_names := definition.value_names;
       options := definition.options;
@@ -2180,7 +2180,7 @@ PLPGSQL,
         aggregation_function, 
         value_names, 
         options, 
-        schema_name, 
+        table_schema, 
         table_name, 
         key_name,
         'wrapper.' || foreign_primary_key_name, 
@@ -2241,7 +2241,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'process',
         [
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
           'p_cache_aggregation_name' => "text DEFAULT '%%'",
         ],
@@ -2253,7 +2253,7 @@ PLPGSQL,
     log %1\$s.logs%%rowtype;
     logs %1\$s.logs[];
   BEGIN
-    RAISE DEBUG '%1\$s.process: start (p_foreign_schema_name=%%, p_foreign_table_name=%%)', p_foreign_schema_name, p_foreign_table_name;
+    RAISE DEBUG '%1\$s.process: start (p_foreign_table_schema=%%, p_foreign_table_name=%%)', p_foreign_table_schema, p_foreign_table_name;
 
     -- Set global variable for the transaction (can be read via current_setting('hoard.processing')::bool)
     SET hoard.processing = 'true';
@@ -2265,7 +2265,7 @@ PLPGSQL,
         FROM 
           %1\$s.definitions
         WHERE 
-            foreign_schema_name = p_foreign_schema_name 
+            foreign_table_schema = p_foreign_table_schema 
           AND 
             foreign_table_name = p_foreign_table_name 
           AND
@@ -2286,11 +2286,11 @@ PLPGSQL,
       LOOP
         PERFORM %1\$s.update(
           definition.id, 
-          definition.schema_name, 
+          definition.table_schema, 
           definition.table_name, 
           definition.primary_key_name, 
           definition.key_name, 
-          definition.foreign_schema_name, 
+          definition.foreign_table_schema, 
           definition.foreign_table_name, 
           definition.foreign_primary_key_name, 
           definition.foreign_key_name, 
@@ -2336,11 +2336,11 @@ PLPGSQL,
         'update',
         [
           'p_definition_id' => 'bigint',
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
           'p_primary_key_name' => 'text',
           'p_key_name' => 'text',
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
           'p_foreign_primary_key_name' => 'text',
           'p_foreign_key_name' => 'text',
@@ -2402,7 +2402,7 @@ PLPGSQL,
     RAISE DEBUG '
       %1\$s.update: start (
         p_definition_id=%%,
-        p_schema_name=%%, 
+        p_table_schema=%%, 
         p_table_name=%%, 
         p_key_name=%%, 
         p_foreign_table_name=%%,
@@ -2427,7 +2427,7 @@ PLPGSQL,
         changed_value=%%
       )',
       p_definition_id,
-      p_schema_name,  
+      p_table_schema,  
       p_table_name,
       p_key_name,
       p_foreign_table_name,
@@ -2489,7 +2489,7 @@ PLPGSQL,
       p_aggregation_function, 
       p_value_names, 
       p_options, 
-      p_schema_name, 
+      p_table_schema, 
       p_table_name, 
       p_key_name, 
       format('%%L', p_old_foreign_key), 
@@ -2500,7 +2500,7 @@ PLPGSQL,
       p_aggregation_function, 
       p_value_names, 
       p_options,
-      p_schema_name, 
+      p_table_schema, 
       p_table_name, 
       p_key_name, 
       format('%%L', p_new_foreign_key), 
@@ -2538,11 +2538,11 @@ PLPGSQL,
       EXECUTE format(
         'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L::jsonb, %%L, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L)',
         update_function_name,
-        p_schema_name,
+        p_table_schema,
         p_table_name,
         p_primary_key_name,
         p_key_name,
-        p_foreign_schema_name,
+        p_foreign_table_schema,
         p_foreign_table_name,
         p_foreign_primary_key_name,
         p_foreign_key_name,
@@ -2615,11 +2615,11 @@ PLPGSQL,
       EXECUTE format(
         'SELECT %1\$s.%%s(%%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L, %%L, %%L::bool, %%L, %%L, %%L)',
         update_function_name,
-        p_schema_name,
+        p_table_schema,
         p_table_name,
         p_primary_key_name,
         p_key_name,
-        p_foreign_schema_name,
+        p_foreign_table_schema,
         p_foreign_table_name,
         p_foreign_primary_key_name,
         p_foreign_key_name,
@@ -2687,10 +2687,10 @@ DECLARE
   p_definition_id bigint DEFAULT NULL;
 
   definition_id bigint;
-  schema_name text;
+  table_schema text;
   table_name text;
   primary_key_name text;
-  foreign_schema_name text;
+  foreign_table_schema text;
   foreign_table_name text;
   cache_table_name text;
   cache_aggregation_name text;
@@ -2749,7 +2749,7 @@ BEGIN
           (
               p_definition_id IS NULL
             AND
-              %1\$s.definitions.schema_name = TG_TABLE_SCHEMA
+              %1\$s.definitions.table_schema = TG_TABLE_SCHEMA
             AND 
               %1\$s.definitions.table_name = TG_TABLE_NAME
           )
@@ -2764,10 +2764,10 @@ BEGIN
         %1\$s.definitions.manual = false
   LOOP
     definition_id := definition.id;
-    schema_name := definition.schema_name;
+    table_schema := definition.table_schema;
     table_name := definition.table_name;
     primary_key_name := definition.primary_key_name;
-    foreign_schema_name := definition.foreign_schema_name;
+    foreign_table_schema := definition.foreign_table_schema;
     foreign_table_name := definition.foreign_table_name;
     cache_table_name := definition.cache_table_name;
     cache_aggregation_name := definition.cache_aggregation_name;
@@ -2782,13 +2782,13 @@ BEGIN
     foreign_conditions := definition.foreign_conditions;
     asynchronous := definition.asynchronous;
 
-    RAISE DEBUG '%1\$s.hoardable__after: trigger (TG_TABLE_NAME=%%, definition_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+    RAISE DEBUG '%1\$s.hoardable__after: trigger (TG_TABLE_NAME=%%, definition_id=%%, table_schema=%%, table_name=%%, primary_key_name=%%, foreign_table_schema=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
       TG_TABLE_NAME,
       definition_id, 
-      schema_name, 
+      table_schema, 
       table_name, 
       primary_key_name, 
-      foreign_schema_name, 
+      foreign_table_schema, 
       foreign_table_name, 
       cache_table_name, 
       cache_aggregation_name, 
@@ -2838,11 +2838,11 @@ BEGIN
     IF asynchronous = false THEN
       PERFORM %1\$s.update(
         definition_id,
-        schema_name,
+        table_schema,
         table_name,
         primary_key_name,
         key_name,
-        foreign_schema_name,
+        foreign_table_schema,
         foreign_table_name,
         foreign_primary_key_name,
         foreign_key_name,
@@ -2900,10 +2900,10 @@ DECLARE
   p_definition_id int DEFAULT NULL;
   
   definition_id int;
-  schema_name text;
+  table_schema text;
   table_name text;
   primary_key_name text;
-  foreign_schema_name text;
+  foreign_table_schema text;
   foreign_table_name text;
   cache_table_name text;
   cache_aggregation_name text;
@@ -2965,7 +2965,7 @@ BEGIN
           (
               p_definition_id IS NULL
             AND
-              %1\$s.definitions.schema_name = TG_TABLE_SCHEMA
+              %1\$s.definitions.table_schema = TG_TABLE_SCHEMA
             AND 
               %1\$s.definitions.table_name = TG_TABLE_NAME
           )
@@ -2982,10 +2982,10 @@ BEGIN
       CONTINUE WHEN TG_OP = 'DELETE' AND definition.lazy = true;
 
       definition_id := definition.id;
-      schema_name := definition.schema_name;
+      table_schema := definition.table_schema;
       table_name := definition.table_name;
       primary_key_name := definition.primary_key_name;
-      foreign_schema_name := definition.foreign_schema_name;
+      foreign_table_schema := definition.foreign_table_schema;
       foreign_table_name := definition.foreign_table_name;
       cache_table_name := definition.cache_table_name;
       cache_aggregation_name := definition.cache_aggregation_name;
@@ -3001,10 +3001,10 @@ BEGIN
       asynchronous := definition.asynchronous;
 
       RAISE DEBUG 
-        '%1\$s.hoardable__before: trigger (TG_TABLE_NAME=%%, definition_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+        '%1\$s.hoardable__before: trigger (TG_TABLE_NAME=%%, definition_id=%%, table_schema=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
         TG_TABLE_NAME,
         definition_id, 
-        schema_name, 
+        table_schema, 
         table_name,
         primary_key_name, 
         foreign_table_name, 
@@ -3080,7 +3080,7 @@ BEGIN
           TG_TABLE_NAME,
           primary_key_name,
           key_name,
-          foreign_schema_name,
+          foreign_table_schema,
           foreign_table_name,
           foreign_primary_key_name,
           foreign_key_name,
@@ -3139,7 +3139,7 @@ PLPGSQL,
         'create_triggers',
         [
           'p_trigger_name' => 'text',
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
           'p_dependency_names' => 'text[]',
           'p_definition_id' => 'bigint DEFAULT NULL',
@@ -3155,9 +3155,9 @@ DECLARE
   value_name text;
 BEGIN
   RAISE DEBUG 
-    '%1\$s.create_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%, p_dependency_names=%%, p_definition_id=%%)', 
+    '%1\$s.create_triggers: start (p_trigger_name=%%, p_table_schema=%%, p_table_name=%%, p_dependency_names=%%, p_definition_id=%%)', 
     p_trigger_name, 
-    p_schema_name, 
+    p_table_schema, 
     p_table_name, 
     p_dependency_names,
     p_definition_id;
@@ -3170,7 +3170,7 @@ BEGIN
     -- Check if the table contains this column
     FOREACH dependency_name IN ARRAY p_dependency_names LOOP
       FOREACH value_name IN ARRAY array(SELECT REGEXP_MATCHES(dependency_name, '[A-Za-z0-9_]+', 'g')) LOOP
-        IF %1\$s.exists_table_column(p_schema_name, p_table_name, value_name) THEN
+        IF %1\$s.exists_table_column(p_table_schema, p_table_name, value_name) THEN
           column_names := column_names || format('%%I', value_name::text);
         END IF;
       END LOOP;
@@ -3179,48 +3179,48 @@ BEGIN
 
     -- If none of the columns match the table, we don't need any update trigger
     IF cardinality(column_names) > 0 THEN
-      IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, before_trigger_name) THEN
+      IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, before_trigger_name) THEN
         EXECUTE format('
           CREATE TRIGGER %%I
             BEFORE UPDATE OF %%s
             ON %%I.%%I
             FOR EACH ROW 
             EXECUTE FUNCTION %1\$s.hoardable__before(%%L)
-          ', before_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_definition_id);
+          ', before_trigger_name, array_to_string(column_names, ','), p_table_schema, p_table_name, p_definition_id);
       END IF;
 
-      IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, after_trigger_name) THEN
+      IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, after_trigger_name) THEN
         EXECUTE format('
           CREATE TRIGGER %%I
             AFTER UPDATE OF %%s
             ON %%I.%%I
             FOR EACH ROW 
             EXECUTE FUNCTION %1\$s.hoardable__after(%%L)
-          ', after_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_definition_id);
+          ', after_trigger_name, array_to_string(column_names, ','), p_table_schema, p_table_name, p_definition_id);
       END IF;
     END IF;
   END IF;
 
   -- Create create/delete triggers for table
   IF p_table_name <> '' THEN
-    IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, 'hoard_before_create_or_delete') THEN
+    IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, 'hoard_before_create_or_delete') THEN
       EXECUTE format('
         CREATE TRIGGER hoard_before_create_or_delete
           BEFORE INSERT OR DELETE 
           ON %%I.%%I
           FOR EACH ROW 
           EXECUTE FUNCTION %1\$s.hoardable__before()
-        ', p_schema_name, p_table_name);
+        ', p_table_schema, p_table_name);
     END IF;
 
-    IF NOT %1\$s.exists_trigger(p_schema_name, p_table_name, 'hoard_after_create_or_delete') THEN
+    IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, 'hoard_after_create_or_delete') THEN
       EXECUTE format('
         CREATE TRIGGER hoard_after_create_or_delete
           AFTER INSERT OR DELETE 
           ON %%I.%%I
           FOR EACH ROW 
           EXECUTE FUNCTION %1\$s.hoardable__after()
-        ', p_schema_name, p_table_name);
+        ', p_table_schema, p_table_name);
     END IF;
   END IF;
 END;
@@ -3234,7 +3234,7 @@ PLPGSQL,
         'drop_triggers',
         [
           'p_trigger_name' => 'text',
-          'p_schema_name' => 'text',
+          'p_table_schema' => 'text',
           'p_table_name' => 'text',
         ],
         'void',
@@ -3244,7 +3244,7 @@ DECLARE
   before_trigger_name text;
   after_trigger_name text;
 BEGIN
-  RAISE DEBUG '%1\$s.drop_triggers: start (p_trigger_name=%%, p_schema_name=%%, p_table_name=%%)', p_trigger_name, p_schema_name, p_table_name;
+  RAISE DEBUG '%1\$s.drop_triggers: start (p_trigger_name=%%, p_table_schema=%%, p_table_name=%%)', p_trigger_name, p_table_schema, p_table_name;
 
   -- Concatenate trigger names
   before_trigger_name := '9999_hoard_' || p_trigger_name || '__before';
@@ -3254,11 +3254,11 @@ BEGIN
   IF p_table_name <> '' THEN
     EXECUTE format('
         DROP TRIGGER IF EXISTS %%I ON %%I.%%I
-      ', before_trigger_name, p_schema_name, p_table_name);
+      ', before_trigger_name, p_table_schema, p_table_name);
 
     EXECUTE format('
         DROP TRIGGER IF EXISTS %%I ON %%I.%%I
-      ', after_trigger_name, p_schema_name, p_table_name);
+      ', after_trigger_name, p_table_schema, p_table_name);
   END IF;
 END;
 PLPGSQL,
@@ -3285,8 +3285,8 @@ PLPGSQL,
     -- Drop view
     IF TG_OP = 'DELETE' THEN
       -- RAISE EXCEPTION '%1\$s.definitions__before: definitions cannot be deleted and must be deactivated instead';
-      EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name));
-      RAISE DEBUG 'hoard.definitions__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_schema_name, OLD.foreign_table_name);
+      EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(OLD.foreign_table_schema, OLD.foreign_table_name));
+      RAISE DEBUG 'hoard.definitions__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(OLD.foreign_table_schema, OLD.foreign_table_name);
 
       RETURN OLD;
     END IF;
@@ -3298,19 +3298,19 @@ PLPGSQL,
       NEW.cache_table_name := OLD. cache_table_name;
       NEW.cache_primary_key_name := OLD. cache_primary_key_name;
       
-      NEW.foreign_schema_name := OLD.foreign_schema_name;
+      NEW.foreign_table_schema := OLD.foreign_table_schema;
       NEW.foreign_table_name := OLD.foreign_table_name;
       NEW.foreign_table_name := OLD.foreign_table_name;
     END IF;
 
     -- Prefill keys
-    NEW.primary_key_name = %1\$s.get_primary_key_name(NEW.schema_name, NEW.table_name);
+    NEW.primary_key_name = %1\$s.get_primary_key_name(NEW.table_schema, NEW.table_name);
     IF (NEW.key_name = '') IS NOT FALSE THEN
       NEW.key_name := NEW.primary_key_name;
     END IF;
 
     -- Prefill foreign keys
-    NEW.foreign_primary_key_name = %1\$s.get_primary_key_name(NEW.foreign_schema_name, NEW.foreign_table_name);
+    NEW.foreign_primary_key_name = %1\$s.get_primary_key_name(NEW.foreign_table_schema, NEW.foreign_table_name);
     IF (NEW.foreign_key_name = '') IS NOT FALSE THEN
       NEW.foreign_key_name := NEW.foreign_primary_key_name;
     END IF;
@@ -3336,7 +3336,7 @@ PLPGSQL,
       ELSEIF NEW.aggregation_function = 'push' THEN
         NEW.aggregation_type := 'jsonb DEFAULT ''[]''';
       ELSE
-        NEW.aggregation_type := %1\$s.get_column_type(NEW.schema_name, NEW.table_name, NEW.value_names->>0);
+        NEW.aggregation_type := %1\$s.get_column_type(NEW.table_schema, NEW.table_name, NEW.value_names->>0);
 
         IF (NEW.aggregation_type = '') IS NOT FALSE THEN
           -- Try to resolve from same cache table
@@ -3347,7 +3347,7 @@ PLPGSQL,
             FOR definition IN
               SELECT * FROM %1\$s.definitions
               WHERE 
-                  %1\$s.definitions.foreign_schema_name = NEW.schema_name
+                  %1\$s.definitions.foreign_table_schema = NEW.table_schema
                 AND
                   %1\$s.definitions.foreign_table_name = NEW.table_name
             LOOP
@@ -3370,8 +3370,8 @@ PLPGSQL,
     IF NEW.manual = false THEN
       IF (NEW.primary_key_name = '') IS NOT FALSE THEN
         RAISE EXCEPTION 
-          'primary_key_name must not be empty (schema_name=%%, table_name=%%).', 
-          NEW.schema_name, 
+          'primary_key_name must not be empty (table_schema=%%, table_name=%%).', 
+          NEW.table_schema, 
           NEW.table_name;
       END IF;
 
@@ -3381,8 +3381,8 @@ PLPGSQL,
 
       IF (NEW.foreign_primary_key_name = '') IS NOT FALSE THEN
         RAISE EXCEPTION 
-          'foreign_primary_key_name must not be empty (foreign_schema_name=%%, foreign_table_name=%%).', 
-          NEW.foreign_schema_name, 
+          'foreign_primary_key_name must not be empty (foreign_table_schema=%%, foreign_table_name=%%).', 
+          NEW.foreign_table_schema, 
           NEW.foreign_table_name;
       END IF;
 
@@ -3405,8 +3405,8 @@ PLPGSQL,
     END IF;
 
     -- Drop view
-    EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name));
-    RAISE DEBUG 'hoard.definitions__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_schema_name, NEW.foreign_table_name);
+    EXECUTE format('DROP VIEW IF EXISTS %1\$s.%%s', %1\$s.get_cache_view_name(NEW.foreign_table_schema, NEW.foreign_table_name));
+    RAISE DEBUG 'hoard.definitions__before: dropped view (cache_view_name=%%)', hoard.get_cache_view_name(NEW.foreign_table_schema, NEW.foreign_table_name);
 
     RETURN NEW;
   END;
@@ -3448,13 +3448,13 @@ PLPGSQL,
       END IF;
 
       -- Drop triggers
-      PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.schema_name, OLD.table_name);
-      PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.foreign_schema_name, OLD.foreign_table_name);
+      PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.table_schema, OLD.table_name);
+      PERFORM %1\$s.drop_triggers(OLD.id::text, OLD.foreign_table_schema, OLD.foreign_table_name);
 
       FOR definition IN
         SELECT * FROM %1\$s.definitions
         WHERE 
-            %1\$s.definitions.foreign_schema_name = OLD.schema_name
+            %1\$s.definitions.foreign_table_schema = OLD.table_schema
           AND
             %1\$s.definitions.foreign_table_name = OLD.table_name
       LOOP
@@ -3462,7 +3462,7 @@ PLPGSQL,
       END LOOP;
 
       -- Recreate view
-      PERFORM %1\$s.create_cache_view(OLD.foreign_schema_name, OLD.foreign_table_name);
+      PERFORM %1\$s.create_cache_view(OLD.foreign_table_schema, OLD.foreign_table_name);
 
       RETURN OLD;
     END IF;
@@ -3470,7 +3470,7 @@ PLPGSQL,
     -- Create cache table and aggregation
     IF TG_OP = 'INSERT' THEN
       PERFORM %1\$s.create_cache_table(
-        NEW.foreign_schema_name, 
+        NEW.foreign_table_schema, 
         NEW.foreign_table_name, 
         NEW.foreign_primary_key_name, 
         NEW.foreign_key_name, 
@@ -3486,18 +3486,18 @@ PLPGSQL,
 
     -- Create cache view
     IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
-      PERFORM %1\$s.create_cache_view(NEW.foreign_schema_name, NEW.foreign_table_name);
+      PERFORM %1\$s.create_cache_view(NEW.foreign_table_schema, NEW.foreign_table_name);
     END IF;
 
     -- Drop (potential) existing triggers
     IF (TG_OP = 'UPDATE') THEN
-      PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.schema_name, NEW.table_name);
-      PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.foreign_schema_name, NEW.foreign_table_name);
+      PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.table_schema, NEW.table_name);
+      PERFORM %1\$s.drop_triggers(NEW.id::text, NEW.foreign_table_schema, NEW.foreign_table_name);
 
       FOR definition IN
         SELECT * FROM %1\$s.definitions
         WHERE 
-            %1\$s.definitions.foreign_schema_name = NEW.schema_name
+            %1\$s.definitions.foreign_table_schema = NEW.table_schema
           AND
             %1\$s.definitions.foreign_table_name = NEW.table_name
       LOOP
@@ -3509,7 +3509,7 @@ PLPGSQL,
     IF TG_OP = 'INSERT' THEN
       PERFORM %1\$s.create_triggers(
         NEW.id::text, 
-        NEW.schema_name, 
+        NEW.table_schema, 
         NEW.table_name, 
         array(SELECT jsonb_array_elements_text(
           NEW.value_names || to_jsonb(ARRAY[NEW.key_name, NEW.conditions])
@@ -3518,7 +3518,7 @@ PLPGSQL,
       );
       PERFORM %1\$s.create_triggers(
         NEW.id::text, 
-        NEW.foreign_schema_name, 
+        NEW.foreign_table_schema, 
         NEW.foreign_table_name, 
         ARRAY[NEW.foreign_key_name, NEW.foreign_conditions]
       );
@@ -3526,7 +3526,7 @@ PLPGSQL,
       FOR definition IN
         SELECT * FROM %1\$s.definitions
         WHERE 
-            %1\$s.definitions.foreign_schema_name = NEW.schema_name
+            %1\$s.definitions.foreign_table_schema = NEW.table_schema
           AND
             %1\$s.definitions.foreign_table_name = NEW.table_name
       LOOP
@@ -3544,7 +3544,7 @@ PLPGSQL,
 
     -- Refresh table
     SET jit TO off;
-    PERFORM %1\$s.upsert_cache_table_rows(NEW.foreign_schema_name, NEW.foreign_table_name, '', NEW.cache_aggregation_name);
+    PERFORM %1\$s.upsert_cache_table_rows(NEW.foreign_table_schema, NEW.foreign_table_name, '', NEW.cache_aggregation_name);
     RESET jit;
 
     RETURN NEW;
@@ -3566,7 +3566,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'create_cache_table',
         [
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
           'p_foreign_primary_key_name' => 'text',
           'p_foreign_key_name' => 'text',
@@ -3579,8 +3579,8 @@ PLPGSQL,
   DECLARE
   BEGIN
     RAISE DEBUG 
-      '%1\$s.create_cache_table: start (p_foreign_schema_name=%%, p_foreign_table_name=%%, p_foreign_primary_key_name=%%, p_foreign_key_name=%%, p_cache_primary_key_name=%%, p_cache_table_name=%%)', 
-      p_foreign_schema_name,
+      '%1\$s.create_cache_table: start (p_foreign_table_schema=%%, p_foreign_table_name=%%, p_foreign_primary_key_name=%%, p_foreign_key_name=%%, p_cache_primary_key_name=%%, p_cache_table_name=%%)', 
+      p_foreign_table_schema,
       p_foreign_table_name,
       p_foreign_primary_key_name,
       p_foreign_key_name,
@@ -3604,7 +3604,7 @@ PLPGSQL,
       ', 
       p_cache_table_name,
       p_cache_primary_key_name,
-      %1\$s.get_primary_key_type(p_foreign_schema_name, p_foreign_table_name),
+      %1\$s.get_primary_key_type(p_foreign_table_schema, p_foreign_table_name),
       p_cache_primary_key_name,
       p_cache_primary_key_name,
       md5(p_cache_table_name),
@@ -3612,7 +3612,7 @@ PLPGSQL,
       p_cache_primary_key_name,
       md5(p_cache_table_name),
       p_cache_primary_key_name,
-      p_foreign_schema_name,
+      p_foreign_table_schema,
       p_foreign_table_name,
       p_foreign_primary_key_name
     );
@@ -3710,7 +3710,7 @@ PLPGSQL,
       HoardSchema::createFunction(
         'create_cache_view',
         [
-          'p_foreign_schema_name' => 'text',
+          'p_foreign_table_schema' => 'text',
           'p_foreign_table_name' => 'text',
         ],
         'void',
@@ -3720,7 +3720,7 @@ PLPGSQL,
     definition %1\$s.definitions%%rowtype;
     
     primary_key_name text;
-    foreign_schema_name text;
+    foreign_table_schema text;
     foreign_table_name text;
     cache_table_name text;
     cache_aggregation_name text;
@@ -3736,21 +3736,21 @@ PLPGSQL,
     value text;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.create_cache_view: start (p_foreign_schema_name=%%, p_foreign_table_name=%%)', 
-      p_foreign_schema_name,
+      '%1\$s.create_cache_view: start (p_foreign_table_schema=%%, p_foreign_table_name=%%)', 
+      p_foreign_table_schema,
       p_foreign_table_name;
 
     -- Get all visible cached fields
     FOR definition IN
       SELECT * FROM %1\$s.definitions
       WHERE 
-          %1\$s.definitions.foreign_schema_name = p_foreign_schema_name
+          %1\$s.definitions.foreign_table_schema = p_foreign_table_schema
         AND
           %1\$s.definitions.foreign_table_name = p_foreign_table_name
         AND
           hidden = false
     LOOP
-      foreign_schema_name := definition.foreign_schema_name;
+      foreign_table_schema := definition.foreign_table_schema;
       foreign_table_name := definition.foreign_table_name;
       foreign_primary_key_name := definition.foreign_primary_key_name;
       cache_table_name := definition.cache_table_name;
@@ -3761,7 +3761,7 @@ PLPGSQL,
         cache_table_name, 
         format(
           '%%s.%%s.%%s = %1\$s.%%s.%%s', 
-          foreign_schema_name, 
+          foreign_table_schema, 
           foreign_table_name, 
           foreign_primary_key_name, 
           cache_table_name, 
@@ -3787,7 +3787,7 @@ PLPGSQL,
 
     -- Create view
     IF foreign_primary_key_name IS NOT NULL THEN
-      cache_view_name := %1\$s.get_cache_view_name(p_foreign_schema_name, p_foreign_table_name);
+      cache_view_name := %1\$s.get_cache_view_name(p_foreign_table_schema, p_foreign_table_name);
       primary_key_name := foreign_primary_key_name;
 
       EXECUTE format(

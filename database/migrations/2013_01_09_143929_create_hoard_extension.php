@@ -27,12 +27,12 @@ return new class extends Migration
     Schema::create(HoardSchema::$cacheSchema . '.definitions', function (Blueprint $table) {
       $table->id()->generatedAs();
 
-      $table->text('query')->storedAs("CASE WHEN (aggregation_function = '') IS NOT FALSE THEN NULL ELSE 'SELECT ' || foreign_primary_key_name  || ', (' || " . HoardSchema::$cacheSchema . ".get_refresh_query(primary_key_name, aggregation_function, value_names, options, schema_name, table_name, key_name, 'wrapper.' || foreign_primary_key_name, conditions) || ') AS ' || cache_aggregation_name || ' FROM ' || foreign_table_name || ' AS wrapper;' END")->nullable();
+      $table->text('query')->storedAs("CASE WHEN (aggregation_function = '') IS NOT FALSE THEN NULL ELSE 'SELECT ' || foreign_primary_key_name  || ', (' || " . HoardSchema::$cacheSchema . ".get_refresh_query(primary_key_name, aggregation_function, value_names, options, table_schema, table_name, key_name, 'wrapper.' || foreign_primary_key_name, conditions) || ') AS ' || cache_aggregation_name || ' FROM ' || foreign_table_name || ' AS wrapper;' END")->nullable();
 
       $table->text('cache_table_name');
       $table->text('cache_aggregation_name');
 
-      $table->text('schema_name')->nullable();
+      $table->text('table_schema')->nullable();
       $table->text('table_name')->nullable();
 
       $table->text('aggregation_function')->nullable();
@@ -43,7 +43,7 @@ return new class extends Migration
 
       $table->text('key_name')->nullable();
 
-      $table->text('foreign_schema_name');
+      $table->text('foreign_table_schema');
       $table->text('foreign_table_name');
       $table->text('foreign_primary_key_name');
 

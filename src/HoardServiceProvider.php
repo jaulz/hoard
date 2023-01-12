@@ -54,7 +54,7 @@ class HoardServiceProvider extends ServiceProvider
     ) {
       /** @var \Illuminate\Database\Schema\Grammars\PostgresGrammar $this */
       $foreignAggregationName = $command->foreignAggregationName;
-      $foreignSchemaName = Str::contains($command->foreignTableName, '.')
+      $foreigntableSchema = Str::contains($command->foreignTableName, '.')
         ? Str::before($command->foreignTableName, '.')
         : HoardSchema::$schema;
       $foreignTableName = Str::after($command->foreignTableName, '.');
@@ -69,13 +69,13 @@ class HoardServiceProvider extends ServiceProvider
       );
       $conditions = HoardSchema::prepareConditions($command->conditions ?? []);
       $cacheGroupName = $command->cacheGroupName;
-      $schemaName = Str::contains($command->tableName, '.')
+      $tableSchema = Str::contains($command->tableName, '.')
         ? Str::before($command->tableName, '.')
         : HoardSchema::$schema;
       $tableName = Str::after($command->tableName, '.');
       $keyName =
         $command->keyName ??
-        ($schemaName === HoardSchema::$cacheSchema ? 
+        ($tableSchema === HoardSchema::$cacheSchema ? 
           null: Str::singular($foreignTableName) . '_{FOREIGN_PRIMARY_KEY_NAME}');
       $refreshConditions = HoardSchema::prepareConditions(
         $command->refreshConditions ?? []
@@ -102,8 +102,8 @@ class HoardServiceProvider extends ServiceProvider
               lazy,
               hidden,
               manual,
-              schema_name,
-              foreign_schema_name,
+              table_schema,
+              foreign_table_schema,
               asynchronous,
               cache_group_name,
               aggregation_type
@@ -140,8 +140,8 @@ class HoardServiceProvider extends ServiceProvider
               lazy = EXCLUDED.lazy, 
               hidden = EXCLUDED.hidden, 
               manual = EXCLUDED.manual, 
-              schema_name = EXCLUDED.schema_name, 
-              foreign_schema_name = EXCLUDED.foreign_schema_name, 
+              table_schema = EXCLUDED.table_schema, 
+              foreign_table_schema = EXCLUDED.foreign_table_schema, 
               asynchronous = EXCLUDED.asynchronous, 
               cache_group_name = EXCLUDED.cache_group_name,
               aggregation_type = EXCLUDED.aggregation_type;
@@ -162,8 +162,8 @@ class HoardServiceProvider extends ServiceProvider
           $lazy ? 'true' : 'false',
           $hidden ? 'true' : 'false',
           $manual ? 'true' : 'false',
-          $this->quoteString($schemaName),
-          $this->quoteString($foreignSchemaName),
+          $this->quoteString($tableSchema),
+          $this->quoteString($foreigntableSchema),
           $asynchronous ? 'true' : 'false',
           $this->quoteString($cacheGroupName),
           $this->quoteString($aggregationType),
