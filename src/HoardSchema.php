@@ -3666,7 +3666,7 @@ PLPGSQL,
       p_cache_aggregation_name,
       p_aggregation_type;
 
-    -- Create table
+    -- Create column
     EXECUTE format(
       'ALTER TABLE %1\$s.%%I ADD COLUMN IF NOT EXISTS %%I %%s', 
       p_cache_table_name,
