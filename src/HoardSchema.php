@@ -1696,7 +1696,7 @@ PLPGSQL,
   public static function createRefreshFunctions()
   {
       HoardSchema::createFunction(
-        'upsert_row',
+        'upsert_single_row',
         [
           'p_table_name' => 'text',
           'p_primary_key_name' => 'text',
@@ -1716,7 +1716,7 @@ PLPGSQL,
     affected_rows int;
   BEGIN
     RAISE DEBUG 
-      '%1\$s.upsert_row: start (p_table_name=%%, p_primary_key_name=%%, p_primary_key=%%, p_updates=%%)', 
+      '%1\$s.upsert_single_row: start (p_table_name=%%, p_primary_key_name=%%, p_primary_key=%%, p_updates=%%)', 
       p_table_name, 
       p_primary_key_name, 
       p_primary_key, 
@@ -1751,7 +1751,7 @@ PLPGSQL,
       p_primary_key_name,
       concatenated_updates
     );
-    RAISE DEBUG '%1\$s.upsert_row: execute (query=%%)', query;
+    RAISE DEBUG '%1\$s.upsert_single_row: execute (query=%%)', query;
 
     EXECUTE query INTO affected_rows;
 
@@ -1926,9 +1926,9 @@ PLPGSQL,
           AND 
             %1\$s.triggers.manual = false
     LOOP
-      -- Execute updates whenever the foreign cache table name changes
+      -- Execute updates whenever the cache table name changes
       IF cache_table_name IS NOT NULL AND cache_table_name <> trigger.cache_table_name THEN
-        PERFORM %1\$s.upsert_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
+        PERFORM %1\$s.upsert_single_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
         updates := '{}';
       END IF;
 
@@ -2007,7 +2007,7 @@ PLPGSQL,
 
     -- Run updates that were not yet executed within the loop
     IF cache_table_name IS NOT NULL AND cache_primary_key_name IS NOT NULL THEN
-      PERFORM %1\$s.upsert_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
+      PERFORM %1\$s.upsert_single_row(cache_table_name, cache_primary_key_name, foreign_primary_key, updates);
     END IF;
 
     -- Clear logs table
@@ -2147,6 +2147,12 @@ PLPGSQL,
           AND 
             %1\$s.triggers.manual = false
     LOOP
+      -- Execute updates whenever the cache table name changes
+      IF cache_table_name IS NOT NULL AND cache_table_name <> trigger.cache_table_name THEN
+        PERFORM %1\$s.upsert_rows(foreign_table_name, foreign_primary_key_name, p_foreign_conditions, cache_table_name, cache_primary_key_name, updates);
+        updates := '{}';
+      END IF;
+
       table_name := trigger.table_name;
       schema_name := trigger.schema_name;
       primary_key_name := trigger.primary_key_name;
@@ -2208,11 +2214,12 @@ PLPGSQL,
           trigger_id = trigger.id;
     END LOOP;
 
-    -- Run updates that were not yet executed within the loop
+    -- Check if any upsert need to be performed at all
     IF (SELECT count(*) FROM jsonb_object_keys(updates)) = 0 THEN
       RETURN 0;
     END IF;
 
+    -- Run updates that were not yet executed within the loop
     affected_rows = %1\$s.upsert_rows(foreign_table_name, foreign_primary_key_name, p_foreign_conditions, cache_table_name, cache_primary_key_name, updates);
   
     RETURN affected_rows;
