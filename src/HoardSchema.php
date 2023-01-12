@@ -3164,8 +3164,8 @@ BEGIN
 
   IF p_definition_id IS NOT NULL THEN
     -- Concatenate trigger names
-    before_trigger_name := '9999_hoard_' || p_trigger_name || '__before';
-    after_trigger_name := '9999_hoard_' || p_trigger_name || '__after';
+    before_trigger_name := format('9999_hoard_%%s__before', p_trigger_name);
+    after_trigger_name := format('9999_hoard_%%s__after', p_trigger_name);
 
     -- Check if the table contains this column
     FOREACH dependency_name IN ARRAY p_dependency_names LOOP
@@ -3247,8 +3247,8 @@ BEGIN
   RAISE DEBUG '%1\$s.drop_triggers: start (p_trigger_name=%%, p_table_schema=%%, p_table_name=%%)', p_trigger_name, p_table_schema, p_table_name;
 
   -- Concatenate trigger names
-  before_trigger_name := '9999_hoard_' || p_trigger_name || '__before';
-  after_trigger_name := '9999_hoard_' || p_trigger_name || '__after';
+  before_trigger_name := format('9999_hoard_%%s__before', p_trigger_name);
+  after_trigger_name := format('9999_hoard_%%s__after', p_trigger_name);
 
   -- Drop triggers for table
   IF p_table_name <> '' THEN
