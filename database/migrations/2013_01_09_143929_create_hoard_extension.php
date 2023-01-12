@@ -123,7 +123,7 @@ return new class extends Migration
    * @return void
    */
   public function down()
-  {
-    DB::statement('DROP SCHEMA IF EXISTS hoard CASCADE;');
+  {    
+    DB::statement('DROP SCHEMA IF EXISTS ' . HoardSchema::$cacheSchema . ' CASCADE;');
   }
 };
