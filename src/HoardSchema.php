@@ -2676,7 +2676,7 @@ PLPGSQL,
   public static function createCacheTriggerFunctions()
   {
     HoardSchema::createFunction(
-        'cacheable__after',
+        'hoardable__after',
         [],
         'trigger',
         sprintf(
@@ -2719,7 +2719,7 @@ BEGIN
 
   -- Log
   RAISE DEBUG '
-    %1\$s.cacheable__after: start (
+    %1\$s.hoardable__after: start (
       TG_NAME=%%, 
       TG_OP=%%, 
       TG_TABLE_NAME=%%, 
@@ -2782,7 +2782,7 @@ BEGIN
     foreign_conditions := trigger.foreign_conditions;
     asynchronous := trigger.asynchronous;
 
-    RAISE DEBUG '%1\$s.cacheable__after: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+    RAISE DEBUG '%1\$s.hoardable__after: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_schema_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
       TG_TABLE_NAME,
       trigger_id, 
       schema_name, 
@@ -2832,7 +2832,7 @@ BEGIN
       new_relevant := false;
     END IF;
 
-    RAISE DEBUG '%1\$s.cacheable__after: new (new_values=%%, new_foreign_key=%%, new_relevant=%%)', new_values, new_foreign_key, new_relevant;
+    RAISE DEBUG '%1\$s.hoardable__after: new (new_values=%%, new_foreign_key=%%, new_relevant=%%)', new_values, new_foreign_key, new_relevant;
 
     -- Run update if required
     IF asynchronous = false THEN
@@ -2865,7 +2865,7 @@ BEGIN
       );
       processed_at := NOW();
     ELSE
-      RAISE DEBUG '%1\$s.cacheable__after: skip update because of asynchronous mode';
+      RAISE DEBUG '%1\$s.hoardable__after: skip update because of asynchronous mode';
     END IF;
     RAISE DEBUG '';
 
@@ -2874,7 +2874,7 @@ BEGIN
       USING trigger_id, TG_OP, new_values, new_foreign_key, new_relevant, processed_at;
   END LOOP;
 
-  RAISE DEBUG '%1\$s.cacheable__after: end';
+  RAISE DEBUG '%1\$s.hoardable__after: end';
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;
@@ -2889,7 +2889,7 @@ PLPGSQL,
       );
 
       HoardSchema::createFunction(
-        'cacheable__before',
+        'hoardable__before',
         [],
         'trigger',
         sprintf(
@@ -2938,7 +2938,7 @@ BEGIN
 
   -- Log
   RAISE DEBUG '
-    %1\$s.cacheable__before: start (
+    %1\$s.hoardable__before: start (
       TG_NAME=%%, 
       TG_OP=%%, 
       TG_TABLE_NAME=%%, 
@@ -3001,7 +3001,7 @@ BEGIN
       asynchronous := trigger.asynchronous;
 
       RAISE DEBUG 
-        '%1\$s.cacheable__before: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
+        '%1\$s.hoardable__before: trigger (TG_TABLE_NAME=%%, trigger_id=%%, schema_name=%%, table_name=%%, primary_key_name=%%, foreign_table_name=%%, cache_table_name=%%, cache_aggregation_name=%%, foreign_key_name=%%, aggregation_function=%%, value_names=%%, key_name=%%, conditions=%%, foreign_conditions=%%, asynchronous=%%)', 
         TG_TABLE_NAME,
         trigger_id, 
         schema_name, 
@@ -3053,7 +3053,7 @@ BEGIN
       END IF;
 
       RAISE DEBUG 
-        '%1\$s.cacheable__before: old (old_values=%%, old_foreign_key=%%, old_relevant=%%)', 
+        '%1\$s.hoardable__before: old (old_values=%%, old_foreign_key=%%, old_relevant=%%)', 
         old_values, 
         old_foreign_key, 
         old_relevant;
@@ -3103,7 +3103,7 @@ BEGIN
         );
         processed_at := NOW();
       ELSE
-        RAISE DEBUG '%1\$s.cacheable__before: skip update because of asynchronous mode';
+        RAISE DEBUG '%1\$s.hoardable__before: skip update because of asynchronous mode';
       END IF;
       RAISE DEBUG '';
 
@@ -3112,7 +3112,7 @@ BEGIN
     END LOOP;
   END IF;
 
-  RAISE DEBUG '%1\$s.cacheable__before: end';
+  RAISE DEBUG '%1\$s.hoardable__before: end';
 
   IF TG_OP = 'DELETE' THEN
     RETURN OLD;
@@ -3185,7 +3185,7 @@ BEGIN
             BEFORE UPDATE OF %%s
             ON %%I.%%I
             FOR EACH ROW 
-            EXECUTE FUNCTION %1\$s.cacheable__before(%%L)
+            EXECUTE FUNCTION %1\$s.hoardable__before(%%L)
           ', before_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_trigger_id);
       END IF;
 
@@ -3195,7 +3195,7 @@ BEGIN
             AFTER UPDATE OF %%s
             ON %%I.%%I
             FOR EACH ROW 
-            EXECUTE FUNCTION %1\$s.cacheable__after(%%L)
+            EXECUTE FUNCTION %1\$s.hoardable__after(%%L)
           ', after_trigger_name, array_to_string(column_names, ','), p_schema_name, p_table_name, p_trigger_id);
       END IF;
     END IF;
@@ -3209,7 +3209,7 @@ BEGIN
           BEFORE INSERT OR DELETE 
           ON %%I.%%I
           FOR EACH ROW 
-          EXECUTE FUNCTION %1\$s.cacheable__before()
+          EXECUTE FUNCTION %1\$s.hoardable__before()
         ', p_schema_name, p_table_name);
     END IF;
 
@@ -3219,7 +3219,7 @@ BEGIN
           AFTER INSERT OR DELETE 
           ON %%I.%%I
           FOR EACH ROW 
-          EXECUTE FUNCTION %1\$s.cacheable__after()
+          EXECUTE FUNCTION %1\$s.hoardable__after()
         ', p_schema_name, p_table_name);
     END IF;
   END IF;
