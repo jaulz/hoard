@@ -91,22 +91,21 @@ return new class extends Migration
     HoardSchema::createProcessFunctions();
     HoardSchema::createRefreshFunctions();
 
-    // Optimize logs performance
+    // Optimize log table performance
     DB::statement(sprintf('ALTER TABLE %1$s.logs' . ' SET UNLOGGED;', HoardSchema::$cacheSchema));
 
     // Create triggers on definitions table
     HoardSchema::execute(sprintf(
       <<<PLPGSQL
         BEGIN
-          IF NOT %1\$s.exists_trigger('%1\$s', 'definitions', 'hoard_before') THEN
-            CREATE TRIGGER hoard_before
+          IF NOT %1\$s.exists_trigger('%1\$s', 'definitions', '100_prepare_before') THEN
+            CREATE TRIGGER "100_prepare_before"
               BEFORE INSERT OR UPDATE OR DELETE ON %1\$s.definitions
               FOR EACH ROW 
               EXECUTE FUNCTION %1\$s.definitions__before();
           END IF;
-
-          IF NOT %1\$s.exists_trigger('%1\$s', 'definitions', 'hoard_after') THEN
-            CREATE TRIGGER hoard_after
+          IF NOT %1\$s.exists_trigger('%1\$s', 'definitions', '100_create_artifacts_after') THEN
+            CREATE TRIGGER "100_create_artifacts_after"
               AFTER INSERT OR UPDATE OR DELETE ON %1\$s.definitions
               FOR EACH ROW 
               EXECUTE FUNCTION %1\$s.definitions__after();
