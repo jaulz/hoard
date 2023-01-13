@@ -568,7 +568,7 @@ PLPGSQL
       );
 
       HoardSchema::createFunction(
-        'set_row_value',
+        'set_record_value',
         [
           'p_element' => 'anyelement',
           'p_key' => 'text',
@@ -584,7 +584,7 @@ SQL
       );
 
       HoardSchema::createFunction(
-        'set_row_value',
+        'set_record_value',
         [
           'p_element' => 'anyelement',
           'p_key' => 'text',
@@ -600,7 +600,7 @@ SQL
       );
 
       HoardSchema::createFunction(
-        'get_row_value',
+        'get_record_value',
         [
           'p_element' => 'json',
           'p_key' => 'text',
@@ -617,7 +617,7 @@ PLPGSQL
       );
 
       HoardSchema::createFunction(
-        'get_row_value',
+        'get_record_value',
         [
           'p_element' => 'jsonb',
           'p_key' => 'text',
@@ -634,7 +634,7 @@ PLPGSQL
       );
 
       HoardSchema::createFunction(
-        'get_row_value',
+        'get_record_value',
         [
           'p_element' => 'anyelement',
           'p_key' => 'text',
@@ -1958,7 +1958,7 @@ PLPGSQL,
       END IF;
 
       -- Get foreign key 
-      foreign_primary_key := %1\$s.get_row_value(p_foreign_row, foreign_primary_key_name);
+      foreign_primary_key := %1\$s.get_record_value(p_foreign_row, foreign_primary_key_name);
 
       -- Check if foreign conditions are met
       EXECUTE format(
@@ -1980,7 +1980,7 @@ PLPGSQL,
           table_schema, 
           table_name, 
           key_name,
-          format('%%L', %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)), 
+          format('%%L', %1\$s.get_record_value(p_foreign_row, definition.foreign_key_name)), 
           conditions
         );
 
@@ -2018,9 +2018,9 @@ PLPGSQL,
           definition_id = definition.id
         AND
           ( 
-              new_foreign_key = %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)
+              new_foreign_key = %1\$s.get_record_value(p_foreign_row, definition.foreign_key_name)
             OR
-              old_foreign_key = %1\$s.get_row_value(p_foreign_row, definition.foreign_key_name)
+              old_foreign_key = %1\$s.get_record_value(p_foreign_row, definition.foreign_key_name)
           );
   END;
 PLPGSQL,
