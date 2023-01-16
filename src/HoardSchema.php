@@ -3164,8 +3164,8 @@ BEGIN
 
   IF p_definition_id IS NOT NULL THEN
     -- Concatenate trigger names
-    before_trigger_name := format('9999_hoard_%%s__before', p_trigger_name);
-    after_trigger_name := format('9999_hoard_%%s__after', p_trigger_name);
+    before_trigger_name := format('9999_hoard__update__%%s__before', p_trigger_name);
+    after_trigger_name := format('9999_hoard__update__%%s__after', p_trigger_name);
 
     -- Check if the table contains this column
     FOREACH dependency_name IN ARRAY p_dependency_names LOOP
@@ -3203,24 +3203,24 @@ BEGIN
 
   -- Create create/delete triggers for table
   IF p_table_name <> '' THEN
-    IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, 'hoard_before_create_or_delete') THEN
+    IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, '9998_hoard__insert_or_delete__before') THEN
       EXECUTE format('
-        CREATE TRIGGER hoard_before_create_or_delete
+        CREATE TRIGGER %%I
           BEFORE INSERT OR DELETE 
           ON %%I.%%I
           FOR EACH ROW 
           EXECUTE FUNCTION %1\$s.hoardable__before()
-        ', p_table_schema, p_table_name);
+        ', '9998_hoard__insert_or_delete__before', p_table_schema, p_table_name);
     END IF;
 
-    IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, 'hoard_after_create_or_delete') THEN
+    IF NOT %1\$s.exists_trigger(p_table_schema, p_table_name, '9998_hoard__insert_or_delete__after') THEN
       EXECUTE format('
-        CREATE TRIGGER hoard_after_create_or_delete
+        CREATE TRIGGER %%I
           AFTER INSERT OR DELETE 
           ON %%I.%%I
           FOR EACH ROW 
           EXECUTE FUNCTION %1\$s.hoardable__after()
-        ', p_table_schema, p_table_name);
+        ', '9998_hoard__insert_or_delete__after', p_table_schema, p_table_name);
     END IF;
   END IF;
 END;
