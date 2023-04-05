@@ -10,8 +10,8 @@
         }
     ],
     "require": {
-        "php": "^7.3|^8.0",
-        "laravel/framework": "^9.2",
+        "php": "^8.0",
+        "laravel/framework": "^9.0 || ^10.0",
         "spatie/enum": "^3.13"
     },
     "require-dev": {
